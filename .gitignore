@@ -1,36 +1,37 @@
-# dependencies
-node_modules/
-.pnpm-store/
+node_modules
 
-# build output
-/build/
-/.svelte-kit/
-/package/
-/.vercel/
-/.netlify/
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+/package
 
-# env
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
 .env
 .env.*
 !.env.example
+!.env.test
 
-# data (local runtime)
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Runtime data (Docker volumes, local dev)
 /data/
+/uploads/
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
-/uploads/
 
-# testing
+# Testing
 /coverage/
 /playwright-report/
 /test-results/
-
-# misc
-.DS_Store
-*.log
-npm-debug.log*
-pnpm-debug.log*
-.idea/
-.vscode/
