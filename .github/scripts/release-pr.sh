@@ -16,7 +16,7 @@ GH_TOKEN="${GH_TOKEN:?GH_TOKEN is required}"
 API="https://api.github.com"
 BASE="main"
 HEAD="develop"
-TITLE="feat: merge develop into main (release candidate)"
+TITLE="chore: merge develop into main (release candidate)"
 LABEL="release-candidate"
 BODY="Automatically opened after a merge into develop.
 
