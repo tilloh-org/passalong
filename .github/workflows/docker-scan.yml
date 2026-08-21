@@ -23,7 +23,7 @@ jobs:
           tags: passalong:ci
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@v0.30.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: passalong:ci
           format: table
@@ -32,7 +32,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Scan filesystem with Trivy
-        uses: aquasecurity/trivy-action@v0.30.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
