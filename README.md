@@ -43,13 +43,16 @@ marketplaces, or a simple hand-over to friends.
 ```bash
 git clone https://github.com/tilloh-org/passalong.git
 cd passalong
-docker build -t passalong .
-docker run -p 3000:3000 passalong
+docker compose up -d --build
 # open http://localhost:3000
 ```
 
-A `docker compose` setup (app + SQLite volume, one-command install) is planned
-for the first release.
+Builds the image locally from the Dockerfile. Once the first release is
+published, a prebuilt image is available from GitHub Container Registry
+(`ghcr.io/tilloh-org/passalong:latest`) — then `docker compose up -d` is enough.
+
+Persistent data (SQLite database, uploads) lives in the named volume
+`passalong-data` (`/data` inside the container).
 
 ## Development
 
