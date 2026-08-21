@@ -17,6 +17,8 @@ RUN corepack enable pnpm && addgroup -S app && adduser -S app -G app
 
 COPY --from=build /app/build ./build
 COPY --from=build /app/package.json ./
+COPY --from=build /app/pnpm-lock.yaml ./
+COPY --from=build /app/.npmrc ./
 RUN pnpm install --prod --frozen-lockfile
 
 USER app
