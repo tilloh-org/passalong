@@ -1,4 +1,4 @@
-name: Release candidate PR
+name: Develop pipeline
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
   pull-requests: write
 
 jobs:
@@ -19,3 +20,28 @@ jobs:
 
       - name: Open or update release candidate PR (develop -> main)
         run: bash .github/scripts/release-pr.sh
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: open-or-update
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive short commit SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> "$GITHUB_ENV"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push develop image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:develop-${{ env.SHORT_SHA }}
+            ghcr.io/${{ github.repository }}:develop
