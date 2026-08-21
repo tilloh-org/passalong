@@ -8,18 +8,20 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 RUN pnpm build
+RUN pnpm install --prod --frozen-lockfile
 
 # Runtime stage
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable pnpm && npm install -g npm@latest && addgroup -S app && adduser -S app -G app
+# npm-CLI entfernen: wird zur Laufzeit nicht benötigt (Start via node build/index.js)
+# und eliminiert CVEs in den gebündelten npm-Dependencies (brace-expansion, ip-address, ...)
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && \
+    addgroup -S app && adduser -S app -G app
 
 COPY --from=build /app/build ./build
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
-COPY --from=build /app/pnpm-lock.yaml ./
-COPY --from=build /app/.npmrc ./
-RUN pnpm install --prod --frozen-lockfile
 
 USER app
 EXPOSE 3000
