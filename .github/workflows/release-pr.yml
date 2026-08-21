@@ -1,0 +1,21 @@
+name: Release candidate PR
+
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-or-update:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open or update release candidate PR (develop -> main)
+        run: bash .github/scripts/release-pr.sh
