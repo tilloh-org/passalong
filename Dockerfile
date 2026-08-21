@@ -13,7 +13,7 @@ RUN pnpm build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable pnpm && addgroup -S app && adduser -S app -G app
+RUN corepack enable pnpm && npm install -g npm@latest && addgroup -S app && adduser -S app -G app
 
 COPY --from=build /app/build ./build
 COPY --from=build /app/package.json ./
