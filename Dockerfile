@@ -23,7 +23,11 @@ COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./
 
+# Persistent app data (SQLite database, uploads) lives under /data.
+# Mount a volume here when running with docker compose.
+VOLUME /data
+
 USER app
-EXPOSE 3000
-ENV PORT=3000
+EXPOSE 4242
+ENV PORT=4242
 CMD ["node", "build/index.js"]

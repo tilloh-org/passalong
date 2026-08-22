@@ -1,5 +1,9 @@
 # passalong
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/tilloh-org/passalong/actions/workflows/ci.yml/badge.svg)](https://github.com/tilloh-org/passalong/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/tilloh-org/passalong)](https://github.com/tilloh-org/passalong/releases)
+
 > Manage the things you no longer need — and give them a second home.
 
 passalong is a self-hosted, open-source app for **families and private sellers**
@@ -37,12 +41,18 @@ marketplaces, or a simple hand-over to friends.
 ## Quick start (Docker)
 
 ```bash
-git clone https://github.com/timlohse1104/passalong.git
+git clone https://github.com/tilloh-org/passalong.git
 cd passalong
-cp .env.example .env        # adjust values
-docker compose up -d
-# open http://localhost:3000
+docker compose up -d --build
+# open http://localhost:4242
 ```
+
+Builds the image locally from the Dockerfile. Once the first release is
+published, a prebuilt image is available from GitHub Container Registry
+(`ghcr.io/tilloh-org/passalong:latest`) — then `docker compose up -d` is enough.
+
+Persistent data (SQLite database, uploads) lives in the named volume
+`passalong-data` (`/data` inside the container).
 
 ## Development
 
