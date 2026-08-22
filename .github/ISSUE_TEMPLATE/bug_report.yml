@@ -1,0 +1,63 @@
+name: Bug report
+description: Create a report to help us improve
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: To reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain your problem.
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      description: How are you running passalong?
+      options:
+        - Docker
+        - pnpm dev (source)
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: passalong version (e.g. 0.1.0)
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, device, OS — whatever is relevant.
+      placeholder: e.g. Firefox 128 on Windows 11, Desktop
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else about the problem.

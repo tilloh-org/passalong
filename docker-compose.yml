@@ -1,0 +1,22 @@
+services:
+  passalong:
+    image: ghcr.io/tilloh-org/passalong:latest
+    build: .
+    container_name: passalong
+    restart: unless-stopped
+    ports:
+      - "${PASSALONG_PORT:-4242}:4242"
+    volumes:
+      - passalong-data:/data
+    environment:
+      NODE_ENV: production
+      PORT: 4242
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4242"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  passalong-data:
