@@ -44,7 +44,7 @@ marketplaces, or a simple hand-over to friends.
 git clone https://github.com/tilloh-org/passalong.git
 cd passalong
 docker compose up -d --build
-# open http://localhost:3000
+# open http://localhost:4242
 ```
 
 Builds the image locally from the Dockerfile. Once the first release is

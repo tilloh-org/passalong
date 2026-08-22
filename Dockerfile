@@ -28,6 +28,6 @@ COPY --from=build /app/package.json ./
 VOLUME /data
 
 USER app
-EXPOSE 3000
-ENV PORT=3000
+EXPOSE 4242
+ENV PORT=4242
 CMD ["node", "build/index.js"]

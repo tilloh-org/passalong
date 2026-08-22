@@ -5,14 +5,14 @@ services:
     container_name: passalong
     restart: unless-stopped
     ports:
-      - "${PASSALONG_PORT:-3000}:3000"
+      - "${PASSALONG_PORT:-4242}:4242"
     volumes:
       - passalong-data:/data
     environment:
       NODE_ENV: production
-      PORT: 3000
+      PORT: 4242
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:4242"]
       interval: 30s
       timeout: 5s
       retries: 3
