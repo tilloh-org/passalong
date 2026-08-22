@@ -3,6 +3,7 @@ name: Develop pipeline
 on:
   push:
     branches: [develop]
+  workflow_dispatch:
 
 permissions:
   contents: read
