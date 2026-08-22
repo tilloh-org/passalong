@@ -18,6 +18,7 @@ BASE="main"
 HEAD="develop"
 TITLE="chore: merge develop into main (release candidate)"
 LABEL="release-candidate"
+REVIEWER="timlohse1104"
 BODY="Automatically opened after a merge into develop.
 
 Merging this PR turns the accumulated state of develop into a release candidate. The Release workflow then creates the next semantic version tag, changelog entry and GitHub Release."
@@ -60,7 +61,8 @@ PAYLOAD=$(jq -n \
   --arg head "${HEAD}" \
   --arg base "${BASE}" \
   --arg label "${LABEL}" \
-  '{title:$title, body:$body, head:$head, base:$base, labels:[$label]}')
+  --arg reviewer "${REVIEWER}" \
+  '{title:$title, body:$body, head:$head, base:$base, labels:[$label], reviewers:[$reviewer]}')
 
 RESPONSE=$(curl -s -X POST -H "Authorization: Bearer ${GH_TOKEN}" \
   -H "Accept: application/vnd.github+json" \
