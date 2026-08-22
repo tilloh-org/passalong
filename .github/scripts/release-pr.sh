@@ -5,6 +5,11 @@
 # Uses the GitHub API directly (curl + jq); requires GH_TOKEN with
 # pull-requests write permission on the repository.
 #
+# The PR title is derived from the conventional commits in main..develop so
+# that the squash merge onto main carries a semantic prefix. With squash
+# merging, release-please only ever sees the PR title on main — a plain
+# "chore:" title would never trigger a version bump.
+#
 # Env:
 #   GH_TOKEN  GitHub token (required)
 #   REPO      owner/repo (required)
@@ -16,7 +21,6 @@ GH_TOKEN="${GH_TOKEN:?GH_TOKEN is required}"
 API="https://api.github.com"
 BASE="main"
 HEAD="develop"
-TITLE="chore: merge develop into main (release candidate)"
 LABEL="release-candidate"
 REVIEWER="timlohse1104"
 BODY="Automatically opened after a merge into develop.
@@ -36,12 +40,38 @@ if [ "${PR_COUNT}" -gt "0" ]; then
   exit 0
 fi
 
+# Derive the semantic prefix from the commits on develop not yet on main.
+COMPARE=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" \
+  -H "Accept: application/vnd.github+json" \
+  "${API}/repos/${REPO}/compare/${BASE}...${HEAD}")
+
+FEATURES=$(printf '%s' "${COMPARE}" | jq '[.commits[].commit.message | capture("^(?<p>feat|feat!|feature)(\\([^)]*\\))?:")] | length' 2>/dev/null || echo 0)
+FIXES=$(printf '%s' "${COMPARE}" | jq '[.commits[].commit.message | capture("^(?<p>fix|fix!|bugfix|perf|perf!|revert|revert!)(\\([^)]*\\))?:")] | length' 2>/dev/null || echo 0)
+
+if [ "${FEATURES}" -gt "0" ] && [ "${FIXES}" -gt "0" ]; then
+  FEAT_LABEL="feature"; [ "${FEATURES}" -ne "1" ] && FEAT_LABEL="features"
+  FIX_LABEL="fix"; [ "${FIXES}" -ne "1" ] && FIX_LABEL="fixes"
+  TITLE="feat: merge develop into main (${FEATURES} ${FEAT_LABEL}, ${FIXES} ${FIX_LABEL})"
+elif [ "${FEATURES}" -gt "0" ]; then
+  FEAT_LABEL="feature"; [ "${FEATURES}" -ne "1" ] && FEAT_LABEL="features"
+  TITLE="feat: merge develop into main (${FEATURES} ${FEAT_LABEL})"
+elif [ "${FIXES}" -gt "0" ]; then
+  FIX_LABEL="fix"; [ "${FIXES}" -ne "1" ] && FIX_LABEL="fixes"
+  TITLE="fix: merge develop into main (${FIXES} ${FIX_LABEL})"
+else
+  TITLE="chore: merge develop into main (release candidate)"
+fi
+
+echo "==> Diff main...develop: ${FEATURES} feature(s), ${FIXES} fix(es)"
+echo "==> Derived title: ${TITLE}"
+
 if [ "${DRY_RUN:-0}" = "1" ]; then
   echo "==> [dry-run] No open PR; would create:"
   echo "    title: ${TITLE}"
   echo "    base:  ${BASE}"
   echo "    head:  ${HEAD}"
   echo "    label: ${LABEL}"
+  echo "    reviewer: ${REVIEWER}"
   exit 0
 fi
 
