@@ -12,6 +12,8 @@ Catalog your stuff once (photos, price, condition, category), track where each
 item is listed and whether it has been sold — across flea markets, online
 marketplaces, or a simple hand-over to friends.
 
+`One man's trash, that's another man's come up` - Macklemore, Thrift Shop
+
 **One collection. Many ways to pass it along.**
 
 ## Features
