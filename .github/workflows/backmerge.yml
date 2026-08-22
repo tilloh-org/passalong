@@ -1,0 +1,21 @@
+name: Backmerge
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-backmerge:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open or update backmerge PR (main -> develop)
+        run: bash .github/scripts/backmerge.sh
