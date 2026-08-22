@@ -45,6 +45,17 @@ COMPARE=$(curl -s -H "Authorization: Bearer ${GH_TOKEN}" \
   -H "Accept: application/vnd.github+json" \
   "${API}/repos/${REPO}/compare/${BASE}...${HEAD}")
 
+# Guard: refuse to create a release candidate while main has commits that
+# develop does not have yet (status "behind" or "diverged" with behind_by > 0).
+# The backmerge PR (main -> develop) must be merged first so the merge base
+# moves forward; otherwise every release candidate PR would conflict again.
+BEHIND_BY=$(printf '%s' "${COMPARE}" | jq -r '.behind_by // 0' 2>/dev/null || echo 0)
+if [ "${BEHIND_BY}" -gt "0" ]; then
+  echo "==> ERROR: develop is ${BEHIND_BY} commit(s) behind main." >&2
+  echo "    Merge the pending backmerge PR (main -> develop) first, then re-run." >&2
+  exit 1
+fi
+
 FEATURES=$(printf '%s' "${COMPARE}" | jq '[.commits[].commit.message | capture("^(?<p>feat|feat!|feature)(\\([^)]*\\))?:")] | length' 2>/dev/null || echo 0)
 FIXES=$(printf '%s' "${COMPARE}" | jq '[.commits[].commit.message | capture("^(?<p>fix|fix!|bugfix|perf|perf!|revert|revert!)(\\([^)]*\\))?:")] | length' 2>/dev/null || echo 0)
 
