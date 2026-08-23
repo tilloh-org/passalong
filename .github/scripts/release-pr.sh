@@ -95,7 +95,10 @@ fi
 
 BREAKING=$(printf '%s' "${COMPARE}" | jq '[
   .commits[].commit.message |
-  select(test("^[a-zA-Z]+(\\([^)]*\\))?!:"; "m") or test("^BREAKING[ -]CHANGE:"; "m"))
+  select(
+    test("^[a-zA-Z]+(\\([^)]*\\))?!:") or
+    test("(^|\\n)BREAKING[ -]CHANGE:")
+  )
 ] | length')
 FEATURES=$(printf '%s' "${COMPARE}" | jq '[
   .commits[].commit.message | select(test("^(feat|feature)(\\([^)]*\\))?!?:"))

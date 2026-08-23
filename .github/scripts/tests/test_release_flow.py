@@ -122,6 +122,28 @@ class ReleaseFlowTests(unittest.TestCase):
         self.assertIn("feat!: merge develop into main", result.stdout)
         self.assertIn("Would update release candidate PR #42", result.stdout)
 
+    def test_release_candidate_preserves_breaking_change_footers(self) -> None:
+        """Both conventional breaking footer spellings must produce a major title."""
+        for footer in ("BREAKING CHANGE", "BREAKING-CHANGE"):
+            with self.subTest(footer=footer):
+                result = self.run_script(
+                    "release-pr.sh",
+                    {
+                        "/repos/example/passalong/compare/main...develop": (
+                            200,
+                            self.compare(
+                                messages=[f"fix: change storage behavior\n\n{footer}: incompatible"]
+                            ),
+                        ),
+                        "/repos/example/passalong/pulls?state=open&base=main&head=example:develop": (
+                            200,
+                            [{"number": 42, "html_url": "https://example.test/pr/42"}],
+                        ),
+                    },
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("feat!: merge develop into main", result.stdout)
+
     def test_release_candidate_rejects_contentless_squash_backmerge(self) -> None:
         """Identical trees must not hide missing main ancestry."""
         result = self.run_script(
