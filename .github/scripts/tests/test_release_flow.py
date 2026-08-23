@@ -122,8 +122,22 @@ class ReleaseFlowTests(unittest.TestCase):
         self.assertIn("feat!: merge develop into main", result.stdout)
         self.assertIn("Would update release candidate PR #42", result.stdout)
 
-    def test_release_candidate_skips_contentless_backmerge(self) -> None:
-        """A merge commit without a tree difference must not create a candidate."""
+    def test_release_candidate_rejects_contentless_squash_backmerge(self) -> None:
+        """Identical trees must not hide missing main ancestry."""
+        result = self.run_script(
+            "release-pr.sh",
+            {
+                "/repos/example/passalong/compare/main...develop": (
+                    200,
+                    self.compare(behind=1, files=0, messages=["chore: squash backmerge"]),
+                )
+            },
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("develop is 1 commit(s) behind main", result.stderr)
+
+    def test_release_candidate_skips_contentless_true_backmerge(self) -> None:
+        """A true merge commit without a tree difference must not create a candidate."""
         result = self.run_script(
             "release-pr.sh",
             {

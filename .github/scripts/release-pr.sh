@@ -76,19 +76,21 @@ AHEAD_BY=$(printf '%s' "${COMPARE}" | jq -r '.ahead_by')
 BEHIND_BY=$(printf '%s' "${COMPARE}" | jq -r '.behind_by')
 CHANGED_FILES=$(printf '%s' "${COMPARE}" | jq -r '.files | length')
 
+# The backmerge must be a real merge commit. A squash backmerge copies content
+# but does not make main an ancestor of develop, so behind_by stays > 0 even
+# when the trees are currently identical. Check ancestry before the empty-diff
+# shortcut so an invalid squash backmerge fails visibly and immediately.
+if [ "${BEHIND_BY}" -gt 0 ]; then
+  echo "==> ERROR: develop is ${BEHIND_BY} commit(s) behind main." >&2
+  echo "    Merge the pending main -> develop backmerge PR with a merge commit first." >&2
+  exit 1
+fi
+
 # A true merge-commit backmerge leaves develop ahead by one merge commit but
 # with no content difference. Do not create an empty release candidate for it.
 if [ "${AHEAD_BY}" -eq 0 ] || [ "${CHANGED_FILES}" -eq 0 ]; then
   echo "==> No content changes to promote from develop; nothing to do."
   exit 0
-fi
-
-# The backmerge must be a real merge commit. A squash backmerge copies content
-# but does not make main an ancestor of develop, so behind_by would stay > 0.
-if [ "${BEHIND_BY}" -gt 0 ]; then
-  echo "==> ERROR: develop is ${BEHIND_BY} commit(s) behind main." >&2
-  echo "    Merge the pending main -> develop backmerge PR with a merge commit first." >&2
-  exit 1
 fi
 
 BREAKING=$(printf '%s' "${COMPARE}" | jq '[
