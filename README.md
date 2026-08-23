@@ -54,7 +54,9 @@ published, a prebuilt image is available from GitHub Container Registry
 (`ghcr.io/tilloh-org/passalong:latest`) — then `docker compose up -d` is enough.
 
 Persistent data (SQLite database, uploads) lives in the named volume
-`passalong-data` (`/data` inside the container).
+`passalong-data` (`/data` inside the container). When serving the app behind a
+reverse proxy, set `PASSALONG_ORIGIN` to its public origin so SvelteKit can keep
+its cross-site form protection enabled.
 
 ## Development
 
@@ -67,7 +69,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Screenshots
 
-*(coming soon)*
+![Core Collection: Sammlung anlegen und Artikel erfassen](docs/screenshots/core-collection.png)
 
 ## Documentation
 
@@ -76,7 +78,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Roadmap
 
-- [ ] v0.1 — core collection: items, photos, categories, users
+- [-] v0.1 — core collection: SQLite collection/item model, price, category,
+  condition and internal notes are implemented; photo gallery and user sessions follow
 - [ ] v0.2 — channel & sale status, public stand view
 - [ ] v0.3 — market day mode (price tags, scan, settlement)
 - [ ] Backups, statistics, advanced i18n
