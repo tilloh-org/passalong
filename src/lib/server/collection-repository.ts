@@ -85,6 +85,8 @@ export function createCollectionRepository(
 ): CollectionRepository {
 	const database = new Database(options.databasePath);
 	database.pragma('foreign_keys = ON');
+	database.pragma('journal_mode = WAL');
+	database.pragma('busy_timeout = 5000');
 	createSchema(database);
 
 	return {
@@ -207,14 +209,16 @@ function createSchema(database: Database.Database): void {
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
-			created_at TEXT NOT NULL
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id)
 		);
 		CREATE TABLE IF NOT EXISTS collections (
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-			owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
-			created_at TEXT NOT NULL
+			created_at TEXT NOT NULL,
+			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
 		);
 		CREATE TABLE IF NOT EXISTS items (
 			id TEXT PRIMARY KEY,
