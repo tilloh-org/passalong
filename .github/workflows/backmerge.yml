@@ -1,21 +1,31 @@
 name: Backmerge
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: backmerge
+  cancel-in-progress: false
 
 permissions:
   contents: read
+  issues: write
   pull-requests: write
 
 jobs:
   open-backmerge:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Open or update backmerge PR (main -> develop)
         run: bash .github/scripts/backmerge.sh

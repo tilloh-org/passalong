@@ -4,7 +4,14 @@ on:
   pull_request:
     branches: [develop, main]
   push:
-    branches: [main]
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   audit:
@@ -47,6 +54,9 @@ jobs:
 
       - name: Run tests
         run: pnpm test
+
+      - name: Test release automation scripts
+        run: python3 .github/scripts/tests/test_release_flow.py
 
   e2e:
     runs-on: ubuntu-latest

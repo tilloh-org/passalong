@@ -5,8 +5,13 @@ on:
     branches: [develop]
   workflow_dispatch:
 
+concurrency:
+  group: develop-pipeline
+  cancel-in-progress: true
+
 permissions:
   contents: read
+  issues: write
   packages: write
   pull-requests: write
 
@@ -24,7 +29,6 @@ jobs:
 
   build-and-push:
     runs-on: ubuntu-latest
-    needs: open-or-update
     steps:
       - uses: actions/checkout@v4
 
