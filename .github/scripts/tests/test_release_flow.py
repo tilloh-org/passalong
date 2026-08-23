@@ -103,8 +103,8 @@ class ReleaseFlowTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("develop is 1 commit(s) behind main", result.stderr)
 
-    def test_release_candidate_updates_title_for_breaking_change(self) -> None:
-        """An existing candidate must be updated to a breaking title."""
+    def test_release_candidate_uses_neutral_title_for_breaking_change(self) -> None:
+        """A merge-based candidate must not collapse breaking commits into its title."""
         result = self.run_script(
             "release-pr.sh",
             {
@@ -119,11 +119,34 @@ class ReleaseFlowTests(unittest.TestCase):
             },
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("feat!: merge develop into main", result.stdout)
+        self.assertIn("chore: release develop to main", result.stdout)
         self.assertIn("Would update release candidate PR #42", result.stdout)
 
-    def test_release_candidate_preserves_breaking_change_footers(self) -> None:
-        """Both conventional breaking footer spellings must produce a major title."""
+    def test_release_candidate_uses_neutral_title_for_mixed_changes(self) -> None:
+        """A merge-based candidate must keep individual commits for Release Please."""
+        result = self.run_script(
+            "release-pr.sh",
+            {
+                "/repos/example/passalong/compare/main...develop": (
+                    200,
+                    self.compare(
+                        messages=[
+                            "feat: add calendar export",
+                            "fix: correct time zone display",
+                        ]
+                    ),
+                ),
+                "/repos/example/passalong/pulls?state=open&base=main&head=example:develop": (
+                    200,
+                    [{"number": 42, "html_url": "https://example.test/pr/42"}],
+                ),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("chore: release develop to main", result.stdout)
+
+    def test_release_candidate_preserves_breaking_commits_for_release_please(self) -> None:
+        """Breaking commits must remain individual commits in a merge-based release."""
         for footer in ("BREAKING CHANGE", "BREAKING-CHANGE"):
             with self.subTest(footer=footer):
                 result = self.run_script(
@@ -142,7 +165,7 @@ class ReleaseFlowTests(unittest.TestCase):
                     },
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("feat!: merge develop into main", result.stdout)
+                self.assertIn("chore: release develop to main", result.stdout)
 
     def test_release_candidate_rejects_contentless_squash_backmerge(self) -> None:
         """Identical trees must not hide missing main ancestry."""
