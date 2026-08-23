@@ -8,9 +8,10 @@ long-lived branches require different merge methods to keep Git ancestry intact.
 ### `main`
 
 - Require a pull request and one approval.
-- Allow squash merges only.
+- Allow merge commits only. Do not allow squash or rebase merges.
 - Require the `build` and `test` status checks.
-- Require linear history.
+- Do not require linear history: each release promotion is a deliberate merge commit.
+- Use merge commits for both `develop -> main` release candidates and Release Please PRs.
 
 ### `develop`
 
@@ -38,13 +39,21 @@ as a GitHub Actions repository secret.
 1. Merge feature and fix pull requests into `develop` using squash.
 2. The Develop pipeline validates the resulting commit, publishes
    `develop-<sha7>` and `develop`, and opens or updates the release candidate.
-3. Merge the `develop -> main` release candidate using squash after CI and review.
+3. Merge the `develop -> main` release candidate using a **merge commit** after CI and review. This preserves the individual Conventional Commits for Release Please.
 4. Release Please opens or updates its version and changelog pull request.
-5. Merge the Release Please pull request using squash after CI and review.
+5. Merge the Release Please pull request using a **merge commit** after CI and review.
 6. Release Please creates the tag, GitHub Release and release container image.
 7. The Backmerge workflow opens `main -> develop` after the Release workflow.
 8. Merge the backmerge pull request using a **merge commit**, never squash.
 9. Confirm that `develop` is no longer behind `main` before promoting more work.
+
+## Release summaries
+
+Release Please receives the individual Conventional Commits preserved by the
+`develop -> main` merge commit and generates its changelog from them directly.
+Use short, user-facing Conventional Commit subjects for feature and fix pull
+requests. Avoid generic subjects such as `update files` or `minor changes`, as
+those become part of the published release notes.
 
 ## Recovery check
 

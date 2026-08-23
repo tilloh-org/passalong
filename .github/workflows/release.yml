@@ -4,6 +4,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Semantic image tag to publish, without a leading v"
+        required: false
+        type: string
+      image_ref:
+        description: "Git ref to build for a manual image recovery"
+        required: false
+        type: string
 
 concurrency:
   group: release-main
@@ -39,12 +48,28 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: needs.release-please.outputs.release_created == 'true' || inputs.image_tag != ''
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.image_ref || github.sha }}
+
+      - name: Determine image version
+        id: image-version
+        env:
+          RECOVERY_IMAGE_TAG: ${{ inputs.image_tag }}
+          RELEASE_TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          raw_tag="${RECOVERY_IMAGE_TAG:-$RELEASE_TAG_NAME}"
+          image_version="${raw_tag#v}"
+          if ! [[ "$image_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Expected a semantic version tag, got: $raw_tag" >&2
+            exit 1
+          fi
+          echo "version=$image_version" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
@@ -59,5 +84,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ needs.release-please.outputs.tag_name }}
+            ghcr.io/${{ github.repository }}:${{ steps.image-version.outputs.version }}
             ghcr.io/${{ github.repository }}:latest
