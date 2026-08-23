@@ -3,7 +3,8 @@
 #
 # Triggered on every push to develop. The script fails closed when the GitHub
 # compare API is unavailable, refuses to promote a stale develop branch, and
-# keeps the PR title aligned with all conventional commits in main..develop.
+# creates a merge-based promotion that preserves the individual commits for
+# Release Please.
 #
 # Env:
 #   GH_TOKEN  GitHub token (required)
@@ -19,6 +20,8 @@ HEAD="develop"
 LABEL="release-candidate"
 REVIEWER="timlohse1104"
 BODY="Automatically opened after a merge into develop.
+
+IMPORTANT: Merge this PR using a merge commit, not squash. This keeps the individual Conventional Commits on main so Release Please can generate a detailed changelog.
 
 Merging this PR promotes the accumulated state of develop to main. Release Please then prepares the semantic version, changelog and GitHub Release."
 OWNER="${REPO%/*}"
@@ -93,36 +96,7 @@ if [ "${AHEAD_BY}" -eq 0 ] || [ "${CHANGED_FILES}" -eq 0 ]; then
   exit 0
 fi
 
-BREAKING=$(printf '%s' "${COMPARE}" | jq '[
-  .commits[].commit.message |
-  select(
-    test("^[a-zA-Z]+(\\([^)]*\\))?!:") or
-    test("(^|\\n)BREAKING[ -]CHANGE:")
-  )
-] | length')
-FEATURES=$(printf '%s' "${COMPARE}" | jq '[
-  .commits[].commit.message | select(test("^(feat|feature)(\\([^)]*\\))?!?:"))
-] | length')
-FIXES=$(printf '%s' "${COMPARE}" | jq '[
-  .commits[].commit.message | select(test("^(fix|bugfix|perf|revert)(\\([^)]*\\))?!?:"))
-] | length')
-
-if [ "${BREAKING}" -gt 0 ]; then
-  CHANGE_LABEL="breaking change"; [ "${BREAKING}" -ne 1 ] && CHANGE_LABEL="breaking changes"
-  TITLE="feat!: merge develop into main (${BREAKING} ${CHANGE_LABEL})"
-elif [ "${FEATURES}" -gt 0 ] && [ "${FIXES}" -gt 0 ]; then
-  FEAT_LABEL="feature"; [ "${FEATURES}" -ne 1 ] && FEAT_LABEL="features"
-  FIX_LABEL="fix"; [ "${FIXES}" -ne 1 ] && FIX_LABEL="fixes"
-  TITLE="feat: merge develop into main (${FEATURES} ${FEAT_LABEL}, ${FIXES} ${FIX_LABEL})"
-elif [ "${FEATURES}" -gt 0 ]; then
-  FEAT_LABEL="feature"; [ "${FEATURES}" -ne 1 ] && FEAT_LABEL="features"
-  TITLE="feat: merge develop into main (${FEATURES} ${FEAT_LABEL})"
-elif [ "${FIXES}" -gt 0 ]; then
-  FIX_LABEL="fix"; [ "${FIXES}" -ne 1 ] && FIX_LABEL="fixes"
-  TITLE="fix: merge develop into main (${FIXES} ${FIX_LABEL})"
-else
-  TITLE="chore: merge develop into main (release candidate)"
-fi
+TITLE="chore: release develop to main"
 
 echo "==> Diff: ${AHEAD_BY} commit(s), ${CHANGED_FILES} changed file(s), ${BEHIND_BY} behind"
 echo "==> Derived title: ${TITLE}"
