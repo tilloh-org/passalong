@@ -52,7 +52,7 @@ export const actions: Actions = {
 			repository.createItem({
 				collectionId,
 				title: getFormText(formData, 'title'),
-				priceCents: Number(getFormText(formData, 'priceCents')),
+				priceCents: getPriceCents(formData),
 				category: getFormText(formData, 'category') as ItemCategory,
 				condition: getFormText(formData, 'condition') as ItemCondition,
 				internalNotes: getFormText(formData, 'internalNotes')
@@ -75,6 +75,26 @@ export const actions: Actions = {
 function getFormText(formData: FormData, name: string): string {
 	const value = formData.get(name);
 	return typeof value === 'string' ? value : '';
+}
+
+/**
+ * Parse the required non-negative integer price submitted by the item form.
+ *
+ * @param {FormData} formData - Submitted form values.
+ * @returns {number} The price in euro cents.
+ * @throws {Error} When the submitted price is missing or invalid.
+ */
+function getPriceCents(formData: FormData): number {
+	const value = getFormText(formData, 'priceCents').trim();
+	if (!/^\d+$/.test(value)) {
+		throw new Error('Bitte gib einen Preis in Cent als ganze Zahl ein.');
+	}
+
+	const priceCents = Number(value);
+	if (!Number.isSafeInteger(priceCents) || priceCents > 10_000_000) {
+		throw new Error('Der Preis liegt außerhalb des erlaubten Bereichs.');
+	}
+	return priceCents;
 }
 
 /**
