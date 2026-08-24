@@ -35,8 +35,13 @@ export interface Item {
 	internalNotes: string;
 }
 
+export interface CreateInitialAdminInput {
+	username: string;
+	displayName: string;
+	passwordHash: string;
+}
+
 export interface CreateCollectionInput {
-	ownerName: string;
 	name: string;
 }
 
@@ -54,16 +59,26 @@ export interface SessionScope {
 	tenantId: string;
 }
 
+export interface AdminAccount extends SessionScope {
+	username: string;
+	displayName: string;
+}
+
+export interface LoginAccount extends AdminAccount {
+	passwordHash: string;
+}
+
 export interface CollectionRepository {
-	createCollection(input: CreateCollectionInput): Collection;
-	getCollection(collectionId: string): Collection | null;
+	hasAdminAccount(): boolean;
+	createInitialAdmin(input: CreateInitialAdminInput): AdminAccount;
+	getUserForLogin(username: string): LoginAccount | null;
+	createCollection(input: CreateCollectionInput, scope: SessionScope): Collection;
 	getCollectionForOwner(collectionId: string, scope: SessionScope): Collection | null;
-	createSessionForCollection(collectionId: string, tokenHash: string): void;
+	listCollectionsForOwner(scope: SessionScope): Collection[];
+	createSessionForUser(scope: SessionScope, tokenHash: string): void;
 	getSession(tokenHash: string): SessionScope | null;
-	listCollections(): Collection[];
-	createItem(input: CreateItemInput): Item;
+	createItem(input: CreateItemInput, scope: SessionScope): Item;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
-	listItems(collectionId: string): Item[];
 }
 
 interface CreateCollectionRepositoryOptions {
@@ -97,45 +112,91 @@ export function createCollectionRepository(
 	database.pragma('journal_mode = WAL');
 	database.pragma('busy_timeout = 5000');
 	createSchema(database);
+	migrateSchema(database);
 
 	return {
-		createCollection(input) {
-			const ownerName = requireText(input.ownerName, 'ownerName');
-			const name = requireText(input.name, 'name');
-			const tenantId = randomUUID();
-			const ownerId = randomUUID();
-			const collectionId = randomUUID();
-			const createdAt = new Date().toISOString();
-
-			database.transaction(() => {
-				database
-					.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
-					.run(tenantId, `${ownerName}'s household`, createdAt);
-				database
-					.prepare(
-						'INSERT INTO users (id, tenant_id, display_name, created_at) VALUES (?, ?, ?, ?)'
-					)
-					.run(ownerId, tenantId, ownerName, createdAt);
-				database
-					.prepare(
-						'INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)'
-					)
-					.run(collectionId, tenantId, ownerId, name, createdAt);
-			})();
-
-			return { id: collectionId, name, ownerName };
+		hasAdminAccount() {
+			return Boolean(
+				database.prepare('SELECT 1 FROM users WHERE is_admin = 1 LIMIT 1').get()
+			);
 		},
 
-		getCollection(collectionId) {
+		createInitialAdmin(input) {
+			const username = normalizeUsername(input.username);
+			const displayName = requireText(input.displayName, 'displayName');
+			const passwordHash = requireText(input.passwordHash, 'passwordHash');
+			const tenantId = randomUUID();
+			const userId = randomUUID();
+			const createdAt = new Date().toISOString();
+
+			try {
+				database.transaction(() => {
+					if (database.prepare('SELECT 1 FROM users WHERE is_admin = 1 LIMIT 1').get()) {
+						throw new Error('an admin account already exists');
+					}
+					database
+						.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+						.run(tenantId, `${displayName}'s household`, createdAt);
+					database
+						.prepare(
+							`INSERT INTO users (
+								id, tenant_id, username, display_name, password_hash, is_admin, created_at
+							) VALUES (?, ?, ?, ?, ?, 1, ?)`
+						)
+						.run(userId, tenantId, username, displayName, passwordHash, createdAt);
+				})();
+			} catch (error) {
+				if (error instanceof Error && error.message.includes('UNIQUE constraint failed: users.is_admin')) {
+					throw new Error('an admin account already exists');
+				}
+				throw error;
+			}
+
+			return { userId, tenantId, username, displayName };
+		},
+
+		getUserForLogin(username) {
 			const row = database
 				.prepare(
-					`SELECT collections.id, collections.name, users.display_name AS owner_name
-					 FROM collections
-					 JOIN users ON users.id = collections.owner_id
-					 WHERE collections.id = ?`
+					`SELECT id, tenant_id, username, display_name, password_hash
+					 FROM users
+					 WHERE username = ? AND is_admin = 1`
 				)
-				.get(collectionId) as { id: string; name: string; owner_name: string } | undefined;
-			return row ? { id: row.id, name: row.name, ownerName: row.owner_name } : null;
+				.get(normalizeUsername(username)) as
+				| {
+						id: string;
+						tenant_id: string;
+						username: string;
+						display_name: string;
+						password_hash: string;
+					  }
+				| undefined;
+			return row
+				? {
+						userId: row.id,
+						tenantId: row.tenant_id,
+						username: row.username,
+						displayName: row.display_name,
+						passwordHash: row.password_hash
+					}
+				: null;
+		},
+
+		createCollection(input, scope) {
+			const name = requireText(input.name, 'name');
+			const collectionId = randomUUID();
+			const result = database
+				.prepare(
+					`INSERT INTO collections (id, tenant_id, owner_id, name, created_at)
+					 SELECT ?, tenant_id, id, ?, ?
+					 FROM users
+					 WHERE id = ? AND tenant_id = ? AND is_admin = 1`
+				)
+				.run(collectionId, name, new Date().toISOString(), scope.userId, scope.tenantId);
+			if (result.changes !== 1) {
+				throw new Error('authenticated owner was not found');
+			}
+			return { id: collectionId, name, ownerName: getOwnerDisplayName(database, scope) };
 		},
 
 		getCollectionForOwner(collectionId, scope) {
@@ -144,7 +205,8 @@ export function createCollectionRepository(
 					`SELECT collections.id, collections.name, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
-					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
+					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?
+					 AND users.is_admin = 1`
 				)
 				.get(collectionId, scope.userId, scope.tenantId) as
 				| { id: string; name: string; owner_name: string }
@@ -152,33 +214,50 @@ export function createCollectionRepository(
 			return row ? { id: row.id, name: row.name, ownerName: row.owner_name } : null;
 		},
 
-		createSessionForCollection(collectionId, tokenHash) {
-			const session = database
-				.prepare('SELECT owner_id, tenant_id FROM collections WHERE id = ?')
-				.get(collectionId) as { owner_id: string; tenant_id: string } | undefined;
-			if (!session) {
-				throw new Error('collection was not found');
-			}
-			database
+		listCollectionsForOwner(scope) {
+			return database
+				.prepare(
+					`SELECT collections.id, collections.name, users.display_name AS owner_name
+					 FROM collections
+					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+					 WHERE collections.owner_id = ? AND collections.tenant_id = ? AND users.is_admin = 1
+					 ORDER BY collections.created_at ASC, collections.id ASC`
+				)
+				.all(scope.userId, scope.tenantId)
+				.map((row) => {
+					const collection = row as { id: string; name: string; owner_name: string };
+					return { id: collection.id, name: collection.name, ownerName: collection.owner_name };
+				});
+		},
+
+		createSessionForUser(scope, tokenHash) {
+			const result = database
 				.prepare(
 					`INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at)
-					 VALUES (?, ?, ?, ?, ?, ?)`
+					 SELECT ?, id, tenant_id, ?, ?, ?
+					 FROM users
+					 WHERE id = ? AND tenant_id = ? AND is_admin = 1`
 				)
 				.run(
 					randomUUID(),
-					session.owner_id,
-					session.tenant_id,
 					tokenHash,
 					new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString(),
-					new Date().toISOString()
+					new Date().toISOString(),
+					scope.userId,
+					scope.tenantId
 				);
+			if (result.changes !== 1) {
+				throw new Error('authenticated owner was not found');
+			}
 		},
 
 		getSession(tokenHash) {
 			const row = database
 				.prepare(
-					`SELECT user_id, tenant_id FROM sessions
-					 WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?`
+					`SELECT sessions.user_id, sessions.tenant_id FROM sessions
+					 JOIN users ON users.id = sessions.user_id AND users.tenant_id = sessions.tenant_id
+					 WHERE sessions.token_hash = ? AND sessions.revoked_at IS NULL AND sessions.expires_at > ?
+					 AND users.is_admin = 1`
 				)
 				.get(tokenHash, new Date().toISOString()) as
 				| { user_id: string; tenant_id: string }
@@ -186,22 +265,7 @@ export function createCollectionRepository(
 			return row ? { userId: row.user_id, tenantId: row.tenant_id } : null;
 		},
 
-		listCollections() {
-			return database
-				.prepare(
-					`SELECT collections.id, collections.name, users.display_name AS owner_name
-					 FROM collections
-					 JOIN users ON users.id = collections.owner_id
-					 ORDER BY collections.created_at ASC, collections.id ASC`
-				)
-				.all()
-				.map((row) => {
-					const collection = row as { id: string; name: string; owner_name: string };
-					return { id: collection.id, name: collection.name, ownerName: collection.owner_name };
-				});
-		},
-
-		createItem(input) {
+		createItem(input, scope) {
 			const title = requireText(input.title, 'title');
 			const internalNotes = input.internalNotes.trim();
 			validateItemInput(input);
@@ -215,23 +279,31 @@ export function createCollectionRepository(
 				internalNotes
 			};
 
-			database
+			const result = database
 				.prepare(
 					`INSERT INTO items (
 						id, collection_id, title, price_cents, category, condition, internal_notes, created_at
-					) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+					) SELECT ?, collections.id, ?, ?, ?, ?, ?, ?
+					FROM collections
+					JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+					WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?
+					AND users.is_admin = 1`
 				)
 				.run(
 					item.id,
-					item.collectionId,
 					item.title,
 					item.priceCents,
 					item.category,
 					item.condition,
 					item.internalNotes,
-					new Date().toISOString()
+					new Date().toISOString(),
+					item.collectionId,
+					scope.userId,
+					scope.tenantId
 				);
-
+			if (result.changes !== 1) {
+				throw new Error('collection was not found');
+			}
 			return item;
 		},
 
@@ -241,29 +313,19 @@ export function createCollectionRepository(
 					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes
 					 FROM items
 					 JOIN collections ON collections.id = items.collection_id
+					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE items.collection_id = ? AND collections.owner_id = ? AND collections.tenant_id = ?
+					 AND users.is_admin = 1
 					 ORDER BY items.created_at DESC, items.id DESC`
 				)
 				.all(collectionId, scope.userId, scope.tenantId)
-				.map((row) => mapItemRow(row as ItemRow));
-		},
-
-		listItems(collectionId) {
-			return database
-				.prepare(
-					`SELECT id, collection_id, title, price_cents, category, condition, internal_notes
-					 FROM items
-					 WHERE collection_id = ?
-					 ORDER BY created_at DESC, id DESC`
-				)
-				.all(collectionId)
 				.map((row) => mapItemRow(row as ItemRow));
 		}
 	};
 }
 
 /**
- * Create the schema shared by all core collection repositories.
+ * Create the current schema for new SQLite databases.
  *
  * @param {Database.Database} database - The SQLite connection to initialize.
  * @returns {void}
@@ -278,7 +340,10 @@ function createSchema(database: Database.Database): void {
 		CREATE TABLE IF NOT EXISTS users (
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			username TEXT,
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
+			password_hash TEXT,
+			is_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id)
 		);
@@ -325,6 +390,54 @@ function createSchema(database: Database.Database): void {
 }
 
 /**
+ * Add account columns and indexes to databases created before account login existed.
+ * Existing collections and items are preserved; old owner records remain non-admin.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateSchema(database: Database.Database): void {
+	const userColumns = new Set(
+		(database.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map((column) => column.name)
+	);
+	const migrations: Array<[string, string]> = [
+		['username', 'ALTER TABLE users ADD COLUMN username TEXT'],
+		['password_hash', 'ALTER TABLE users ADD COLUMN password_hash TEXT'],
+		['is_admin', 'ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1))']
+	];
+
+	database.transaction(() => {
+		for (const [column, statement] of migrations) {
+			if (!userColumns.has(column)) {
+				database.exec(statement);
+			}
+		}
+		database.exec(`
+			CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users(username) WHERE username IS NOT NULL;
+			CREATE UNIQUE INDEX IF NOT EXISTS users_single_admin_idx ON users(is_admin) WHERE is_admin = 1;
+		`);
+	})();
+}
+
+/**
+ * Look up the display name that belongs to a validated authenticated scope.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {string} The owner's display name.
+ * @throws {Error} If the authenticated owner no longer exists.
+ */
+function getOwnerDisplayName(database: Database.Database, scope: SessionScope): string {
+	const row = database
+		.prepare('SELECT display_name FROM users WHERE id = ? AND tenant_id = ? AND is_admin = 1')
+		.get(scope.userId, scope.tenantId) as { display_name: string } | undefined;
+	if (!row) {
+		throw new Error('authenticated owner was not found');
+	}
+	return row.display_name;
+}
+
+/**
  * Map a database row into the application's public item shape.
  *
  * @param {ItemRow} row - The selected database row.
@@ -354,6 +467,21 @@ function requireText(value: string, fieldName: string): string {
 	const normalized = value.trim();
 	if (!normalized) {
 		throw new Error(`${fieldName} must not be empty`);
+	}
+	return normalized;
+}
+
+/**
+ * Normalize and validate a login username.
+ *
+ * @param {string} value - The untrusted username.
+ * @returns {string} The normalized lowercase username.
+ * @throws {Error} If the username is outside the allowed format.
+ */
+function normalizeUsername(value: string): string {
+	const normalized = value.trim().toLowerCase();
+	if (!/^[a-z0-9_-]{3,64}$/.test(normalized)) {
+		throw new Error('username must contain 3 to 64 lowercase letters, numbers, underscores, or hyphens');
 	}
 	return normalized;
 }

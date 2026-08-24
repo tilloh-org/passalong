@@ -1,6 +1,12 @@
-import { timingSafeEqual } from 'node:crypto';
-import { fail, redirect } from '@sveltejs/kit';
-import { itemCategories, itemConditions, type ItemCategory, type ItemCondition } from '$lib/server/collection-repository';
+import { fail, redirect, type Cookies } from '@sveltejs/kit';
+import {
+	itemCategories,
+	itemConditions,
+	type ItemCategory,
+	type ItemCondition,
+	type SessionScope
+} from '$lib/server/collection-repository';
+import { hashPassword, verifyPassword } from '$lib/server/password';
 import { getCollectionRepository } from '$lib/server/repository';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
 import type { Actions, PageServerLoad } from './$types';
@@ -8,7 +14,7 @@ import type { Actions, PageServerLoad } from './$types';
 const sessionCookieName = 'passalong_session';
 
 /**
- * Load only the collection owned by the authenticated session.
+ * Load account-aware and tenant-scoped collection data.
  *
  * @param {Parameters<PageServerLoad>[0]} event - The SvelteKit load event.
  * @returns {ReturnType<PageServerLoad>} Tenant-scoped page data.
@@ -16,37 +22,84 @@ const sessionCookieName = 'passalong_session';
 export const load: PageServerLoad = ({ cookies, url }) => {
 	const repository = getCollectionRepository();
 	const scope = getSessionScope(cookies.get(sessionCookieName));
-	const collectionId = url.searchParams.get('collection');
+	const collections = scope ? repository.listCollectionsForOwner(scope) : [];
+	const requestedCollectionId = url.searchParams.get('collection');
+	const collectionId = requestedCollectionId ?? collections[0]?.id;
 	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
 
 	return {
 		collection,
+		collections,
 		items: collection && scope ? repository.listItemsForOwner(collection.id, scope) : [],
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
-		isAuthenticated: Boolean(scope)
+		isAuthenticated: Boolean(scope),
+		isInitialSetup: !repository.hasAdminAccount()
 	};
 };
 
 export const actions: Actions = {
-	createCollection: async ({ cookies, request }) => {
-		const formData = await request.formData();
-		if (!isValidAccessToken(getFormText(formData, 'accessToken'))) {
-			return fail(403, { createCollectionError: 'Der Zugangs-Code ist ungültig.' });
+	register: async ({ cookies, request }) => {
+		const repository = getCollectionRepository();
+		if (repository.hasAdminAccount()) {
+			return fail(409, { registerError: 'Der erste Zugang wurde bereits erstellt. Bitte melde dich an.' });
 		}
 
-		const repository = getCollectionRepository();
+		const formData = await request.formData();
+		const password = getFormText(formData, 'password');
+		try {
+			validatePassword(password);
+			const admin = repository.createInitialAdmin({
+				username: getFormText(formData, 'username'),
+				displayName: getFormText(formData, 'displayName'),
+				passwordHash: await hashPassword(password)
+			});
+			setSessionCookie(cookies, admin);
+		} catch (error) {
+			return fail(400, { registerError: getErrorMessage(error) });
+		}
+
+		redirect(303, '/');
+	},
+
+	login: async ({ cookies, request }) => {
+		const formData = await request.formData();
+		let user;
+		try {
+			user = getCollectionRepository().getUserForLogin(getFormText(formData, 'username'));
+		} catch {
+			return fail(401, { loginError: 'Benutzername oder Passwort ist nicht korrekt.' });
+		}
+		if (!user || !(await verifyPassword(getFormText(formData, 'password'), user.passwordHash))) {
+			return fail(401, { loginError: 'Benutzername oder Passwort ist nicht korrekt.' });
+		}
+
+		setSessionCookie(cookies, user);
+		redirect(303, '/');
+	},
+
+	logout: ({ cookies }) => {
+		cookies.delete(sessionCookieName, { path: '/' });
+		redirect(303, '/');
+	},
+
+	createCollection: async ({ cookies, request }) => {
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(401, { createCollectionError: 'Bitte melde dich zuerst an.' });
+		}
+
+		const formData = await request.formData();
 		let collection;
 		try {
-			collection = repository.createCollection({
-				ownerName: getFormText(formData, 'ownerName'),
-				name: getFormText(formData, 'collectionName')
-			});
+			collection = getCollectionRepository().createCollection(
+				{ name: getFormText(formData, 'collectionName') },
+				scope
+			);
 		} catch (error) {
 			return fail(400, { createCollectionError: getErrorMessage(error) });
 		}
 
-		setSessionCookie(cookies, collection.id);
 		redirect(303, `/?collection=${encodeURIComponent(collection.id)}`);
 	},
 
@@ -55,7 +108,7 @@ export const actions: Actions = {
 		const repository = getCollectionRepository();
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(401, { addItemError: 'Deine Sitzung ist abgelaufen. Bitte richte den Zugang erneut ein.' });
+			return fail(401, { addItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
 		}
 
 		const collectionId = getFormText(formData, 'collectionId');
@@ -64,14 +117,17 @@ export const actions: Actions = {
 		}
 
 		try {
-			repository.createItem({
-				collectionId,
-				title: getFormText(formData, 'title'),
-				priceCents: getPriceCents(formData),
-				category: getFormText(formData, 'category') as ItemCategory,
-				condition: getFormText(formData, 'condition') as ItemCondition,
-				internalNotes: getFormText(formData, 'internalNotes')
-			});
+			repository.createItem(
+				{
+					collectionId,
+					title: getFormText(formData, 'title'),
+					priceCents: getPriceCents(formData),
+					category: getFormText(formData, 'category') as ItemCategory,
+					condition: getFormText(formData, 'condition') as ItemCondition,
+					internalNotes: getFormText(formData, 'internalNotes')
+				},
+				scope
+			);
 		} catch (error) {
 			return fail(400, { addItemError: getErrorMessage(error) });
 		}
@@ -112,41 +168,38 @@ function getPriceCents(formData: FormData): number {
 }
 
 /**
+ * Reject passwords that are too short or expensive to process safely.
+ *
+ * @param {string} password - The submitted plaintext password.
+ * @returns {void}
+ * @throws {Error} If the password does not meet the policy.
+ */
+function validatePassword(password: string): void {
+	if (password.length < 12 || password.length > 128) {
+		throw new Error('Das Passwort muss 12 bis 128 Zeichen lang sein.');
+	}
+}
+
+/**
  * Resolve a cookie token to an active tenant/user scope.
  *
  * @param {string | undefined} token - Raw session cookie value.
- * @returns {ReturnType<ReturnType<typeof getCollectionRepository>['getSession']>} Active scope or null.
+ * @returns {SessionScope | null} Active scope or null.
  */
-function getSessionScope(token: string | undefined) {
+function getSessionScope(token: string | undefined): SessionScope | null {
 	return token ? getCollectionRepository().getSession(hashSessionToken(token)) : null;
 }
 
 /**
- * Validate the bootstrap token without exposing its value through timing differences.
+ * Persist a server-side session hash and set the hardened browser cookie.
  *
- * @param {string} suppliedToken - Untrusted submitted token.
- * @returns {boolean} Whether the configured access token matches.
- */
-function isValidAccessToken(suppliedToken: string): boolean {
-	const configuredToken = process.env.PASSALONG_SETUP_TOKEN;
-	if (!configuredToken) {
-		return false;
-	}
-	const supplied = Buffer.from(suppliedToken);
-	const configured = Buffer.from(configuredToken);
-	return supplied.length === configured.length && timingSafeEqual(supplied, configured);
-}
-
-/**
- * Persist a server-side session and set the hardened browser cookie.
- *
- * @param {Parameters<Actions['createCollection']>[0]['cookies']} cookies - SvelteKit cookie helper.
- * @param {string} collectionId - Collection whose owner receives the session.
+ * @param {Cookies} cookies - SvelteKit cookie helper.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
  * @returns {void}
  */
-function setSessionCookie(cookies: Parameters<Actions['createCollection']>[0]['cookies'], collectionId: string): void {
+function setSessionCookie(cookies: Cookies, scope: SessionScope): void {
 	const token = createSessionToken();
-	getCollectionRepository().createSessionForCollection(collectionId, hashSessionToken(token));
+	getCollectionRepository().createSessionForUser(scope, hashSessionToken(token));
 	cookies.set(sessionCookieName, token, {
 		httpOnly: true,
 		path: '/',

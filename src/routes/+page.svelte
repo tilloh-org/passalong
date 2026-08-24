@@ -34,33 +34,79 @@
 	<header class="masthead">
 		<a class="brand" href="/">passalong</a>
 		<p>Eine Sammlung. Viele Wege, Dinge weiterzugeben.</p>
+		{#if data.isAuthenticated}
+			<form class="session-control" method="POST" action="?/logout">
+				<button type="submit">Abmelden</button>
+			</form>
+		{/if}
 	</header>
 
-	{#if !data.collection}
+	{#if !data.isAuthenticated}
 		<section class="onboarding" aria-labelledby="onboarding-title">
-			<p class="eyebrow">Deine erste Sammlung</p>
-			<h1 id="onboarding-title">Was darf weiterziehen?</h1>
-			<p class="intro">
-				Lege eine persönliche Sammlung an. Artikel, Bilder und Verkaufswege kommen danach dazu.
-			</p>
+			{#if data.isInitialSetup}
+				<p class="eyebrow">Willkommen</p>
+				<h1 id="onboarding-title">Ersten Zugang erstellen</h1>
+				<p class="intro">Erstelle das Admin-Konto für deine persönliche passalong-Instanz.</p>
+				<form method="POST" action="?/register">
+					<label>
+						<span>Benutzername</span>
+						<input name="username" autocomplete="username" required />
+					</label>
+					<label>
+						<span>Dein Name</span>
+						<input name="displayName" autocomplete="name" required />
+					</label>
+					<label>
+						<span>Passwort</span>
+						<input name="password" type="password" autocomplete="new-password" minlength="12" required />
+					</label>
+					{#if form?.registerError}
+						<p class="form-error" role="alert">{form.registerError}</p>
+					{/if}
+					<button type="submit">Zugang erstellen</button>
+				</form>
+			{:else}
+				<p class="eyebrow">Willkommen zurück</p>
+				<h1 id="onboarding-title">Anmelden</h1>
+				<p class="intro">Melde dich an, um deine Sammlungen zu verwalten.</p>
+				<form method="POST" action="?/login">
+					<label>
+						<span>Benutzername</span>
+						<input name="username" autocomplete="username" required />
+					</label>
+					<label>
+						<span>Passwort</span>
+						<input name="password" type="password" autocomplete="current-password" required />
+					</label>
+					{#if form?.loginError}
+						<p class="form-error" role="alert">{form.loginError}</p>
+					{/if}
+					<button type="submit">Anmelden</button>
+				</form>
+			{/if}
+		</section>
+	{:else if !data.collection}
+		<section class="onboarding" aria-labelledby="collections-title">
+			<p class="eyebrow">Dein Bereich</p>
+			<h1 id="collections-title">Deine Sammlungen</h1>
+			<p class="intro">Lege eine Sammlung an, um Dinge zu erfassen, die weiterziehen dürfen.</p>
 			<form method="POST" action="?/createCollection">
-				<label>
-					<span>Zugangs-Code</span>
-					<input name="accessToken" type="password" autocomplete="off" required />
-				</label>
-				{#if form?.createCollectionError}
-					<p class="form-error" role="alert">{form.createCollectionError}</p>
-				{/if}
-				<label>
-					<span>Dein Name</span>
-					<input name="ownerName" autocomplete="name" required />
-				</label>
 				<label>
 					<span>Name der Sammlung</span>
 					<input name="collectionName" required />
 				</label>
+				{#if form?.createCollectionError}
+					<p class="form-error" role="alert">{form.createCollectionError}</p>
+				{/if}
 				<button type="submit">Sammlung anlegen</button>
 			</form>
+			{#if data.collections.length}
+				<nav class="collection-list" aria-label="Deine Sammlungen">
+					{#each data.collections as collection}
+						<a href={`/?collection=${encodeURIComponent(collection.id)}`}>{collection.name}</a>
+					{/each}
+				</nav>
+			{/if}
 		</section>
 	{:else}
 		<section class="collection-header" aria-labelledby="collection-title">
@@ -175,6 +221,27 @@
 		color: var(--color-text-muted);
 		font-size: 0.9rem;
 		margin: 0;
+	}
+
+	.session-control {
+		display: block;
+	}
+
+	.session-control button {
+		font-size: 0.85rem;
+		padding: 0.55rem 0.75rem;
+	}
+
+	.collection-list {
+		display: grid;
+		gap: 0.5rem;
+		margin-top: 1.5rem;
+	}
+
+	.collection-list a {
+		color: var(--color-accent);
+		font-weight: 700;
+		text-decoration: none;
 	}
 
 	.onboarding {

@@ -1,14 +1,18 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Core collection', () => {
-	test('creates a collection and stores an item', async ({ page }) => {
+	test('registers the first admin, logs in, and protects collection data', async ({ page }) => {
 		await page.goto('/');
 
-		await page.getByLabel('Zugangs-Code').fill('playwright-access-token');
+		await expect(page.getByRole('heading', { name: 'Ersten Zugang erstellen' })).toBeVisible();
+		await page.getByLabel('Benutzername').fill('avery');
 		await page.getByLabel('Dein Name').fill('Avery');
+		await page.getByLabel('Passwort').fill('correct-horse-battery-staple');
+		await page.getByRole('button', { name: 'Zugang erstellen' }).click();
+
+		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 		await page.getByLabel('Name der Sammlung').fill('Wohnzimmer-Ausmisten');
 		await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
-
 		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
 
 		await page.getByLabel('Artikelname').fill('Leselampe');
@@ -17,14 +21,21 @@ test.describe('Core collection', () => {
 		await page.getByLabel('Zustand').selectOption('good');
 		await page.getByLabel('Interne Notizen').fill('Vor dem Inserieren die Glühbirne austauschen.');
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
-
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
-		await expect(page.getByText('12,00 €')).toBeVisible();
 
 		const protectedUrl = page.url();
+		await page.getByRole('button', { name: 'Abmelden' }).click();
+		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
+		await expect(page.getByText('Vor dem Inserieren die Glühbirne austauschen.')).not.toBeVisible();
+
+		await page.getByLabel('Benutzername').fill('avery');
+		await page.getByLabel('Passwort').fill('correct-horse-battery-staple');
+		await page.getByRole('button', { name: 'Anmelden' }).click();
+		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+
 		await page.context().clearCookies();
 		await page.goto(protectedUrl);
-		await expect(page.getByRole('heading', { name: 'Was darf weiterziehen?' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
 		await expect(page.getByText('Vor dem Inserieren die Glühbirne austauschen.')).not.toBeVisible();
 	});
 });
