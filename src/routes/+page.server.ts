@@ -1,32 +1,41 @@
+import { timingSafeEqual } from 'node:crypto';
 import { fail, redirect } from '@sveltejs/kit';
 import { itemCategories, itemConditions, type ItemCategory, type ItemCondition } from '$lib/server/collection-repository';
 import { getCollectionRepository } from '$lib/server/repository';
+import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
 import type { Actions, PageServerLoad } from './$types';
 
+const sessionCookieName = 'passalong_session';
+
 /**
- * Load the selected collection and its items from the persistent repository.
+ * Load only the collection owned by the authenticated session.
  *
  * @param {Parameters<PageServerLoad>[0]} event - The SvelteKit load event.
- * @returns {ReturnType<PageServerLoad>} Collection data for the page.
+ * @returns {ReturnType<PageServerLoad>} Tenant-scoped page data.
  */
-export const load: PageServerLoad = ({ url }) => {
+export const load: PageServerLoad = ({ cookies, url }) => {
 	const repository = getCollectionRepository();
+	const scope = getSessionScope(cookies.get(sessionCookieName));
 	const collectionId = url.searchParams.get('collection');
-	const collection = collectionId ? repository.getCollection(collectionId) : null;
+	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
 
 	return {
 		collection,
-		items: collection ? repository.listItems(collection.id) : [],
+		items: collection && scope ? repository.listItemsForOwner(collection.id, scope) : [],
 		categoryOptions: itemCategories,
-		conditionOptions: itemConditions
+		conditionOptions: itemConditions,
+		isAuthenticated: Boolean(scope)
 	};
 };
 
 export const actions: Actions = {
-	createCollection: async ({ request }) => {
+	createCollection: async ({ cookies, request }) => {
 		const formData = await request.formData();
-		const repository = getCollectionRepository();
+		if (!isValidAccessToken(getFormText(formData, 'accessToken'))) {
+			return fail(403, { createCollectionError: 'Der Zugangs-Code ist ungültig.' });
+		}
 
+		const repository = getCollectionRepository();
 		let collection;
 		try {
 			collection = repository.createCollection({
@@ -37,14 +46,20 @@ export const actions: Actions = {
 			return fail(400, { createCollectionError: getErrorMessage(error) });
 		}
 
+		setSessionCookie(cookies, collection.id);
 		redirect(303, `/?collection=${encodeURIComponent(collection.id)}`);
 	},
 
-	addItem: async ({ request }) => {
+	addItem: async ({ cookies, request }) => {
 		const formData = await request.formData();
 		const repository = getCollectionRepository();
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(401, { addItemError: 'Deine Sitzung ist abgelaufen. Bitte richte den Zugang erneut ein.' });
+		}
+
 		const collectionId = getFormText(formData, 'collectionId');
-		if (!repository.getCollection(collectionId)) {
+		if (!repository.getCollectionForOwner(collectionId, scope)) {
 			return fail(404, { addItemError: 'Die Sammlung wurde nicht gefunden.' });
 		}
 
@@ -89,12 +104,56 @@ function getPriceCents(formData: FormData): number {
 	if (!/^\d+$/.test(value)) {
 		throw new Error('Bitte gib einen Preis in Cent als ganze Zahl ein.');
 	}
-
 	const priceCents = Number(value);
 	if (!Number.isSafeInteger(priceCents) || priceCents > 10_000_000) {
 		throw new Error('Der Preis liegt außerhalb des erlaubten Bereichs.');
 	}
 	return priceCents;
+}
+
+/**
+ * Resolve a cookie token to an active tenant/user scope.
+ *
+ * @param {string | undefined} token - Raw session cookie value.
+ * @returns {ReturnType<ReturnType<typeof getCollectionRepository>['getSession']>} Active scope or null.
+ */
+function getSessionScope(token: string | undefined) {
+	return token ? getCollectionRepository().getSession(hashSessionToken(token)) : null;
+}
+
+/**
+ * Validate the bootstrap token without exposing its value through timing differences.
+ *
+ * @param {string} suppliedToken - Untrusted submitted token.
+ * @returns {boolean} Whether the configured access token matches.
+ */
+function isValidAccessToken(suppliedToken: string): boolean {
+	const configuredToken = process.env.PASSALONG_SETUP_TOKEN;
+	if (!configuredToken) {
+		return false;
+	}
+	const supplied = Buffer.from(suppliedToken);
+	const configured = Buffer.from(configuredToken);
+	return supplied.length === configured.length && timingSafeEqual(supplied, configured);
+}
+
+/**
+ * Persist a server-side session and set the hardened browser cookie.
+ *
+ * @param {Parameters<Actions['createCollection']>[0]['cookies']} cookies - SvelteKit cookie helper.
+ * @param {string} collectionId - Collection whose owner receives the session.
+ * @returns {void}
+ */
+function setSessionCookie(cookies: Parameters<Actions['createCollection']>[0]['cookies'], collectionId: string): void {
+	const token = createSessionToken();
+	getCollectionRepository().createSessionForCollection(collectionId, hashSessionToken(token));
+	cookies.set(sessionCookieName, token, {
+		httpOnly: true,
+		path: '/',
+		sameSite: 'lax',
+		secure: process.env.NODE_ENV === 'production',
+		maxAge: 60 * 60 * 24 * 30
+	});
 }
 
 /**

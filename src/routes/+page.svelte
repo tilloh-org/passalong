@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 
-	let { data } = $props();
+	let { data, form } = $props();
 
 	const categoryLabels: Record<string, string> = {
 		clothing: 'Kleidung',
@@ -44,6 +44,13 @@
 				Lege eine persönliche Sammlung an. Artikel, Bilder und Verkaufswege kommen danach dazu.
 			</p>
 			<form method="POST" action="?/createCollection">
+				<label>
+					<span>Zugangs-Code</span>
+					<input name="accessToken" type="password" autocomplete="off" required />
+				</label>
+				{#if form?.createCollectionError}
+					<p class="form-error" role="alert">{form.createCollectionError}</p>
+				{/if}
 				<label>
 					<span>Dein Name</span>
 					<input name="ownerName" autocomplete="name" required />
@@ -102,6 +109,9 @@
 						<span>Interne Notizen</span>
 						<textarea name="internalNotes" rows="3"></textarea>
 					</label>
+					{#if form?.addItemError}
+						<p class="form-error" role="alert">{form.addItemError}</p>
+					{/if}
 					<button type="submit">Artikel hinzufügen</button>
 				</form>
 			</section>
@@ -212,6 +222,15 @@
 	form {
 		display: grid;
 		gap: 1rem;
+	}
+
+	.form-error {
+		background: color-mix(in srgb, #b42318 14%, var(--color-surface));
+		border: 1px solid #b42318;
+		border-radius: 0.65rem;
+		color: var(--color-text);
+		margin: 0;
+		padding: 0.65rem 0.8rem;
 	}
 
 	label {

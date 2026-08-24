@@ -49,11 +49,20 @@ export interface CreateItemInput {
 	internalNotes: string;
 }
 
+export interface SessionScope {
+	userId: string;
+	tenantId: string;
+}
+
 export interface CollectionRepository {
 	createCollection(input: CreateCollectionInput): Collection;
 	getCollection(collectionId: string): Collection | null;
+	getCollectionForOwner(collectionId: string, scope: SessionScope): Collection | null;
+	createSessionForCollection(collectionId: string, tokenHash: string): void;
+	getSession(tokenHash: string): SessionScope | null;
 	listCollections(): Collection[];
 	createItem(input: CreateItemInput): Item;
+	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
 	listItems(collectionId: string): Item[];
 }
 
@@ -129,6 +138,54 @@ export function createCollectionRepository(
 			return row ? { id: row.id, name: row.name, ownerName: row.owner_name } : null;
 		},
 
+		getCollectionForOwner(collectionId, scope) {
+			const row = database
+				.prepare(
+					`SELECT collections.id, collections.name, users.display_name AS owner_name
+					 FROM collections
+					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
+				)
+				.get(collectionId, scope.userId, scope.tenantId) as
+				| { id: string; name: string; owner_name: string }
+				| undefined;
+			return row ? { id: row.id, name: row.name, ownerName: row.owner_name } : null;
+		},
+
+		createSessionForCollection(collectionId, tokenHash) {
+			const session = database
+				.prepare('SELECT owner_id, tenant_id FROM collections WHERE id = ?')
+				.get(collectionId) as { owner_id: string; tenant_id: string } | undefined;
+			if (!session) {
+				throw new Error('collection was not found');
+			}
+			database
+				.prepare(
+					`INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at)
+					 VALUES (?, ?, ?, ?, ?, ?)`
+				)
+				.run(
+					randomUUID(),
+					session.owner_id,
+					session.tenant_id,
+					tokenHash,
+					new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString(),
+					new Date().toISOString()
+				);
+		},
+
+		getSession(tokenHash) {
+			const row = database
+				.prepare(
+					`SELECT user_id, tenant_id FROM sessions
+					 WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?`
+				)
+				.get(tokenHash, new Date().toISOString()) as
+				| { user_id: string; tenant_id: string }
+				| undefined;
+			return row ? { userId: row.user_id, tenantId: row.tenant_id } : null;
+		},
+
 		listCollections() {
 			return database
 				.prepare(
@@ -178,6 +235,19 @@ export function createCollectionRepository(
 			return item;
 		},
 
+		listItemsForOwner(collectionId, scope) {
+			return database
+				.prepare(
+					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes
+					 FROM items
+					 JOIN collections ON collections.id = items.collection_id
+					 WHERE items.collection_id = ? AND collections.owner_id = ? AND collections.tenant_id = ?
+					 ORDER BY items.created_at DESC, items.id DESC`
+				)
+				.all(collectionId, scope.userId, scope.tenantId)
+				.map((row) => mapItemRow(row as ItemRow));
+		},
+
 		listItems(collectionId) {
 			return database
 				.prepare(
@@ -211,6 +281,16 @@ function createSchema(database: Database.Database): void {
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id)
+		);
+		CREATE TABLE IF NOT EXISTS sessions (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			tenant_id TEXT NOT NULL,
+			token_hash TEXT NOT NULL UNIQUE,
+			expires_at TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			revoked_at TEXT,
+			FOREIGN KEY (user_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE CASCADE
 		);
 		CREATE TABLE IF NOT EXISTS collections (
 			id TEXT PRIMARY KEY,

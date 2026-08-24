@@ -92,4 +92,15 @@ describe('collection repository', () => {
 			})
 		).toThrow();
 	});
+
+	it('scopes a session to its collection owner', () => {
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const collection = repository.createCollection({ ownerName: 'Ada', name: 'Studio' });
+		repository.createSessionForCollection(collection.id, 'test-token-hash');
+
+		const scope = repository.getSession('test-token-hash');
+		expect(scope).not.toBeNull();
+		expect(repository.getCollectionForOwner(collection.id, scope!)).toEqual(collection);
+		expect(repository.getCollectionForOwner(collection.id, { ...scope!, userId: 'another-user' })).toBeNull();
+	});
 });

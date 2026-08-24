@@ -4,6 +4,7 @@ test.describe('Core collection', () => {
 	test('creates a collection and stores an item', async ({ page }) => {
 		await page.goto('/');
 
+		await page.getByLabel('Zugangs-Code').fill('playwright-access-token');
 		await page.getByLabel('Dein Name').fill('Avery');
 		await page.getByLabel('Name der Sammlung').fill('Wohnzimmer-Ausmisten');
 		await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
@@ -19,5 +20,11 @@ test.describe('Core collection', () => {
 
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 		await expect(page.getByText('12,00 €')).toBeVisible();
+
+		const protectedUrl = page.url();
+		await page.context().clearCookies();
+		await page.goto(protectedUrl);
+		await expect(page.getByRole('heading', { name: 'Was darf weiterziehen?' })).toBeVisible();
+		await expect(page.getByText('Vor dem Inserieren die Glühbirne austauschen.')).not.toBeVisible();
 	});
 });

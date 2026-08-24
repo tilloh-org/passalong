@@ -13,6 +13,7 @@ services:
       PORT: 4242
       ORIGIN: ${PASSALONG_ORIGIN:-http://localhost:4242}
       PASSALONG_DATABASE_PATH: /data/passalong.sqlite
+      PASSALONG_SETUP_TOKEN: ${PASSALONG_SETUP_TOKEN:?Set PASSALONG_SETUP_TOKEN to a long random secret before starting passalong}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4242"]
       interval: 30s
