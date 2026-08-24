@@ -45,9 +45,17 @@ marketplaces, or a simple hand-over to friends.
 ```bash
 git clone https://github.com/tilloh-org/passalong.git
 cd passalong
+umask 077
+printf 'PASSALONG_SETUP_TOKEN=%s\n' "$(openssl rand -base64 32)" > .env
 docker compose up -d --build
 # open http://localhost:4242
 ```
+
+`PASSALONG_SETUP_TOKEN` is a high-entropy deployment secret. Keep `.env` local,
+store the value in your password manager and never commit or paste it into an
+issue, PR or chat. The first owner enters it in the setup form; the server then
+creates a 30-day, HttpOnly owner-session cookie. Without that cookie, a known
+collection URL cannot reveal its items or internal notes.
 
 Builds the image locally from the Dockerfile. Once the first release is
 published, a prebuilt image is available from GitHub Container Registry
