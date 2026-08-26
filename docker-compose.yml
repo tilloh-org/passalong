@@ -14,7 +14,7 @@ services:
       ORIGIN: ${PASSALONG_ORIGIN:-http://localhost:4242}
       PASSALONG_DATABASE_PATH: /data/passalong.sqlite
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:4242"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4242"]
       interval: 30s
       timeout: 5s
       retries: 3
