@@ -112,9 +112,7 @@ export function createCollectionRepository(
 	database.pragma('foreign_keys = ON');
 	database.pragma('journal_mode = WAL');
 	database.pragma('busy_timeout = 5000');
-	createSchema(database);
-	migrateSchema(database);
-	createIndexes(database);
+	initializeSchema(database);
 
 	return {
 		hasAdminAccount() {
@@ -316,6 +314,40 @@ export function createCollectionRepository(
 }
 
 /**
+ * Initialize an empty database or atomically migrate an existing one.
+ *
+ * @param {Database.Database} database - The SQLite connection to initialize.
+ * @returns {void}
+ */
+function initializeSchema(database: Database.Database): void {
+	if (isEmptyDatabase(database)) {
+		database.transaction(() => {
+			createSchema(database);
+			assertForeignKeys(database);
+			createIndexes(database);
+			database
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+				.run(tenantSchemaFoundationVersion, new Date().toISOString());
+		})();
+		return;
+	}
+
+	migrateSchema(database);
+}
+
+/**
+ * Determine whether a SQLite database has no application tables.
+ *
+ * @param {Database.Database} database - The SQLite connection to inspect.
+ * @returns {boolean} Whether the database contains no application tables.
+ */
+function isEmptyDatabase(database: Database.Database): boolean {
+	return !database
+		.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1")
+		.get();
+}
+
+/**
  * Create the current schema for a new SQLite database.
  *
  * @param {Database.Database} database - The SQLite connection to initialize.
@@ -421,23 +453,22 @@ function createIndexes(database: Database.Database): void {
  * @returns {void}
  */
 function migrateSchema(database: Database.Database): void {
-	if (
-		database
-			.prepare('SELECT 1 FROM schema_migrations WHERE version = ?')
-			.get(tenantSchemaFoundationVersion)
-	) {
+	if (hasMigrationVersion(database, tenantSchemaFoundationVersion)) {
+		database.transaction(() => {
+			createIndexes(database);
+		})();
 		return;
 	}
-
-	const legacyAdminUserIds = hasColumn(database, 'users', 'is_admin')
-		? (database.prepare('SELECT id FROM users WHERE is_admin = 1').all() as { id: string }[]).map(
-			({ id }) => id
-		)
-		: [];
 
 	database.pragma('foreign_keys = OFF');
 	try {
 		database.transaction(() => {
+			createSchema(database);
+			const legacyAdminUserIds = hasColumn(database, 'users', 'is_admin')
+				? (database.prepare('SELECT id FROM users WHERE is_admin = 1').all() as { id: string }[]).map(
+						({ id }) => id
+					)
+				: [];
 			rebuildUsers(database);
 			rebuildSessions(database);
 			rebuildCollections(database);
@@ -451,8 +482,8 @@ function migrateSchema(database: Database.Database): void {
 					)
 					.run(userId, 'instance_admin', new Date().toISOString());
 			}
-			createSchema(database);
 			assertForeignKeys(database);
+			createIndexes(database);
 			database
 				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
 				.run(tenantSchemaFoundationVersion, new Date().toISOString());
@@ -460,6 +491,17 @@ function migrateSchema(database: Database.Database): void {
 	} finally {
 		database.pragma('foreign_keys = ON');
 	}
+}
+
+/**
+ * Determine whether a migration version has already been applied.
+ *
+ * @param {Database.Database} database - The SQLite connection to inspect.
+ * @param {string} version - Migration version to find.
+ * @returns {boolean} Whether the version has been recorded.
+ */
+function hasMigrationVersion(database: Database.Database, version: string): boolean {
+	return hasTable(database, 'schema_migrations') && Boolean(database.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(version));
 }
 
 /**
@@ -644,6 +686,19 @@ function assertCopiedRowCount(database: Database.Database, sourceTable: string, 
  */
 function getTableRowCount(database: Database.Database, tableName: string): number {
 	return (database.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count: number }).count;
+}
+
+/**
+ * Determine whether a trusted SQLite table exists.
+ *
+ * @param {Database.Database} database - The SQLite connection to inspect.
+ * @param {string} tableName - Trusted internal table name.
+ * @returns {boolean} Whether the table exists.
+ */
+function hasTable(database: Database.Database, tableName: string): boolean {
+	return Boolean(
+		database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName)
+	);
 }
 
 /**

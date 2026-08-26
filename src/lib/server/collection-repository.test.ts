@@ -18,6 +18,57 @@ function createDatabasePath(): string {
 	return join(directory, 'passalong.sqlite');
 }
 
+/**
+ * Create a pre-authentication core collection database fixture.
+ *
+ * @param {string} databasePath - SQLite database file path.
+ * @returns {void}
+ */
+function createOriginalCoreCollectionDatabase(databasePath: string): void {
+	const database = new Database(databasePath);
+	const createdAt = '2026-01-01T00:00:00.000Z';
+	database.exec(`
+		CREATE TABLE tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
+		CREATE TABLE users (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			display_name TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id)
+		);
+		CREATE TABLE collections (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			owner_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		);
+		CREATE TABLE items (
+			id TEXT PRIMARY KEY,
+			collection_id TEXT NOT NULL,
+			title TEXT NOT NULL,
+			price_cents INTEGER NOT NULL,
+			category TEXT NOT NULL,
+			condition TEXT NOT NULL,
+			internal_notes TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		);
+	`);
+	database.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)').run('legacy-tenant', 'Legacy household', createdAt);
+	database
+		.prepare('INSERT INTO users (id, tenant_id, display_name, created_at) VALUES (?, ?, ?, ?)')
+		.run('legacy-user', 'legacy-tenant', 'Legacy owner', createdAt);
+	database
+		.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
+		.run('legacy-collection', 'legacy-tenant', 'legacy-user', 'Legacy collection', createdAt);
+	database
+		.prepare(
+			'INSERT INTO items (id, collection_id, title, price_cents, category, condition, internal_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+		)
+		.run('legacy-item', 'legacy-collection', 'Legacy item', 100, 'home', 'good', '', createdAt);
+	database.close();
+}
+
 afterEach(() => {
 	for (const directory of temporaryDirectories.splice(0)) {
 		rmSync(directory, { force: true, recursive: true });
@@ -117,6 +168,160 @@ describe('collection repository', () => {
 				anotherScope
 			)
 		).toThrow('collection was not found');
+	});
+
+	it('migrates the original core collection fixture atomically and idempotently', () => {
+		const databasePath = createDatabasePath();
+		createOriginalCoreCollectionDatabase(databasePath);
+
+		const repository = createCollectionRepository({ databasePath });
+		const legacyScope = { userId: 'legacy-user', tenantId: 'legacy-tenant' };
+		expect(repository.getCollectionForOwner('legacy-collection', legacyScope)).toMatchObject({
+			id: 'legacy-collection',
+			name: 'Legacy collection'
+		});
+
+		const migratedDatabase = new Database(databasePath, { readonly: true });
+		expect(
+			migratedDatabase
+				.prepare('SELECT tenant_id, owner_id, collection_id FROM items WHERE id = ?')
+				.get('legacy-item')
+		).toEqual({ tenant_id: 'legacy-tenant', owner_id: 'legacy-user', collection_id: 'legacy-collection' });
+		expect(migratedDatabase.prepare('SELECT COUNT(*) AS count FROM sessions').get()).toEqual({ count: 0 });
+		expect(migratedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get()).toEqual({ count: 0 });
+		expect(migratedDatabase.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+		migratedDatabase.close();
+
+		createCollectionRepository({ databasePath });
+		const reopenedDatabase = new Database(databasePath, { readonly: true });
+		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 1 });
+		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM items').get()).toEqual({ count: 1 });
+		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM sessions').get()).toEqual({ count: 0 });
+		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get()).toEqual({ count: 0 });
+		expect(reopenedDatabase.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+		reopenedDatabase.close();
+	});
+
+	it('rolls back every migration write when legacy usernames collide case-insensitively', () => {
+		const databasePath = createDatabasePath();
+		const legacyDatabase = new Database(databasePath);
+		legacyDatabase.exec(`
+			CREATE TABLE tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
+			CREATE TABLE users (
+				id TEXT PRIMARY KEY,
+				tenant_id TEXT NOT NULL,
+				username TEXT UNIQUE,
+				display_name TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				UNIQUE (id, tenant_id)
+			);
+			CREATE TABLE collections (
+				id TEXT PRIMARY KEY,
+				tenant_id TEXT NOT NULL,
+				owner_id TEXT NOT NULL,
+				name TEXT NOT NULL,
+				created_at TEXT NOT NULL
+			);
+			CREATE TABLE items (
+				id TEXT PRIMARY KEY,
+				collection_id TEXT NOT NULL,
+				title TEXT NOT NULL,
+				price_cents INTEGER NOT NULL,
+				category TEXT NOT NULL,
+				condition TEXT NOT NULL,
+				internal_notes TEXT NOT NULL DEFAULT '',
+				created_at TEXT NOT NULL
+			);
+		`);
+		const createdAt = '2026-01-01T00:00:00.000Z';
+		legacyDatabase.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)').run('tenant-a', 'Alpha', createdAt);
+		legacyDatabase
+			.prepare('INSERT INTO users (id, tenant_id, username, display_name, created_at) VALUES (?, ?, ?, ?, ?)')
+			.run('user-a', 'tenant-a', 'Alice', 'Alice', createdAt);
+		legacyDatabase
+			.prepare('INSERT INTO users (id, tenant_id, username, display_name, created_at) VALUES (?, ?, ?, ?, ?)')
+			.run('user-b', 'tenant-a', 'alice', 'Alice duplicate', createdAt);
+		legacyDatabase.close();
+
+		expect(() => createCollectionRepository({ databasePath })).toThrow(/UNIQUE constraint failed/);
+
+		const unchangedDatabase = new Database(databasePath, { readonly: true });
+		expect(
+			unchangedDatabase
+				.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+				.all()
+		).toEqual([{ name: 'collections' }, { name: 'items' }, { name: 'tenants' }, { name: 'users' }]);
+		expect(unchangedDatabase.prepare('SELECT id, username FROM users ORDER BY id').all()).toEqual([
+			{ id: 'user-a', username: 'Alice' },
+			{ id: 'user-b', username: 'alice' }
+		]);
+		unchangedDatabase.close();
+	});
+
+	it('rejects mixed-tenant foreign-key relationships and creates tenant indexes', () => {
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const alpha = repository.createInitialAdmin({
+			username: 'alpha',
+			displayName: 'Alpha',
+			passwordHash: 'scrypt$alpha$hash'
+		});
+		const collection = repository.createCollection({ name: 'Alpha collection' }, alpha);
+		const item = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Alpha item',
+				priceCents: 100,
+				category: 'home',
+				condition: 'good',
+				internalNotes: ''
+			},
+			alpha
+		);
+		const database = new Database(databasePath);
+		database.pragma('foreign_keys = ON');
+		database.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)').run('tenant-b', 'Beta', '2026-01-01T00:00:00.000Z');
+		database
+			.prepare('INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+			.run('user-b', 'tenant-b', 'beta', 'Beta', 'scrypt$beta$hash', '2026-01-01T00:00:00.000Z');
+
+		expect(() =>
+			database
+				.prepare('INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+				.run('session-b', alpha.userId, 'tenant-b', 'token-b', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+		).toThrow(/FOREIGN KEY constraint failed/);
+		expect(() =>
+			database
+				.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
+				.run('collection-b', 'tenant-b', alpha.userId, 'Mixed collection', '2026-01-01T00:00:00.000Z')
+		).toThrow(/FOREIGN KEY constraint failed/);
+		expect(() =>
+			database
+				.prepare('INSERT INTO items (id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+				.run('item-b', 'tenant-b', alpha.userId, collection.id, 'Mixed item', 100, 'home', 'good', '', '2026-01-01T00:00:00.000Z')
+		).toThrow(/FOREIGN KEY constraint failed/);
+		expect(() =>
+			database
+				.prepare('INSERT INTO item_images (id, tenant_id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+				.run('image-b', 'tenant-b', item.id, 'items/mixed.jpg', 0, 1, '2026-01-01T00:00:00.000Z')
+		).toThrow(/FOREIGN KEY constraint failed/);
+
+		const indexNames = new Set(
+			['users', 'sessions', 'collections', 'items', 'item_images'].flatMap((tableName) =>
+				(database.prepare(`PRAGMA index_list(${tableName})`).all() as { name: string }[]).map(({ name }) => name)
+			)
+		);
+		expect([...indexNames]).toEqual(
+			expect.arrayContaining([
+				'users_tenant_id_idx',
+				'sessions_tenant_user_idx',
+				'collections_tenant_owner_created_idx',
+				'items_tenant_collection_created_idx',
+				'items_tenant_owner_created_idx',
+				'item_images_tenant_item_position_idx'
+			])
+		);
+		database.close();
 	});
 
 	it('migrates a legacy owner schema without deleting existing records', () => {
