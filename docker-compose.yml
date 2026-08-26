@@ -11,6 +11,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4242
+      ORIGIN: ${PASSALONG_ORIGIN:-http://localhost:4242}
+      PASSALONG_DATABASE_PATH: /data/passalong.sqlite
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4242"]
       interval: 30s
