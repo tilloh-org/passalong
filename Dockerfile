@@ -14,9 +14,11 @@ RUN pnpm install --prod --frozen-lockfile
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-# Remove npm CLI: not needed at runtime (started via node build/index.js)
-# and eliminates CVEs in bundled npm dependencies (brace-expansion, ip-address, ...)
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && \
+# Upgrade Alpine packages before adding the application runtime. This picks up
+# security fixes that may not yet be present in the mutable Node base-image tag.
+# Remove npm CLI: it is not needed at runtime (started via node build/index.js).
+RUN apk upgrade --no-cache && \
+    rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && \
     addgroup -S app && adduser -S app -G app && \
     mkdir -p /data && chown app:app /data
 
