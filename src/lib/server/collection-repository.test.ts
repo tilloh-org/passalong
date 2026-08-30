@@ -81,6 +81,7 @@ describe('collection repository', () => {
 		const repository = createCollectionRepository({ databasePath });
 
 		expect(repository.hasAdminAccount()).toBe(false);
+		expect(repository.hasAccounts()).toBe(false);
 		const admin = repository.createInitialAdmin({
 			username: 'avery',
 			displayName: 'Avery',
@@ -105,6 +106,73 @@ describe('collection repository', () => {
 		const database = new Database(databasePath, { readonly: true });
 		expect(database.prepare('SELECT user_id, role FROM instance_roles').all()).toEqual([
 			{ user_id: admin.userId, role: 'instance_admin' }
+		]);
+		database.close();
+	});
+
+	it('enforces a database-level singleton for the instance administrator role', () => {
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const administrator = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const database = new Database(databasePath);
+		database.pragma('foreign_keys = ON');
+		database
+			.prepare(
+				'INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+			)
+			.run('second-user', administrator.tenantId, 'blake', 'Blake', 'scrypt$test-salt$test-key', '2026-01-01T00:00:00.000Z');
+
+		expect(() =>
+			database
+				.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
+				.run('second-user', 'instance_admin', '2026-01-01T00:00:00.000Z')
+		).toThrow(/UNIQUE constraint failed/);
+		database.close();
+	});
+
+	it('creates a multi-account bootstrap manifest once with exactly one instance administrator', () => {
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const accounts = [
+			{
+				tenantName: 'Avery household',
+				username: 'avery',
+				displayName: 'Avery',
+				password: 'not-a-real-password-avery',
+				passwordHash: 'scrypt$avery$hash',
+				instanceAdmin: true
+			},
+			{
+				tenantName: 'Blake household',
+				username: 'blake',
+				displayName: 'Blake',
+				password: 'not-a-real-password-blake',
+				passwordHash: 'scrypt$blake$hash',
+				instanceAdmin: false
+			}
+		];
+
+		repository.provisionBootstrapAccounts(accounts);
+
+		expect(repository.getBootstrapAccount('avery')).toEqual({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$avery$hash',
+			tenantName: 'Avery household',
+			instanceAdmin: true
+		});
+
+		const database = new Database(databasePath, { readonly: true });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM tenants').get()).toEqual({ count: 2 });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual({ count: 1 });
+		expect(database.prepare('SELECT username FROM users ORDER BY username').all()).toEqual([
+			{ username: 'avery' },
+			{ username: 'blake' }
 		]);
 		database.close();
 	});

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
+import { verifyPasswordSync } from './password';
 
 export const itemCategories = [
 	'clothing',
@@ -41,6 +42,15 @@ export interface CreateInitialAdminInput {
 	passwordHash: string;
 }
 
+export interface BootstrapProvisionAccount {
+	tenantName: string;
+	username: string;
+	displayName: string;
+	password: string;
+	passwordHash: string;
+	instanceAdmin: boolean;
+}
+
 export interface CreateCollectionInput {
 	name: string;
 }
@@ -68,9 +78,20 @@ export interface LoginAccount extends AdminAccount {
 	passwordHash: string;
 }
 
+export interface BootstrapAccountDetails {
+	username: string;
+	displayName: string;
+	passwordHash: string;
+	tenantName: string;
+	instanceAdmin: boolean;
+}
+
 export interface CollectionRepository {
 	hasAdminAccount(): boolean;
+	hasAccounts(): boolean;
 	createInitialAdmin(input: CreateInitialAdminInput): AdminAccount;
+	provisionBootstrapAccounts(accounts: BootstrapProvisionAccount[]): void;
+	getBootstrapAccount(username: string): BootstrapAccountDetails | null;
 	getUserForLogin(username: string): LoginAccount | null;
 	createCollection(input: CreateCollectionInput, scope: SessionScope): Collection;
 	getCollectionForOwner(collectionId: string, scope: SessionScope): Collection | null;
@@ -119,6 +140,15 @@ export function createCollectionRepository(
 			return Boolean(database.prepare('SELECT 1 FROM users LIMIT 1').get());
 		},
 
+		/**
+		 * Determine whether the instance has at least one account globally.
+		 *
+		 * @returns {boolean} Whether any account exists.
+		 */
+		hasAccounts() {
+			return Boolean(database.prepare('SELECT 1 FROM users LIMIT 1').get());
+		},
+
 		createInitialAdmin(input) {
 			const username = normalizeUsername(input.username);
 			const displayName = requireText(input.displayName, 'displayName');
@@ -127,7 +157,7 @@ export function createCollectionRepository(
 			const userId = randomUUID();
 			const createdAt = new Date().toISOString();
 
-			database.transaction(() => {
+			runImmediateTransaction(database, () => {
 				if (database.prepare('SELECT 1 FROM users LIMIT 1').get()) {
 					throw new Error('an initial admin account already exists');
 				}
@@ -143,9 +173,120 @@ export function createCollectionRepository(
 				database
 					.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
 					.run(userId, 'instance_admin', createdAt);
-			})();
+			});
 
 			return { userId, tenantId, username, displayName };
+		},
+
+		/**
+		 * Create bootstrap accounts once without changing existing records.
+		 *
+		 * Every immutable comparison and insert runs under the same immediate transaction,
+		 * so a conflicting concurrent startup cannot apply a partial manifest.
+		 *
+		 * @param {BootstrapProvisionAccount[]} accounts - Validated bootstrap accounts.
+		 * @returns {void}
+		 * @throws {Error} When the manifest conflicts or would add another instance administrator.
+		 */
+		provisionBootstrapAccounts(accounts) {
+			const normalizedAccounts = accounts.map((account) => ({
+				tenantName: requireText(account.tenantName, 'tenantName'),
+				username: normalizeUsername(account.username),
+				displayName: requireText(account.displayName, 'displayName'),
+				password: requirePassword(account.password),
+				passwordHash: requireText(account.passwordHash, 'passwordHash'),
+				instanceAdmin: account.instanceAdmin
+			}));
+
+			runImmediateTransaction(database, () => {
+				const hasAccounts = Boolean(database.prepare('SELECT 1 FROM users LIMIT 1').get());
+				const existingAdministratorCount = (
+					database.prepare("SELECT COUNT(*) AS count FROM instance_roles WHERE role = 'instance_admin'").get() as {
+						count: number;
+					}
+				).count;
+				const accountsToCreate = normalizedAccounts.filter((account) => {
+					const existingAccount = readBootstrapAccount(database, account.username);
+					if (!existingAccount) {
+						return true;
+					}
+					if (
+						existingAccount.tenantName !== account.tenantName ||
+						existingAccount.displayName !== account.displayName ||
+						existingAccount.instanceAdmin !== account.instanceAdmin ||
+						!verifyPasswordSync(account.password, existingAccount.passwordHash)
+					) {
+						throw new Error('Bootstrap configuration conflicts with an existing account.');
+					}
+					return false;
+				});
+				const newAdministratorCount = accountsToCreate.filter(({ instanceAdmin }) => instanceAdmin).length;
+
+				if (!hasAccounts && normalizedAccounts.length > 0 && normalizedAccounts.filter(({ instanceAdmin }) => instanceAdmin).length !== 1) {
+					throw new Error('bootstrap configuration requires exactly one instance administrator');
+				}
+				if (hasAccounts && newAdministratorCount > 0) {
+					throw new Error('bootstrap configuration cannot create another instance administrator');
+				}
+				if (existingAdministratorCount > 1) {
+					throw new Error('instance administrator role is not unique');
+				}
+
+				for (const account of accountsToCreate) {
+					const tenantId = randomUUID();
+					const userId = randomUUID();
+					const createdAt = new Date().toISOString();
+					database
+						.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+						.run(tenantId, account.tenantName, createdAt);
+					database
+						.prepare(
+							`INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at)
+							 VALUES (?, ?, ?, ?, ?, ?)`
+						)
+						.run(userId, tenantId, account.username, account.displayName, account.passwordHash, createdAt);
+					if (account.instanceAdmin) {
+						database
+							.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
+							.run(userId, 'instance_admin', createdAt);
+					}
+				}
+			});
+		},
+
+		/**
+		 * Read the immutable bootstrap-relevant fields for an existing account.
+		 *
+		 * @param {string} username - Case-insensitive account username.
+		 * @returns {BootstrapAccountDetails | null} Existing bootstrap account details, or null.
+		 */
+		getBootstrapAccount(username) {
+			const row = database
+				.prepare(
+					`SELECT users.username, users.display_name, users.password_hash, tenants.name AS tenant_name,
+					 EXISTS(SELECT 1 FROM instance_roles WHERE instance_roles.user_id = users.id AND instance_roles.role = 'instance_admin') AS instance_admin
+					 FROM users
+					 JOIN tenants ON tenants.id = users.tenant_id
+					 WHERE users.username = ?`
+				)
+				.get(normalizeUsername(username)) as
+				| {
+						username: string;
+						display_name: string;
+						password_hash: string;
+						tenant_name: string;
+						instance_admin: number;
+					  }
+				| undefined;
+			return row
+				? {
+						username: row.username,
+						displayName: row.display_name,
+						passwordHash: row.password_hash,
+						tenantName: row.tenant_name,
+						instanceAdmin: row.instance_admin === 1
+					}
+				: null;
 		},
 
 		getUserForLogin(username) {
@@ -314,6 +455,77 @@ export function createCollectionRepository(
 }
 
 /**
+ * Read immutable bootstrap attributes for one normalized username.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} username - Normalized account username.
+ * @returns {BootstrapAccountDetails | null} Existing account details or null.
+ */
+function readBootstrapAccount(database: Database.Database, username: string): BootstrapAccountDetails | null {
+	const row = database
+		.prepare(
+			`SELECT users.username, users.display_name, users.password_hash, tenants.name AS tenant_name,
+			 EXISTS(SELECT 1 FROM instance_roles WHERE instance_roles.user_id = users.id AND instance_roles.role = 'instance_admin') AS instance_admin
+			 FROM users
+			 JOIN tenants ON tenants.id = users.tenant_id
+			 WHERE users.username = ?`
+		)
+		.get(username) as
+		| {
+				username: string;
+				display_name: string;
+				password_hash: string;
+				tenant_name: string;
+				instance_admin: number;
+			  }
+		| undefined;
+	return row
+		? {
+				username: row.username,
+				displayName: row.display_name,
+				passwordHash: row.password_hash,
+				tenantName: row.tenant_name,
+				instanceAdmin: row.instance_admin === 1
+			}
+		: null;
+}
+
+/**
+ * Require a non-empty password without trimming its secret bytes.
+ *
+ * @param {string} value - Plaintext password supplied only for bootstrap verification.
+ * @returns {string} The unchanged password value.
+ * @throws {Error} If the password is empty.
+ */
+function requirePassword(value: string): string {
+	if (value.length === 0) {
+		throw new Error('password must not be empty');
+	}
+	return value;
+}
+
+/**
+ * Execute a SQLite transaction that serializes writers before checking account state.
+ *
+ * @template T
+ * @param {Database.Database} database - SQLite connection to lock.
+ * @param {() => T} operation - Transactional operation.
+ * @returns {T} The operation result.
+ * @throws {unknown} When the operation fails after rolling back its writes.
+ */
+function runImmediateTransaction<T>(database: Database.Database, operation: () => T): T {
+	database.exec('BEGIN IMMEDIATE');
+	try {
+		const result = operation();
+		database.exec('COMMIT');
+		return result;
+	} catch (error) {
+		database.exec('ROLLBACK');
+		throw error;
+	}
+}
+
+/**
  * Initialize an empty database or atomically migrate an existing one.
  *
  * @param {Database.Database} database - The SQLite connection to initialize.
@@ -437,6 +649,7 @@ function createIndexes(database: Database.Database): void {
 	database.exec(`
 		CREATE INDEX IF NOT EXISTS users_tenant_id_idx ON users(tenant_id, id);
 		CREATE INDEX IF NOT EXISTS instance_roles_role_idx ON instance_roles(role, user_id);
+		CREATE UNIQUE INDEX IF NOT EXISTS instance_roles_single_instance_admin_idx ON instance_roles(role) WHERE role = 'instance_admin';
 		CREATE INDEX IF NOT EXISTS sessions_tenant_user_idx ON sessions(tenant_id, user_id);
 		CREATE INDEX IF NOT EXISTS sessions_token_active_idx ON sessions(token_hash, expires_at) WHERE revoked_at IS NULL;
 		CREATE INDEX IF NOT EXISTS collections_tenant_owner_created_idx ON collections(tenant_id, owner_id, created_at, id);
@@ -790,8 +1003,10 @@ function requireText(value: string, fieldName: string): string {
  */
 function normalizeUsername(value: string): string {
 	const normalized = value.trim().toLowerCase();
-	if (!/^[a-z0-9_-]{3,64}$/.test(normalized)) {
-		throw new Error('username must contain 3 to 64 lowercase letters, numbers, underscores, or hyphens');
+	if (!/^[a-z0-9._+-]{3,64}$/.test(normalized)) {
+		throw new Error(
+			'username must contain 3 to 64 lowercase letters, numbers, periods, underscores, plus signs, or hyphens'
+		);
 	}
 	return normalized;
 }

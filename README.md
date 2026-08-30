@@ -46,14 +46,31 @@ marketplaces, or a simple hand-over to friends.
 git clone https://github.com/tilloh-org/passalong.git
 cd passalong
 docker compose up -d --build
-# open http://localhost:4242 and create the first admin account
+# open http://localhost:4242
 ```
 
-On the first visit, passalong asks for an admin username, display name and
-password. The password is stored as a salted scrypt hash; the browser receives
-a 30-day, HttpOnly session cookie while only its hash is stored in SQLite.
-Later visits show the login form. Without an active session, a known collection
-URL cannot reveal collection data or internal notes.
+For unattended first installation, set the optional single-line
+`PASSALONG_BOOTSTRAP` value in `.env` before starting the container:
+
+```dotenv
+PASSALONG_BOOTSTRAP={"accounts":[{"tenantName":"Example household","username":"admin","displayName":"Example admin","password":"replace-with-a-unique-password","instanceAdmin":true}]}
+```
+
+The value is a JSON object with an `accounts` array. Every account creates its
+own tenant in v1.0.0. On an empty database, exactly one account must set
+`instanceAdmin` to `true`. Provisioning runs after migrations and before the
+HTTP server accepts regular requests. It is atomic and create-only: later
+starts neither update nor delete existing tenants, accounts, passwords, or
+roles. An existing username must match the configured tenant, display name,
+instance-admin flag, and password, otherwise startup stops without writes.
+
+Without a bootstrap manifest, or whenever the global account count is zero,
+passalong offers open first registration. The first successfully created
+account receives the instance-admin role. The password is stored as a salted
+scrypt hash; the browser receives a 30-day, HttpOnly session cookie while only
+its hash is stored in SQLite. Later visits show the login form. Without an
+active session, a known collection URL cannot reveal collection data or
+internal notes.
 
 Builds the image locally from the Dockerfile. Once the first release is
 published, a prebuilt image is available from GitHub Container Registry

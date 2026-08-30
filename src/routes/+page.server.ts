@@ -6,7 +6,7 @@ import {
 	type ItemCondition,
 	type SessionScope
 } from '$lib/server/collection-repository';
-import { hashPassword, verifyPassword } from '$lib/server/password';
+import { hashPassword, validatePassword, verifyPassword } from '$lib/server/password';
 import { getCollectionRepository } from '$lib/server/repository';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
 import type { Actions, PageServerLoad } from './$types';
@@ -34,14 +34,14 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
 		isAuthenticated: Boolean(scope),
-		isInitialSetup: !repository.hasAdminAccount()
+		isInitialSetup: !repository.hasAccounts()
 	};
 };
 
 export const actions: Actions = {
 	register: async ({ cookies, request }) => {
 		const repository = getCollectionRepository();
-		if (repository.hasAdminAccount()) {
+		if (repository.hasAccounts()) {
 			return fail(409, { registerError: 'Der erste Zugang wurde bereits erstellt. Bitte melde dich an.' });
 		}
 
@@ -165,19 +165,6 @@ function getPriceCents(formData: FormData): number {
 		throw new Error('Der Preis liegt außerhalb des erlaubten Bereichs.');
 	}
 	return priceCents;
-}
-
-/**
- * Reject passwords that are too short or expensive to process safely.
- *
- * @param {string} password - The submitted plaintext password.
- * @returns {void}
- * @throws {Error} If the password does not meet the policy.
- */
-function validatePassword(password: string): void {
-	if (password.length < 12 || password.length > 128) {
-		throw new Error('Das Passwort muss 12 bis 128 Zeichen lang sein.');
-	}
 }
 
 /**
