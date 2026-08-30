@@ -79,7 +79,7 @@ inside the running container. Use the deployed Compose service and provide only
 the account username:
 
 ```bash
-docker compose exec passalong node scripts/create-password-reset.mjs <username>
+docker compose exec passalong node build/scripts/create-password-reset.js <username>
 ```
 
 The command prints the secret once and persists only its SHA-256 hash. Transfer

@@ -5,7 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "vite build && tsc --project tsconfig.scripts.json",
+		"build:scripts": "tsc --project tsconfig.scripts.json",
 		"preview": "vite preview",
 		"test:e2e": "playwright test",
 		"prepare": "svelte-kit sync || echo ''",
