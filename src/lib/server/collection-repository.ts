@@ -435,7 +435,7 @@ export function createCollectionRepository(
 		},
 
 		recordLoginFailure(username, requestIp, now = new Date()) {
-			const normalizedUsername = normalizeUsername(username);
+			const normalizedUsername = normalizeLoginAttemptUsername(username);
 			const normalizedIp = normalizeRequestIp(requestIp);
 			const nowMilliseconds = now.getTime();
 			runImmediateTransaction(database, () => {
@@ -462,12 +462,10 @@ export function createCollectionRepository(
 			return getLoginAttemptStatus(database, normalizedUsername, normalizedIp, now);
 		},
 
-		clearLoginFailures(username, requestIp) {
-			const normalizedUsername = normalizeUsername(username);
-			const normalizedIp = normalizeRequestIp(requestIp);
+		clearLoginFailures(username, _requestIp) {
 			database
-				.prepare("DELETE FROM login_attempts WHERE (scope = 'username' AND subject = ?) OR (scope = 'ip' AND subject = ?)")
-				.run(normalizedUsername, normalizedIp);
+				.prepare("DELETE FROM login_attempts WHERE scope = 'username' AND subject = ?")
+				.run(normalizeLoginAttemptUsername(username));
 		},
 
 		createPasswordResetForUsername(username, secretHash, expiresAt) {
@@ -1204,7 +1202,7 @@ function requireText(value: string, fieldName: string): string {
  * @returns {LoginRateLimitStatus} Whether login is blocked and its retry delay.
  */
 function getLoginAttemptStatus(database: Database.Database, username: string, requestIp: string, now: Date): LoginRateLimitStatus {
-	const normalizedUsername = normalizeUsername(username);
+	const normalizedUsername = normalizeLoginAttemptUsername(username);
 	const normalizedIp = normalizeRequestIp(requestIp);
 	const nowMilliseconds = now.getTime();
 	const windowStartedAt = nowMilliseconds - loginAttemptWindowMilliseconds;
@@ -1237,6 +1235,20 @@ function normalizeRequestIp(value: string): string {
 		throw new Error('request IP is invalid');
 	}
 	return normalized.toLowerCase();
+}
+
+/**
+ * Normalize a login attempt key without allowing malformed usernames to bypass IP throttling.
+ *
+ * @param {string} value - The untrusted submitted username.
+ * @returns {string} A valid username or a stable invalid-attempt bucket.
+ */
+function normalizeLoginAttemptUsername(value: string): string {
+	try {
+		return normalizeUsername(value);
+	} catch {
+		return 'invalid-login-attempt';
+	}
 }
 
 /**

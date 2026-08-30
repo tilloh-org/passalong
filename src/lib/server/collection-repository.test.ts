@@ -663,9 +663,13 @@ describe('collection repository', () => {
 		expect(repository.getLoginAttemptStatus('avery', '127.0.0.2', now)).toEqual({ blocked: true, retryAfterSeconds: 900 });
 		expect(repository.getLoginAttemptStatus('blake', '127.0.0.1', now)).toEqual({ blocked: true, retryAfterSeconds: 900 });
 		repository.clearLoginFailures('avery', '127.0.0.1');
-		expect(repository.getLoginAttemptStatus('avery', '127.0.0.1', now)).toEqual({ blocked: false, retryAfterSeconds: 0 });
-		expect(repository.getLoginAttemptStatus('avery', '127.0.0.2', now)).toEqual({ blocked: false, retryAfterSeconds: 0 });
-		expect(repository.getLoginAttemptStatus('blake', '127.0.0.1', now)).toEqual({ blocked: false, retryAfterSeconds: 0 });
+		expect(repository.getLoginAttemptStatus('avery', '127.0.0.9', now)).toEqual({ blocked: false, retryAfterSeconds: 0 });
+		expect(repository.getLoginAttemptStatus('blake', '127.0.0.1', now)).toEqual({ blocked: true, retryAfterSeconds: 900 });
+		expect(repository.getLoginAttemptStatus('avery', '127.0.0.1', now)).toEqual({ blocked: true, retryAfterSeconds: 900 });
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			repository.recordLoginFailure('!', '127.0.0.3', now);
+		}
+		expect(repository.getLoginAttemptStatus('unrelated-user', '127.0.0.3', now)).toEqual({ blocked: true, retryAfterSeconds: 900 });
 
 		expect(repository.createPasswordResetForUsername('avery', 'reset-secret-hash', '2030-01-02T00:00:00.000Z')).toBe(true);
 		expect(repository.consumePasswordReset('avery', 'reset-secret-hash', 'scrypt$v1$16384$8$1$salt$key')).toEqual({

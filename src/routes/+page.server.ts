@@ -82,7 +82,12 @@ export const actions: Actions = {
 			if (rateLimit.blocked) {
 				return fail(429, { loginError: `Zu viele Anmeldeversuche. Bitte warte ${rateLimit.retryAfterSeconds} Sekunden.` });
 			}
-			const user = repository.getUserForLogin(username);
+			let user;
+			try {
+				user = repository.getUserForLogin(username);
+			} catch {
+				user = null;
+			}
 			if (!user || !(await verifyPassword(password, user.passwordHash)) || user.passwordResetRequired) {
 				repository.recordLoginFailure(username, requestIp);
 				return fail(401, { loginError: invalidCredentialsError });
