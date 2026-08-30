@@ -14,9 +14,11 @@ import { createSessionToken, hashSessionToken } from '$lib/server/session-token'
 import type { Actions, PageServerLoad } from './$types';
 
 const sessionCookieName = 'passalong_session';
+const millisecondsPerSecond = 1000;
 const secondsPerMinute = 60;
 const minutesPerHour = 60;
 const hoursPerDay = 24;
+const passwordResetLifetimeMilliseconds = minutesPerHour * secondsPerMinute * millisecondsPerSecond;
 const sessionMaxAgeSeconds = 30 * hoursPerDay * minutesPerHour * secondsPerMinute;
 const maximumPriceCents = 10_000_000;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
@@ -32,6 +34,7 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	const repository = getCollectionRepository();
 	const scope = getSessionScope(cookies.get(sessionCookieName));
 	const collections = scope ? repository.listCollectionsForOwner(scope) : [];
+	const isInstanceAdmin = scope ? repository.isInstanceAdmin(scope) : false;
 	const requestedCollectionId = url.searchParams.get('collection');
 	const collectionId = requestedCollectionId ?? collections[0]?.id;
 	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
@@ -43,7 +46,8 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
 		isAuthenticated: Boolean(scope),
-		isInitialSetup: !repository.hasAccounts()
+		isInitialSetup: !repository.hasAccounts(),
+		isInstanceAdmin
 	};
 };
 
@@ -120,6 +124,35 @@ export const actions: Actions = {
 		}
 		cookies.delete(sessionCookieName, { path: '/' });
 		redirect(303, '/');
+	},
+
+	createPasswordReset: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(403, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(401, { passwordResetIssueError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+		const repository = getCollectionRepository();
+		if (!repository.isInstanceAdmin(scope)) {
+			return fail(403, { passwordResetIssueError: 'Du bist nicht für die Instanzverwaltung berechtigt.' });
+		}
+
+		try {
+			const resetSecret = createSessionToken();
+			const resetCreated = repository.createPasswordResetForUsername(
+				getFormText(await request.formData(), 'username'),
+				hashSessionToken(resetSecret),
+				new Date(Date.now() + passwordResetLifetimeMilliseconds).toISOString()
+			);
+			if (!resetCreated) {
+				return fail(404, { passwordResetIssueError: 'Das angegebene Konto wurde nicht gefunden.' });
+			}
+			return { passwordResetSecret: resetSecret };
+		} catch (error) {
+			return fail(400, { passwordResetIssueError: getErrorMessage(error) });
+		}
 	},
 
 	resetPassword: async ({ cookies, request, url }) => {

@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 
 const resetSecretByteLength = 32;
-const resetSecretLifetimeMilliseconds = 60 * 60 * 1000;
+const millisecondsPerSecond = 1000;
+const secondsPerMinute = 60;
+const minutesPerHour = 60;
+const resetSecretLifetimeMilliseconds = minutesPerHour * secondsPerMinute * millisecondsPerSecond;
 const usernamePattern = /^[a-z0-9._+-]{3,64}$/;
 
 interface AccountScope {
@@ -36,7 +39,10 @@ if (!username || !usernamePattern.test(username)) {
 				database
 					.prepare('UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL')
 					.run(now, account.id, account.tenant_id);
-			database
+				database
+					.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?')
+					.run(now, account.id, account.tenant_id);
+				database
 					.prepare('INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
 					.run(randomUUID(), account.id, account.tenant_id, secretHash, expiresAt, now);
 			database

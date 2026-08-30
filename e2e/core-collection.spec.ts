@@ -84,6 +84,33 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
 		await expect(page.getByText('Vor dem Inserieren die Glühbirne austauschen.')).not.toBeVisible();
 
+		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
+		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
+		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+		await page.locator('details.instance-administration > summary').click();
+		const instanceAdministrationForm = page.locator('form[action="?/createPasswordReset"]');
+		await instanceAdministrationForm.getByLabel('Benutzername des Kontos').fill(winningAccount.username);
+		await instanceAdministrationForm.getByRole('button', { name: 'Zurücksetzungscode erzeugen' }).click();
+		const resetSecret = await page.getByTestId('issued-password-reset-secret').textContent();
+		expect(resetSecret).toMatch(/^[A-Za-z0-9_-]+$/);
+
+		await page.locator('details.password-help > summary').click();
+		const resetForm = page.locator('form[action="?/resetPassword"]');
+		await resetForm.getByLabel('Benutzername').fill(winningAccount.username);
+		await resetForm.getByLabel('Zurücksetzungscode').fill(resetSecret!);
+		await resetForm.getByLabel('Neues Passwort').fill('recovered-correct-battery-horse');
+		await resetForm.getByRole('button', { name: 'Passwort zurücksetzen' }).click();
+		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+
+		await page.context().clearCookies();
+		await page.goto('/');
+		const resetIssueAttempt = await page.request.post('/?/createPasswordReset', {
+			form: { username: winningAccount.username },
+			headers: { Origin: 'http://localhost:4173' }
+		});
+		expect(resetIssueAttempt.status()).toBe(200);
+		expect((await resetIssueAttempt.json()).status).toBe(401);
+
 		for (let attempt = 0; attempt < 5 - failedLoginCount; attempt += 1) {
 			const response = await page.request.post('/?/login', {
 				form: { username: 'x', password: 'not-a-password' },

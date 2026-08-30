@@ -45,6 +45,13 @@
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
 	{/if}
+	{#if form && 'passwordResetSecret' in form && form.passwordResetSecret}
+		<section class="issued-reset-secret" aria-labelledby="issued-reset-secret-title">
+			<h2 id="issued-reset-secret-title">Einmaliger Zurücksetzungscode</h2>
+			<code class="reset-secret" data-testid="issued-password-reset-secret">{form.passwordResetSecret}</code>
+			<p>Den Code jetzt über einen privaten Kanal weitergeben. Er wird nicht erneut angezeigt.</p>
+		</section>
+	{/if}
 
 	{#if data.isAuthenticated}
 		<details class="password-help authenticated-password-help">
@@ -64,6 +71,22 @@
 				<button type="submit">Passwort speichern</button>
 			</form>
 		</details>
+		{#if data.isInstanceAdmin}
+			<details class="password-help instance-administration">
+				<summary>Instanzverwaltung</summary>
+				<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
+				<form method="POST" action="?/createPasswordReset">
+					<label>
+						<span>Benutzername des Kontos</span>
+						<input name="username" autocomplete="username" required />
+					</label>
+					{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
+						<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
+					{/if}
+					<button type="submit">Zurücksetzungscode erzeugen</button>
+				</form>
+			</details>
+		{/if}
 	{/if}
 
 	{#if !data.isAuthenticated}

@@ -134,6 +134,27 @@ describe('collection repository', () => {
 		database.close();
 	});
 
+	it('recognizes only the singleton instance administrator as privileged', () => {
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const instanceAdministrator = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const database = new Database(databasePath);
+		database
+			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+			.run('member-tenant', 'Member household', '2026-01-01T00:00:00.000Z');
+		database
+			.prepare('INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+			.run('member-user', 'member-tenant', 'blake', 'Blake', 'scrypt$test-salt$test-key', '2026-01-01T00:00:00.000Z');
+		database.close();
+
+		expect(repository.isInstanceAdmin(instanceAdministrator)).toBe(true);
+		expect(repository.isInstanceAdmin({ userId: 'member-user', tenantId: 'member-tenant' })).toBe(false);
+	});
+
 	it('creates a multi-account bootstrap manifest once with exactly one instance administrator', () => {
 		const databasePath = createDatabasePath();
 		const repository = createCollectionRepository({ databasePath });
@@ -671,7 +692,9 @@ describe('collection repository', () => {
 		}
 		expect(repository.getLoginAttemptStatus('unrelated-user', '127.0.0.3', now)).toEqual({ blocked: true, retryAfterSeconds: 900 });
 
+		repository.createSessionForUser(admin, 'reset-issuance-session-hash');
 		expect(repository.createPasswordResetForUsername('avery', 'reset-secret-hash', '2030-01-02T00:00:00.000Z')).toBe(true);
+		expect(repository.getSession('reset-issuance-session-hash')).toBeNull();
 		expect(repository.consumePasswordReset('avery', 'reset-secret-hash', 'scrypt$v1$16384$8$1$salt$key')).toEqual({
 			userId: admin.userId,
 			tenantId: admin.tenantId

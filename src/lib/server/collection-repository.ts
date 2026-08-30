@@ -104,6 +104,7 @@ export interface CollectionRepository {
 	listCollectionsForOwner(scope: SessionScope): Collection[];
 	createSessionForUser(scope: SessionScope, tokenHash: string): void;
 	getSession(tokenHash: string): SessionScope | null;
+	isInstanceAdmin(scope: SessionScope): boolean;
 	revokeSession(tokenHash: string): void;
 	revokeSessionsForUser(scope: SessionScope): void;
 	getLoginAttemptStatus(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
@@ -429,6 +430,31 @@ export function createCollectionRepository(
 			return row ? { userId: row.user_id, tenantId: row.tenant_id } : null;
 		},
 
+		/**
+		 * Determine whether an authenticated scope holds the singleton instance-admin role.
+		 *
+		 * The tenant match makes the authorization check safe even if a caller constructs
+		 * a scope with a valid user ID but an unrelated tenant ID.
+		 *
+		 * @param {SessionScope} scope - Authenticated user and tenant scope.
+		 * @returns {boolean} Whether the scope is authorized for instance-wide operations.
+		 */
+		isInstanceAdmin(scope) {
+			const row = database
+				.prepare(
+					`SELECT EXISTS(
+						SELECT 1
+						FROM instance_roles
+						JOIN users ON users.id = instance_roles.user_id
+						WHERE instance_roles.user_id = ?
+						  AND users.tenant_id = ?
+						  AND instance_roles.role = 'instance_admin'
+					) AS is_instance_admin`
+				)
+				.get(scope.userId, scope.tenantId) as { is_instance_admin: number };
+			return row.is_instance_admin === sqliteTrue;
+		},
+
 		revokeSession(tokenHash) {
 			database
 				.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE token_hash = ?')
@@ -492,6 +518,7 @@ export function createCollectionRepository(
 				}
 				const now = new Date().toISOString();
 				database.prepare('UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL').run(now, account.id, account.tenant_id);
+				database.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?').run(now, account.id, account.tenant_id);
 				database
 					.prepare('INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
 					.run(randomUUID(), account.id, account.tenant_id, validatedSecretHash, validatedExpiry, now);
