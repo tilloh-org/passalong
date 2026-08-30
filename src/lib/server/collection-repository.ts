@@ -95,11 +95,12 @@ interface ItemRow {
 	internal_notes: string;
 }
 
+const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
 const categoryValues = itemCategories.map((category) => `'${category}'`).join(', ');
 const conditionValues = itemConditions.map((condition) => `'${condition}'`).join(', ');
 
 /**
- * Create a SQLite-backed repository for passalong's core collection domain.
+ * Create a SQLite-backed repository for the core collection domain.
  *
  * @param {CreateCollectionRepositoryOptions} options - Connection configuration.
  * @returns {CollectionRepository} The collection repository.
@@ -111,14 +112,11 @@ export function createCollectionRepository(
 	database.pragma('foreign_keys = ON');
 	database.pragma('journal_mode = WAL');
 	database.pragma('busy_timeout = 5000');
-	createSchema(database);
-	migrateSchema(database);
+	initializeSchema(database);
 
 	return {
 		hasAdminAccount() {
-			return Boolean(
-				database.prepare('SELECT 1 FROM users WHERE is_admin = 1 LIMIT 1').get()
-			);
+			return Boolean(database.prepare('SELECT 1 FROM users LIMIT 1').get());
 		},
 
 		createInitialAdmin(input) {
@@ -129,28 +127,23 @@ export function createCollectionRepository(
 			const userId = randomUUID();
 			const createdAt = new Date().toISOString();
 
-			try {
-				database.transaction(() => {
-					if (database.prepare('SELECT 1 FROM users WHERE is_admin = 1 LIMIT 1').get()) {
-						throw new Error('an admin account already exists');
-					}
-					database
-						.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
-						.run(tenantId, `${displayName}'s household`, createdAt);
-					database
-						.prepare(
-							`INSERT INTO users (
-								id, tenant_id, username, display_name, password_hash, is_admin, created_at
-							) VALUES (?, ?, ?, ?, ?, 1, ?)`
-						)
-						.run(userId, tenantId, username, displayName, passwordHash, createdAt);
-				})();
-			} catch (error) {
-				if (error instanceof Error && error.message.includes('UNIQUE constraint failed: users.is_admin')) {
-					throw new Error('an admin account already exists');
+			database.transaction(() => {
+				if (database.prepare('SELECT 1 FROM users LIMIT 1').get()) {
+					throw new Error('an initial admin account already exists');
 				}
-				throw error;
-			}
+				database
+					.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+					.run(tenantId, `${displayName}'s household`, createdAt);
+				database
+					.prepare(
+						`INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at)
+						 VALUES (?, ?, ?, ?, ?, ?)`
+					)
+					.run(userId, tenantId, username, displayName, passwordHash, createdAt);
+				database
+					.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
+					.run(userId, 'instance_admin', createdAt);
+			})();
 
 			return { userId, tenantId, username, displayName };
 		},
@@ -160,7 +153,7 @@ export function createCollectionRepository(
 				.prepare(
 					`SELECT id, tenant_id, username, display_name, password_hash
 					 FROM users
-					 WHERE username = ? AND is_admin = 1`
+					 WHERE username = ?`
 				)
 				.get(normalizeUsername(username)) as
 				| {
@@ -190,7 +183,7 @@ export function createCollectionRepository(
 					`INSERT INTO collections (id, tenant_id, owner_id, name, created_at)
 					 SELECT ?, tenant_id, id, ?, ?
 					 FROM users
-					 WHERE id = ? AND tenant_id = ? AND is_admin = 1`
+					 WHERE id = ? AND tenant_id = ?`
 				)
 				.run(collectionId, name, new Date().toISOString(), scope.userId, scope.tenantId);
 			if (result.changes !== 1) {
@@ -205,8 +198,7 @@ export function createCollectionRepository(
 					`SELECT collections.id, collections.name, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
-					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?
-					 AND users.is_admin = 1`
+					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 				)
 				.get(collectionId, scope.userId, scope.tenantId) as
 				| { id: string; name: string; owner_name: string }
@@ -220,7 +212,7 @@ export function createCollectionRepository(
 					`SELECT collections.id, collections.name, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
-					 WHERE collections.owner_id = ? AND collections.tenant_id = ? AND users.is_admin = 1
+					 WHERE collections.owner_id = ? AND collections.tenant_id = ?
 					 ORDER BY collections.created_at ASC, collections.id ASC`
 				)
 				.all(scope.userId, scope.tenantId)
@@ -236,7 +228,7 @@ export function createCollectionRepository(
 					`INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at)
 					 SELECT ?, id, tenant_id, ?, ?, ?
 					 FROM users
-					 WHERE id = ? AND tenant_id = ? AND is_admin = 1`
+					 WHERE id = ? AND tenant_id = ?`
 				)
 				.run(
 					randomUUID(),
@@ -254,10 +246,10 @@ export function createCollectionRepository(
 		getSession(tokenHash) {
 			const row = database
 				.prepare(
-					`SELECT sessions.user_id, sessions.tenant_id FROM sessions
+					`SELECT sessions.user_id, sessions.tenant_id
+					 FROM sessions
 					 JOIN users ON users.id = sessions.user_id AND users.tenant_id = sessions.tenant_id
-					 WHERE sessions.token_hash = ? AND sessions.revoked_at IS NULL AND sessions.expires_at > ?
-					 AND users.is_admin = 1`
+					 WHERE sessions.token_hash = ? AND sessions.revoked_at IS NULL AND sessions.expires_at > ?`
 				)
 				.get(tokenHash, new Date().toISOString()) as
 				| { user_id: string; tenant_id: string }
@@ -282,12 +274,10 @@ export function createCollectionRepository(
 			const result = database
 				.prepare(
 					`INSERT INTO items (
-						id, collection_id, title, price_cents, category, condition, internal_notes, created_at
-					) SELECT ?, collections.id, ?, ?, ?, ?, ?, ?
+						id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, created_at
+					) SELECT ?, collections.tenant_id, collections.owner_id, collections.id, ?, ?, ?, ?, ?, ?
 					FROM collections
-					JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
-					WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?
-					AND users.is_admin = 1`
+					WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 				)
 				.run(
 					item.id,
@@ -312,10 +302,9 @@ export function createCollectionRepository(
 				.prepare(
 					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes
 					 FROM items
-					 JOIN collections ON collections.id = items.collection_id
+					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
-					 WHERE items.collection_id = ? AND collections.owner_id = ? AND collections.tenant_id = ?
-					 AND users.is_admin = 1
+					 WHERE items.collection_id = ? AND items.owner_id = ? AND items.tenant_id = ?
 					 ORDER BY items.created_at DESC, items.id DESC`
 				)
 				.all(collectionId, scope.userId, scope.tenantId)
@@ -325,7 +314,41 @@ export function createCollectionRepository(
 }
 
 /**
- * Create the current schema for new SQLite databases.
+ * Initialize an empty database or atomically migrate an existing one.
+ *
+ * @param {Database.Database} database - The SQLite connection to initialize.
+ * @returns {void}
+ */
+function initializeSchema(database: Database.Database): void {
+	if (isEmptyDatabase(database)) {
+		database.transaction(() => {
+			createSchema(database);
+			assertForeignKeys(database);
+			createIndexes(database);
+			database
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+				.run(tenantSchemaFoundationVersion, new Date().toISOString());
+		})();
+		return;
+	}
+
+	migrateSchema(database);
+}
+
+/**
+ * Determine whether a SQLite database has no application tables.
+ *
+ * @param {Database.Database} database - The SQLite connection to inspect.
+ * @returns {boolean} Whether the database contains no application tables.
+ */
+function isEmptyDatabase(database: Database.Database): boolean {
+	return !database
+		.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1")
+		.get();
+}
+
+/**
+ * Create the current schema for a new SQLite database.
  *
  * @param {Database.Database} database - The SQLite connection to initialize.
  * @returns {void}
@@ -340,12 +363,17 @@ function createSchema(database: Database.Database): void {
 		CREATE TABLE IF NOT EXISTS users (
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-			username TEXT,
+			username TEXT COLLATE NOCASE UNIQUE,
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
 			password_hash TEXT,
-			is_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id)
+		);
+		CREATE TABLE IF NOT EXISTS instance_roles (
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			role TEXT NOT NULL CHECK (role = 'instance_admin'),
+			created_at TEXT NOT NULL,
+			PRIMARY KEY (user_id, role)
 		);
 		CREATE TABLE IF NOT EXISTS sessions (
 			id TEXT PRIMARY KEY,
@@ -363,60 +391,342 @@ function createSchema(database: Database.Database): void {
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
 			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
 		);
 		CREATE TABLE IF NOT EXISTS items (
 			id TEXT PRIMARY KEY,
-			collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+			tenant_id TEXT NOT NULL,
+			owner_id TEXT NOT NULL,
+			collection_id TEXT NOT NULL,
 			title TEXT NOT NULL CHECK (length(trim(title)) > 0),
 			price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
 			category TEXT NOT NULL CHECK (category IN (${categoryValues})),
 			condition TEXT NOT NULL CHECK (condition IN (${conditionValues})),
 			internal_notes TEXT NOT NULL DEFAULT '',
-			created_at TEXT NOT NULL
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id),
+			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
+			FOREIGN KEY (collection_id, tenant_id) REFERENCES collections(id, tenant_id) ON DELETE CASCADE
 		);
 		CREATE TABLE IF NOT EXISTS item_images (
 			id TEXT PRIMARY KEY,
-			item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+			tenant_id TEXT NOT NULL,
+			item_id TEXT NOT NULL,
 			storage_key TEXT NOT NULL UNIQUE,
 			position INTEGER NOT NULL CHECK (position >= 0),
 			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
 			created_at TEXT NOT NULL,
-			UNIQUE (item_id, position)
+			UNIQUE (item_id, tenant_id, position),
+			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
 		);
-		CREATE INDEX IF NOT EXISTS items_collection_id_idx ON items(collection_id);
-		CREATE INDEX IF NOT EXISTS item_images_item_id_idx ON item_images(item_id);
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version TEXT PRIMARY KEY,
+			applied_at TEXT NOT NULL
+		);
 	`);
 }
 
 /**
- * Add account columns and indexes to databases created before account login existed.
- * Existing collections and items are preserved; old owner records remain non-admin.
+ * Create indexes only after every legacy table has the current columns.
+ *
+ * @param {Database.Database} database - The SQLite connection to initialize.
+ * @returns {void}
+ */
+function createIndexes(database: Database.Database): void {
+	database.exec(`
+		CREATE INDEX IF NOT EXISTS users_tenant_id_idx ON users(tenant_id, id);
+		CREATE INDEX IF NOT EXISTS instance_roles_role_idx ON instance_roles(role, user_id);
+		CREATE INDEX IF NOT EXISTS sessions_tenant_user_idx ON sessions(tenant_id, user_id);
+		CREATE INDEX IF NOT EXISTS sessions_token_active_idx ON sessions(token_hash, expires_at) WHERE revoked_at IS NULL;
+		CREATE INDEX IF NOT EXISTS collections_tenant_owner_created_idx ON collections(tenant_id, owner_id, created_at, id);
+		CREATE INDEX IF NOT EXISTS items_tenant_collection_created_idx ON items(tenant_id, collection_id, created_at, id);
+		CREATE INDEX IF NOT EXISTS items_tenant_owner_created_idx ON items(tenant_id, owner_id, created_at, id);
+		CREATE INDEX IF NOT EXISTS item_images_tenant_item_position_idx ON item_images(tenant_id, item_id, position);
+	`);
+}
+
+/**
+ * Apply the tenant-schema foundation once while preserving every prior record.
  *
  * @param {Database.Database} database - The SQLite connection to migrate.
  * @returns {void}
  */
 function migrateSchema(database: Database.Database): void {
-	const userColumns = new Set(
-		(database.prepare('PRAGMA table_info(users)').all() as { name: string }[]).map((column) => column.name)
-	);
-	const migrations: Array<[string, string]> = [
-		['username', 'ALTER TABLE users ADD COLUMN username TEXT'],
-		['password_hash', 'ALTER TABLE users ADD COLUMN password_hash TEXT'],
-		['is_admin', 'ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1))']
-	];
+	if (hasMigrationVersion(database, tenantSchemaFoundationVersion)) {
+		database.transaction(() => {
+			createIndexes(database);
+		})();
+		return;
+	}
 
-	database.transaction(() => {
-		for (const [column, statement] of migrations) {
-			if (!userColumns.has(column)) {
-				database.exec(statement);
+	database.pragma('foreign_keys = OFF');
+	try {
+		database.transaction(() => {
+			createSchema(database);
+			const legacyAdminUserIds = hasColumn(database, 'users', 'is_admin')
+				? (database.prepare('SELECT id FROM users WHERE is_admin = 1').all() as { id: string }[]).map(
+						({ id }) => id
+					)
+				: [];
+			rebuildUsers(database);
+			rebuildSessions(database);
+			rebuildCollections(database);
+			rebuildItems(database);
+			rebuildItemImages(database);
+			replaceFoundationTables(database);
+			for (const userId of legacyAdminUserIds) {
+				database
+					.prepare(
+						'INSERT OR IGNORE INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)'
+					)
+					.run(userId, 'instance_admin', new Date().toISOString());
 			}
-		}
-		database.exec(`
-			CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users(username) WHERE username IS NOT NULL;
-			CREATE UNIQUE INDEX IF NOT EXISTS users_single_admin_idx ON users(is_admin) WHERE is_admin = 1;
-		`);
-	})();
+			assertForeignKeys(database);
+			createIndexes(database);
+			database
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+				.run(tenantSchemaFoundationVersion, new Date().toISOString());
+		})();
+	} finally {
+		database.pragma('foreign_keys = ON');
+	}
+}
+
+/**
+ * Determine whether a migration version has already been applied.
+ *
+ * @param {Database.Database} database - The SQLite connection to inspect.
+ * @param {string} version - Migration version to find.
+ * @returns {boolean} Whether the version has been recorded.
+ */
+function hasMigrationVersion(database: Database.Database, version: string): boolean {
+	return hasTable(database, 'schema_migrations') && Boolean(database.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(version));
+}
+
+/**
+ * Rebuild users without the legacy global administrator flag.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function rebuildUsers(database: Database.Database): void {
+	const username = hasColumn(database, 'users', 'username') ? 'username' : 'NULL';
+	const passwordHash = hasColumn(database, 'users', 'password_hash') ? 'password_hash' : 'NULL';
+	database.exec(`
+		CREATE TABLE users_next (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			username TEXT COLLATE NOCASE UNIQUE,
+			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
+			password_hash TEXT,
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id)
+		);
+		INSERT INTO users_next (id, tenant_id, username, display_name, password_hash, created_at)
+		SELECT id, tenant_id, ${username}, display_name, ${passwordHash}, created_at FROM users;
+	`);
+	assertCopiedRowCount(database, 'users', 'users_next');
+}
+
+/**
+ * Rebuild sessions with a tenant-safe composite user relationship.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function rebuildSessions(database: Database.Database): void {
+	database.exec(`
+		CREATE TABLE sessions_next (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			tenant_id TEXT NOT NULL,
+			token_hash TEXT NOT NULL UNIQUE,
+			expires_at TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			revoked_at TEXT,
+			FOREIGN KEY (user_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE CASCADE
+		);
+		INSERT INTO sessions_next (id, user_id, tenant_id, token_hash, expires_at, created_at, revoked_at)
+		SELECT id, user_id, tenant_id, token_hash, expires_at, created_at, revoked_at FROM sessions;
+	`);
+	assertCopiedRowCount(database, 'sessions', 'sessions_next');
+}
+
+/**
+ * Rebuild collections with a tenant-safe composite owner relationship.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function rebuildCollections(database: Database.Database): void {
+	database.exec(`
+		CREATE TABLE collections_next (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			owner_id TEXT NOT NULL,
+			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id),
+			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
+		);
+		INSERT INTO collections_next (id, tenant_id, owner_id, name, created_at)
+		SELECT id, tenant_id, owner_id, name, created_at FROM collections;
+	`);
+	assertCopiedRowCount(database, 'collections', 'collections_next');
+}
+
+/**
+ * Rebuild items and derive their tenant and owner from their existing collection.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function rebuildItems(database: Database.Database): void {
+	database.exec(`
+		CREATE TABLE items_next (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			owner_id TEXT NOT NULL,
+			collection_id TEXT NOT NULL,
+			title TEXT NOT NULL CHECK (length(trim(title)) > 0),
+			price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
+			category TEXT NOT NULL CHECK (category IN (${categoryValues})),
+			condition TEXT NOT NULL CHECK (condition IN (${conditionValues})),
+			internal_notes TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id),
+			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
+			FOREIGN KEY (collection_id, tenant_id) REFERENCES collections(id, tenant_id) ON DELETE CASCADE
+		);
+		INSERT INTO items_next (
+			id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, created_at
+		)
+		SELECT
+			items.id, collections.tenant_id, collections.owner_id, items.collection_id, items.title,
+			items.price_cents, items.category, items.condition, items.internal_notes, items.created_at
+		FROM items
+		JOIN collections ON collections.id = items.collection_id;
+	`);
+	assertCopiedRowCount(database, 'items', 'items_next');
+}
+
+/**
+ * Rebuild item images with a tenant-safe composite item relationship.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function rebuildItemImages(database: Database.Database): void {
+	database.exec(`
+		CREATE TABLE item_images_next (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			item_id TEXT NOT NULL,
+			storage_key TEXT NOT NULL UNIQUE,
+			position INTEGER NOT NULL CHECK (position >= 0),
+			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
+			created_at TEXT NOT NULL,
+			UNIQUE (item_id, tenant_id, position),
+			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
+		);
+		INSERT INTO item_images_next (id, tenant_id, item_id, storage_key, position, is_cover, created_at)
+		SELECT item_images.id, items_next.tenant_id, item_images.item_id, item_images.storage_key,
+			item_images.position, item_images.is_cover, item_images.created_at
+		FROM item_images
+		JOIN items_next ON items_next.id = item_images.item_id;
+	`);
+	assertCopiedRowCount(database, 'item_images', 'item_images_next');
+}
+
+/**
+ * Replace legacy tables only after their complete copies have been created.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function replaceFoundationTables(database: Database.Database): void {
+	database.exec(`
+		DROP TABLE item_images;
+		DROP TABLE items;
+		DROP TABLE sessions;
+		DROP TABLE collections;
+		DROP TABLE users;
+		ALTER TABLE users_next RENAME TO users;
+		ALTER TABLE sessions_next RENAME TO sessions;
+		ALTER TABLE collections_next RENAME TO collections;
+		ALTER TABLE items_next RENAME TO items;
+		ALTER TABLE item_images_next RENAME TO item_images;
+	`);
+}
+
+/**
+ * Assert that a copy operation retained every source row.
+ *
+ * @param {Database.Database} database - The SQLite connection to inspect.
+ * @param {string} sourceTable - Source table name.
+ * @param {string} targetTable - Copied table name.
+ * @returns {void}
+ * @throws {Error} If a relationship prevented a complete copy.
+ */
+function assertCopiedRowCount(database: Database.Database, sourceTable: string, targetTable: string): void {
+	const sourceCount = getTableRowCount(database, sourceTable);
+	const targetCount = getTableRowCount(database, targetTable);
+	if (sourceCount !== targetCount) {
+		throw new Error(`migration could not copy every ${sourceTable} record`);
+	}
+}
+
+/**
+ * Return the number of rows in a trusted internal table name.
+ *
+ * @param {Database.Database} database - The SQLite connection to inspect.
+ * @param {string} tableName - Trusted internal table name.
+ * @returns {number} Row count.
+ */
+function getTableRowCount(database: Database.Database, tableName: string): number {
+	return (database.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count: number }).count;
+}
+
+/**
+ * Determine whether a trusted SQLite table exists.
+ *
+ * @param {Database.Database} database - The SQLite connection to inspect.
+ * @param {string} tableName - Trusted internal table name.
+ * @returns {boolean} Whether the table exists.
+ */
+function hasTable(database: Database.Database, tableName: string): boolean {
+	return Boolean(
+		database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName)
+	);
+}
+
+/**
+ * Determine whether a table contains a named column.
+ *
+ * @param {Database.Database} database - The SQLite connection to inspect.
+ * @param {string} tableName - Trusted internal table name.
+ * @param {string} columnName - Expected column name.
+ * @returns {boolean} Whether the column exists.
+ */
+function hasColumn(database: Database.Database, tableName: string, columnName: string): boolean {
+	return (database.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[]).some(
+		({ name }) => name === columnName
+	);
+}
+
+/**
+ * Fail the migration if SQLite detects any invalid foreign-key relationship.
+ *
+ * @param {Database.Database} database - The SQLite connection to validate.
+ * @returns {void}
+ * @throws {Error} If the rebuilt schema has invalid foreign keys.
+ */
+function assertForeignKeys(database: Database.Database): void {
+	const violations = database.prepare('PRAGMA foreign_key_check').all();
+	if (violations.length > 0) {
+		throw new Error('migration produced invalid foreign-key relationships');
+	}
 }
 
 /**
@@ -429,7 +739,7 @@ function migrateSchema(database: Database.Database): void {
  */
 function getOwnerDisplayName(database: Database.Database, scope: SessionScope): string {
 	const row = database
-		.prepare('SELECT display_name FROM users WHERE id = ? AND tenant_id = ? AND is_admin = 1')
+		.prepare('SELECT display_name FROM users WHERE id = ? AND tenant_id = ?')
 		.get(scope.userId, scope.tenantId) as { display_name: string } | undefined;
 	if (!row) {
 		throw new Error('authenticated owner was not found');
