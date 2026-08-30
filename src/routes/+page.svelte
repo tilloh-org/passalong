@@ -41,6 +41,30 @@
 		{/if}
 	</header>
 
+	{#if form && 'csrfError' in form && form.csrfError}
+		<p class="form-error" role="alert">{form.csrfError}</p>
+	{/if}
+
+	{#if data.isAuthenticated}
+		<details class="password-help authenticated-password-help">
+			<summary>Passwort ändern</summary>
+			<form method="POST" action="?/changePassword">
+				<label>
+					<span>Aktuelles Passwort</span>
+					<input name="currentPassword" type="password" autocomplete="current-password" required />
+				</label>
+				<label>
+					<span>Neues Passwort</span>
+					<input name="password" type="password" autocomplete="new-password" minlength="12" required />
+				</label>
+				{#if form && 'changePasswordError' in form && form.changePasswordError}
+					<p class="form-error" role="alert">{form.changePasswordError}</p>
+				{/if}
+				<button type="submit">Passwort speichern</button>
+			</form>
+		</details>
+	{/if}
+
 	{#if !data.isAuthenticated}
 		<section class="onboarding" aria-labelledby="onboarding-title">
 			{#if data.isInitialSetup}
@@ -83,6 +107,27 @@
 					{/if}
 					<button type="submit">Anmelden</button>
 				</form>
+				<details class="password-help">
+					<summary>Passwort mit Zurücksetzungscode ändern</summary>
+					<form method="POST" action="?/resetPassword">
+						<label>
+							<span>Benutzername</span>
+							<input name="username" autocomplete="username" required />
+						</label>
+						<label>
+							<span>Zurücksetzungscode</span>
+							<input name="resetSecret" type="password" autocomplete="one-time-code" required />
+						</label>
+						<label>
+							<span>Neues Passwort</span>
+							<input name="password" type="password" autocomplete="new-password" minlength="12" required />
+						</label>
+						{#if form && 'resetError' in form && form.resetError}
+							<p class="form-error" role="alert">{form.resetError}</p>
+						{/if}
+						<button type="submit">Passwort zurücksetzen</button>
+					</form>
+				</details>
 			{/if}
 		</section>
 	{:else if !data.collection}
@@ -230,6 +275,27 @@
 	.session-control button {
 		font-size: 0.85rem;
 		padding: 0.55rem 0.75rem;
+	}
+
+	.password-help {
+		border: 1px solid var(--color-border);
+		border-radius: 0.65rem;
+		margin-top: 1.5rem;
+		padding: 0.8rem;
+	}
+
+	.password-help summary {
+		cursor: pointer;
+		font-weight: 700;
+	}
+
+	.password-help form {
+		margin-top: 1rem;
+	}
+
+	.authenticated-password-help {
+		margin: 0 0 1.5rem auto;
+		max-width: 37rem;
 	}
 
 	.collection-list {

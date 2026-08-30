@@ -76,6 +76,7 @@ export interface AdminAccount extends SessionScope {
 
 export interface LoginAccount extends AdminAccount {
 	passwordHash: string;
+	passwordResetRequired?: true;
 }
 
 export interface BootstrapAccountDetails {
@@ -84,6 +85,11 @@ export interface BootstrapAccountDetails {
 	passwordHash: string;
 	tenantName: string;
 	instanceAdmin: boolean;
+}
+
+export interface LoginRateLimitStatus {
+	blocked: boolean;
+	retryAfterSeconds: number;
 }
 
 export interface CollectionRepository {
@@ -98,6 +104,15 @@ export interface CollectionRepository {
 	listCollectionsForOwner(scope: SessionScope): Collection[];
 	createSessionForUser(scope: SessionScope, tokenHash: string): void;
 	getSession(tokenHash: string): SessionScope | null;
+	revokeSession(tokenHash: string): void;
+	revokeSessionsForUser(scope: SessionScope): void;
+	getLoginAttemptStatus(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
+	recordLoginFailure(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
+	clearLoginFailures(username: string, requestIp: string): void;
+	createPasswordResetForUsername(username: string, secretHash: string, expiresAt: string): boolean;
+	consumePasswordReset(username: string, secretHash: string, passwordHash: string): SessionScope | null;
+	getPasswordHashForScope(scope: SessionScope): string | null;
+	updatePassword(scope: SessionScope, passwordHash: string): void;
 	createItem(input: CreateItemInput, scope: SessionScope): Item;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
 }
@@ -117,6 +132,9 @@ interface ItemRow {
 }
 
 const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
+const authHardeningVersion = '2026083001_auth_hardening';
+const loginAttemptLimit = 5;
+const loginAttemptWindowMilliseconds = 15 * 60 * 1000;
 const categoryValues = itemCategories.map((category) => `'${category}'`).join(', ');
 const conditionValues = itemConditions.map((condition) => `'${condition}'`).join(', ');
 
@@ -292,7 +310,7 @@ export function createCollectionRepository(
 		getUserForLogin(username) {
 			const row = database
 				.prepare(
-					`SELECT id, tenant_id, username, display_name, password_hash
+					`SELECT id, tenant_id, username, display_name, password_hash, password_reset_required
 					 FROM users
 					 WHERE username = ?`
 				)
@@ -303,6 +321,7 @@ export function createCollectionRepository(
 						username: string;
 						display_name: string;
 						password_hash: string;
+						password_reset_required: number;
 					  }
 				| undefined;
 			return row
@@ -311,7 +330,8 @@ export function createCollectionRepository(
 						tenantId: row.tenant_id,
 						username: row.username,
 						displayName: row.display_name,
-						passwordHash: row.password_hash
+						passwordHash: row.password_hash,
+						...(row.password_reset_required === 1 ? { passwordResetRequired: true } : {})
 					}
 				: null;
 		},
@@ -396,6 +416,121 @@ export function createCollectionRepository(
 				| { user_id: string; tenant_id: string }
 				| undefined;
 			return row ? { userId: row.user_id, tenantId: row.tenant_id } : null;
+		},
+
+		revokeSession(tokenHash) {
+			database
+				.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE token_hash = ?')
+				.run(new Date().toISOString(), tokenHash);
+		},
+
+		revokeSessionsForUser(scope) {
+			database
+				.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?')
+				.run(new Date().toISOString(), scope.userId, scope.tenantId);
+		},
+
+		getLoginAttemptStatus(username, requestIp, now = new Date()) {
+			return getLoginAttemptStatus(database, username, requestIp, now);
+		},
+
+		recordLoginFailure(username, requestIp, now = new Date()) {
+			const normalizedUsername = normalizeUsername(username);
+			const normalizedIp = normalizeRequestIp(requestIp);
+			const nowMilliseconds = now.getTime();
+			runImmediateTransaction(database, () => {
+				const windowStartedAt = nowMilliseconds - loginAttemptWindowMilliseconds;
+				database.prepare('DELETE FROM login_attempts WHERE window_started_at <= ?').run(windowStartedAt);
+				for (const attempt of [
+					{ scope: 'username', subject: normalizedUsername },
+					{ scope: 'ip', subject: normalizedIp }
+				]) {
+					const existing = database
+						.prepare('SELECT failure_count FROM login_attempts WHERE scope = ? AND subject = ?')
+						.get(attempt.scope, attempt.subject) as { failure_count: number } | undefined;
+					if (existing) {
+						database
+							.prepare('UPDATE login_attempts SET failure_count = ?, last_attempt_at = ? WHERE scope = ? AND subject = ?')
+							.run(existing.failure_count + 1, nowMilliseconds, attempt.scope, attempt.subject);
+					} else {
+						database
+							.prepare('INSERT INTO login_attempts (scope, subject, failure_count, window_started_at, last_attempt_at) VALUES (?, ?, ?, ?, ?)')
+							.run(attempt.scope, attempt.subject, 1, nowMilliseconds, nowMilliseconds);
+					}
+				}
+			});
+			return getLoginAttemptStatus(database, normalizedUsername, normalizedIp, now);
+		},
+
+		clearLoginFailures(username, requestIp) {
+			const normalizedUsername = normalizeUsername(username);
+			const normalizedIp = normalizeRequestIp(requestIp);
+			database
+				.prepare("DELETE FROM login_attempts WHERE (scope = 'username' AND subject = ?) OR (scope = 'ip' AND subject = ?)")
+				.run(normalizedUsername, normalizedIp);
+		},
+
+		createPasswordResetForUsername(username, secretHash, expiresAt) {
+			const normalizedUsername = normalizeUsername(username);
+			const validatedSecretHash = requireText(secretHash, 'secretHash');
+			const validatedExpiry = requireText(expiresAt, 'expiresAt');
+			return runImmediateTransaction(database, () => {
+				const account = database
+					.prepare('SELECT id, tenant_id FROM users WHERE username = ?')
+					.get(normalizedUsername) as { id: string; tenant_id: string } | undefined;
+				if (!account) {
+					return false;
+				}
+				const now = new Date().toISOString();
+				database.prepare('UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL').run(now, account.id, account.tenant_id);
+				database
+					.prepare('INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+					.run(randomUUID(), account.id, account.tenant_id, validatedSecretHash, validatedExpiry, now);
+				database.prepare('UPDATE users SET password_reset_required = 1 WHERE id = ? AND tenant_id = ?').run(account.id, account.tenant_id);
+				return true;
+			});
+		},
+
+		consumePasswordReset(username, secretHash, passwordHash) {
+			const normalizedUsername = normalizeUsername(username);
+			const validatedSecretHash = requireText(secretHash, 'secretHash');
+			const validatedPasswordHash = requireText(passwordHash, 'passwordHash');
+			return runImmediateTransaction(database, () => {
+				const row = database
+					.prepare(
+						`SELECT users.id AS user_id, users.tenant_id
+						 FROM users
+						 JOIN password_resets ON password_resets.user_id = users.id AND password_resets.tenant_id = users.tenant_id
+						 WHERE users.username = ? AND password_resets.secret_hash = ?
+						 AND password_resets.consumed_at IS NULL AND password_resets.expires_at > ?`
+					)
+					.get(normalizedUsername, validatedSecretHash, new Date().toISOString()) as { user_id: string; tenant_id: string } | undefined;
+				if (!row) {
+					return null;
+				}
+				const scope = { userId: row.user_id, tenantId: row.tenant_id };
+				const now = new Date().toISOString();
+				database.prepare('UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL').run(now, scope.userId, scope.tenantId);
+				database.prepare('UPDATE users SET password_hash = ?, password_reset_required = 0 WHERE id = ? AND tenant_id = ?').run(validatedPasswordHash, scope.userId, scope.tenantId);
+				database.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?').run(now, scope.userId, scope.tenantId);
+				return scope;
+			});
+		},
+
+		getPasswordHashForScope(scope) {
+			const row = database
+				.prepare('SELECT password_hash FROM users WHERE id = ? AND tenant_id = ?')
+				.get(scope.userId, scope.tenantId) as { password_hash: string } | undefined;
+			return row?.password_hash ?? null;
+		},
+
+		updatePassword(scope, passwordHash) {
+			const result = database
+				.prepare('UPDATE users SET password_hash = ?, password_reset_required = 0 WHERE id = ? AND tenant_id = ?')
+				.run(requireText(passwordHash, 'passwordHash'), scope.userId, scope.tenantId);
+			if (result.changes !== 1) {
+				throw new Error('authenticated owner was not found');
+			}
 		},
 
 		createItem(input, scope) {
@@ -537,9 +672,10 @@ function initializeSchema(database: Database.Database): void {
 			createSchema(database);
 			assertForeignKeys(database);
 			createIndexes(database);
+			const appliedAt = new Date().toISOString();
 			database
-				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
-				.run(tenantSchemaFoundationVersion, new Date().toISOString());
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?)')
+				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt);
 		})();
 		return;
 	}
@@ -578,6 +714,7 @@ function createSchema(database: Database.Database): void {
 			username TEXT COLLATE NOCASE UNIQUE,
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
 			password_hash TEXT,
+			password_reset_required INTEGER NOT NULL DEFAULT 0 CHECK (password_reset_required IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id)
 		);
@@ -596,6 +733,24 @@ function createSchema(database: Database.Database): void {
 			created_at TEXT NOT NULL,
 			revoked_at TEXT,
 			FOREIGN KEY (user_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE CASCADE
+		);
+		CREATE TABLE IF NOT EXISTS password_resets (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			tenant_id TEXT NOT NULL,
+			secret_hash TEXT NOT NULL UNIQUE,
+			expires_at TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			consumed_at TEXT,
+			FOREIGN KEY (user_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE CASCADE
+		);
+		CREATE TABLE IF NOT EXISTS login_attempts (
+			scope TEXT NOT NULL CHECK (scope IN ('username', 'ip')),
+			subject TEXT NOT NULL,
+			failure_count INTEGER NOT NULL CHECK (failure_count > 0),
+			window_started_at INTEGER NOT NULL,
+			last_attempt_at INTEGER NOT NULL,
+			PRIMARY KEY (scope, subject)
 		);
 		CREATE TABLE IF NOT EXISTS collections (
 			id TEXT PRIMARY KEY,
@@ -652,6 +807,8 @@ function createIndexes(database: Database.Database): void {
 		CREATE UNIQUE INDEX IF NOT EXISTS instance_roles_single_instance_admin_idx ON instance_roles(role) WHERE role = 'instance_admin';
 		CREATE INDEX IF NOT EXISTS sessions_tenant_user_idx ON sessions(tenant_id, user_id);
 		CREATE INDEX IF NOT EXISTS sessions_token_active_idx ON sessions(token_hash, expires_at) WHERE revoked_at IS NULL;
+		CREATE INDEX IF NOT EXISTS password_resets_active_user_idx ON password_resets(user_id, tenant_id, expires_at) WHERE consumed_at IS NULL;
+		CREATE INDEX IF NOT EXISTS login_attempts_window_idx ON login_attempts(window_started_at);
 		CREATE INDEX IF NOT EXISTS collections_tenant_owner_created_idx ON collections(tenant_id, owner_id, created_at, id);
 		CREATE INDEX IF NOT EXISTS items_tenant_collection_created_idx ON items(tenant_id, collection_id, created_at, id);
 		CREATE INDEX IF NOT EXISTS items_tenant_owner_created_idx ON items(tenant_id, owner_id, created_at, id);
@@ -666,44 +823,86 @@ function createIndexes(database: Database.Database): void {
  * @returns {void}
  */
 function migrateSchema(database: Database.Database): void {
-	if (hasMigrationVersion(database, tenantSchemaFoundationVersion)) {
+	if (!hasMigrationVersion(database, tenantSchemaFoundationVersion)) {
+		database.pragma('foreign_keys = OFF');
+		try {
+			database.transaction(() => {
+				createSchema(database);
+				const legacyAdminUserIds = hasColumn(database, 'users', 'is_admin')
+					? (database.prepare('SELECT id FROM users WHERE is_admin = 1').all() as { id: string }[]).map(
+							({ id }) => id
+						)
+					: [];
+				rebuildUsers(database);
+				rebuildSessions(database);
+				rebuildCollections(database);
+				rebuildItems(database);
+				rebuildItemImages(database);
+				replaceFoundationTables(database);
+				for (const userId of legacyAdminUserIds) {
+					database
+						.prepare(
+							'INSERT OR IGNORE INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)'
+						)
+						.run(userId, 'instance_admin', new Date().toISOString());
+				}
+				assertForeignKeys(database);
+				createIndexes(database);
+				database
+					.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+					.run(tenantSchemaFoundationVersion, new Date().toISOString());
+			})();
+		} finally {
+			database.pragma('foreign_keys = ON');
+		}
+	}
+
+	migrateAuthHardeningSchema(database);
+}
+
+/**
+ * Add durable authentication-hardening fields to databases that already use the tenant schema.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateAuthHardeningSchema(database: Database.Database): void {
+	if (hasMigrationVersion(database, authHardeningVersion)) {
 		database.transaction(() => {
 			createIndexes(database);
 		})();
 		return;
 	}
 
-	database.pragma('foreign_keys = OFF');
-	try {
-		database.transaction(() => {
-			createSchema(database);
-			const legacyAdminUserIds = hasColumn(database, 'users', 'is_admin')
-				? (database.prepare('SELECT id FROM users WHERE is_admin = 1').all() as { id: string }[]).map(
-						({ id }) => id
-					)
-				: [];
-			rebuildUsers(database);
-			rebuildSessions(database);
-			rebuildCollections(database);
-			rebuildItems(database);
-			rebuildItemImages(database);
-			replaceFoundationTables(database);
-			for (const userId of legacyAdminUserIds) {
-				database
-					.prepare(
-						'INSERT OR IGNORE INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)'
-					)
-					.run(userId, 'instance_admin', new Date().toISOString());
-			}
-			assertForeignKeys(database);
-			createIndexes(database);
-			database
-				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
-				.run(tenantSchemaFoundationVersion, new Date().toISOString());
-		})();
-	} finally {
-		database.pragma('foreign_keys = ON');
-	}
+	database.transaction(() => {
+		if (!hasColumn(database, 'users', 'password_reset_required')) {
+			database.exec('ALTER TABLE users ADD COLUMN password_reset_required INTEGER NOT NULL DEFAULT 0 CHECK (password_reset_required IN (0, 1))');
+		}
+		database.exec(`
+			CREATE TABLE IF NOT EXISTS password_resets (
+				id TEXT PRIMARY KEY,
+				user_id TEXT NOT NULL,
+				tenant_id TEXT NOT NULL,
+				secret_hash TEXT NOT NULL UNIQUE,
+				expires_at TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				consumed_at TEXT,
+				FOREIGN KEY (user_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE CASCADE
+			);
+			CREATE TABLE IF NOT EXISTS login_attempts (
+				scope TEXT NOT NULL CHECK (scope IN ('username', 'ip')),
+				subject TEXT NOT NULL,
+				failure_count INTEGER NOT NULL CHECK (failure_count > 0),
+				window_started_at INTEGER NOT NULL,
+				last_attempt_at INTEGER NOT NULL,
+				PRIMARY KEY (scope, subject)
+			);
+		`);
+		createIndexes(database);
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(authHardeningVersion, new Date().toISOString());
+	});
 }
 
 /**
@@ -733,6 +932,7 @@ function rebuildUsers(database: Database.Database): void {
 			username TEXT COLLATE NOCASE UNIQUE,
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
 			password_hash TEXT,
+			password_reset_required INTEGER NOT NULL DEFAULT 0 CHECK (password_reset_required IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id)
 		);
@@ -992,6 +1192,51 @@ function requireText(value: string, fieldName: string): string {
 		throw new Error(`${fieldName} must not be empty`);
 	}
 	return normalized;
+}
+
+/**
+ * Read the current bounded login-attempt state after pruning expired windows.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} username - Submitted account username.
+ * @param {string} requestIp - Client network address.
+ * @param {Date} now - Current time used for the bounded window.
+ * @returns {LoginRateLimitStatus} Whether login is blocked and its retry delay.
+ */
+function getLoginAttemptStatus(database: Database.Database, username: string, requestIp: string, now: Date): LoginRateLimitStatus {
+	const normalizedUsername = normalizeUsername(username);
+	const normalizedIp = normalizeRequestIp(requestIp);
+	const nowMilliseconds = now.getTime();
+	const windowStartedAt = nowMilliseconds - loginAttemptWindowMilliseconds;
+	database.prepare('DELETE FROM login_attempts WHERE window_started_at <= ?').run(windowStartedAt);
+	const attempts = database
+		.prepare(
+			"SELECT failure_count, window_started_at FROM login_attempts WHERE (scope = 'username' AND subject = ?) OR (scope = 'ip' AND subject = ?)"
+		)
+		.all(normalizedUsername, normalizedIp) as { failure_count: number; window_started_at: number }[];
+	const blockingAttempt = attempts.find(({ failure_count }) => failure_count >= loginAttemptLimit);
+	if (!blockingAttempt) {
+		return { blocked: false, retryAfterSeconds: 0 };
+	}
+	return {
+		blocked: true,
+		retryAfterSeconds: Math.max(1, Math.ceil((blockingAttempt.window_started_at + loginAttemptWindowMilliseconds - nowMilliseconds) / 1000))
+	};
+}
+
+/**
+ * Normalize a direct client address to a bounded SQLite key.
+ *
+ * @param {string} value - Client address provided by the server adapter.
+ * @returns {string} A validated address key.
+ * @throws {Error} If the address cannot be represented safely.
+ */
+function normalizeRequestIp(value: string): string {
+	const normalized = value.trim();
+	if (!/^[0-9a-fA-F:.]{1,45}$/.test(normalized)) {
+		throw new Error('request IP is invalid');
+	}
+	return normalized.toLowerCase();
 }
 
 /**

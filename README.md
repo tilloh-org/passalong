@@ -66,11 +66,27 @@ instance-admin flag, and password, otherwise startup stops without writes.
 
 Without a bootstrap manifest, or whenever the global account count is zero,
 passalong offers open first registration. The first successfully created
-account receives the instance-admin role. The password is stored as a salted
-scrypt hash; the browser receives a 30-day, HttpOnly session cookie while only
-its hash is stored in SQLite. Later visits show the login form. Without an
-active session, a known collection URL cannot reveal collection data or
-internal notes.
+account receives the instance-admin role. The password is stored as a salted,
+versioned scrypt hash; the browser receives a finite HttpOnly session cookie
+while only its hash is stored in SQLite. Later visits show the login form.
+Without an active session, a known collection URL cannot reveal collection data
+or internal notes.
+
+### Operator password reset
+
+An instance operator can create a single-use, one-hour password-reset secret
+inside the running container. Use the deployed Compose service and provide only
+the account username:
+
+```bash
+docker compose exec passalong node scripts/create-password-reset.mjs <username>
+```
+
+The command prints the secret once and persists only its SHA-256 hash. Transfer
+it to the account holder through an appropriate private channel. The account
+holder opens the password-reset section on the login page, submits the username,
+secret, and a new password. A successful reset invalidates every existing
+session. Do not redirect the command output to persistent logs or shell history.
 
 Builds the image locally from the Dockerfile. Once the first release is
 published, a prebuilt image is available from GitHub Container Registry

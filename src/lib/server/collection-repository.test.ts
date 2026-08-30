@@ -635,4 +635,45 @@ describe('collection repository', () => {
 		expect(reopenedDatabase.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 		reopenedDatabase.close();
 	});
+
+	it('revokes sessions, rejects expired sessions, enforces durable login limits, and consumes reset secrets once', () => {
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const admin = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const now = new Date('2030-01-01T00:00:00.000Z');
+
+		repository.createSessionForUser(admin, 'session-token-hash');
+		repository.revokeSession('session-token-hash');
+		expect(repository.getSession('session-token-hash')).toBeNull();
+		const database = new Database(databasePath);
+		database
+			.prepare('INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+			.run('expired-session', admin.userId, admin.tenantId, 'expired-token-hash', '2000-01-01T00:00:00.000Z', '2000-01-01T00:00:00.000Z');
+		database.close();
+		expect(repository.getSession('expired-token-hash')).toBeNull();
+
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			repository.recordLoginFailure(' AVERY ', '127.0.0.1', now);
+		}
+		expect(repository.getLoginAttemptStatus('avery', '127.0.0.1', now)).toEqual({ blocked: true, retryAfterSeconds: 900 });
+		expect(repository.getLoginAttemptStatus('avery', '127.0.0.2', now)).toEqual({ blocked: true, retryAfterSeconds: 900 });
+		expect(repository.getLoginAttemptStatus('blake', '127.0.0.1', now)).toEqual({ blocked: true, retryAfterSeconds: 900 });
+		repository.clearLoginFailures('avery', '127.0.0.1');
+		expect(repository.getLoginAttemptStatus('avery', '127.0.0.1', now)).toEqual({ blocked: false, retryAfterSeconds: 0 });
+		expect(repository.getLoginAttemptStatus('avery', '127.0.0.2', now)).toEqual({ blocked: false, retryAfterSeconds: 0 });
+		expect(repository.getLoginAttemptStatus('blake', '127.0.0.1', now)).toEqual({ blocked: false, retryAfterSeconds: 0 });
+
+		expect(repository.createPasswordResetForUsername('avery', 'reset-secret-hash', '2030-01-02T00:00:00.000Z')).toBe(true);
+		expect(repository.consumePasswordReset('avery', 'reset-secret-hash', 'scrypt$v1$16384$8$1$salt$key')).toEqual({
+			userId: admin.userId,
+			tenantId: admin.tenantId
+		});
+		expect(repository.consumePasswordReset('avery', 'reset-secret-hash', 'scrypt$v1$16384$8$1$salt$key')).toBeNull();
+		expect(repository.getSession('session-token-hash')).toBeNull();
+		expect(repository.getUserForLogin('avery')).toMatchObject({ passwordHash: 'scrypt$v1$16384$8$1$salt$key' });
+	});
 });
