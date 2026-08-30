@@ -18,7 +18,7 @@ BASE="develop"
 HEAD="main"
 TITLE="chore: merge main into develop (backmerge)"
 LABEL="backmerge"
-REVIEWER="timlohse1104"
+REVIEWER="tilloh-dev"
 BODY="Automatically opened after the Release workflow completed.
 
 IMPORTANT: Merge this PR using a merge commit, not squash. The merge commit makes main an ancestor of develop and prevents repeated conflicts in later develop -> main release candidate PRs."

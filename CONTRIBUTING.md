@@ -30,7 +30,7 @@ Prerequisites:
 
 ```bash
 # clone and install
-git clone git@github.com:timlohse1104/passalong.git
+git clone git@github.com:tilloh-org/passalong.git
 cd passalong
 pnpm install
 

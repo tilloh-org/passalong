@@ -18,7 +18,7 @@ API="${API:-https://api.github.com}"
 BASE="main"
 HEAD="develop"
 LABEL="release-candidate"
-REVIEWER="timlohse1104"
+REVIEWER="tilloh-dev"
 BODY="Automatically opened after a merge into develop.
 
 IMPORTANT: Merge this PR using a merge commit, not squash. This keeps the individual Conventional Commits on main so Release Please can generate a detailed changelog.
