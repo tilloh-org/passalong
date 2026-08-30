@@ -7,12 +7,18 @@ import {
 	type SessionScope
 } from '$lib/server/collection-repository';
 import { hasSameOrigin } from '$lib/server/csrf';
+import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
 import { hashPassword, needsPasswordRehash, validatePassword, verifyPassword } from '$lib/server/password';
 import { getCollectionRepository } from '$lib/server/repository';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
 import type { Actions, PageServerLoad } from './$types';
 
 const sessionCookieName = 'passalong_session';
+const secondsPerMinute = 60;
+const minutesPerHour = 60;
+const hoursPerDay = 24;
+const sessionMaxAgeSeconds = 30 * hoursPerDay * minutesPerHour * secondsPerMinute;
+const maximumPriceCents = 10_000_000;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
 
@@ -250,7 +256,7 @@ function getPriceCents(formData: FormData): number {
 		throw new Error('Bitte gib einen Preis in Cent als ganze Zahl ein.');
 	}
 	const priceCents = Number(value);
-	if (!Number.isSafeInteger(priceCents) || priceCents > 10_000_000) {
+	if (!Number.isSafeInteger(priceCents) || priceCents > maximumPriceCents) {
 		throw new Error('Der Preis liegt außerhalb des erlaubten Bereichs.');
 	}
 	return priceCents;
@@ -282,7 +288,7 @@ function setSessionCookie(cookies: Cookies, scope: SessionScope, url: URL): void
 		path: '/',
 		sameSite: 'lax',
 		secure: url.protocol === 'https:' || process.env.NODE_ENV === 'production',
-		maxAge: 60 * 60 * 24 * 30
+		maxAge: sessionMaxAgeSeconds
 	});
 }
 

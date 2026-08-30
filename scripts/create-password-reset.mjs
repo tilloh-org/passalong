@@ -3,10 +3,14 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 
+const resetSecretByteLength = 32;
+const resetSecretLifetimeMilliseconds = 60 * 60 * 1000;
+const usernamePattern = /^[a-z0-9._+-]{3,64}$/;
+
 const username = process.argv[2]?.trim().toLowerCase();
 const databasePath = process.env.PASSALONG_DATABASE_PATH ?? join(process.cwd(), 'data', 'passalong.sqlite');
 
-if (!username || !/^[a-z0-9._+-]{3,64}$/.test(username)) {
+if (!username || !usernamePattern.test(username)) {
 	console.error('Usage: node scripts/create-password-reset.mjs <username>');
 	process.exitCode = 1;
 } else {
@@ -19,10 +23,10 @@ if (!username || !/^[a-z0-9._+-]{3,64}$/.test(username)) {
 			console.error('No matching account was found.');
 			process.exitCode = 1;
 		} else {
-			const resetSecret = randomBytes(32).toString('base64url');
+			const resetSecret = randomBytes(resetSecretByteLength).toString('base64url');
 			const secretHash = createHash('sha256').update(resetSecret).digest('base64url');
 			const now = new Date().toISOString();
-			const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+			const expiresAt = new Date(Date.now() + resetSecretLifetimeMilliseconds).toISOString();
 			database.transaction(() => {
 				database
 					.prepare('UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL')

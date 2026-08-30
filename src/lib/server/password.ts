@@ -1,10 +1,14 @@
 import { randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
 
 const keyLength = 64;
 const saltLength = 16;
+const legacyPasswordHashPartCount = 3;
+const versionedPasswordHashPartCount = 7;
+const maximumPasswordHashLength = 512;
+const scryptMemoryLimitBytes = 64 * 1024 * 1024;
 const currentScryptParameters = { N: 16_384, r: 8, p: 1 } as const;
 const allowedScryptParameters = [currentScryptParameters] as const;
-const maximumPasswordLength = 128;
 const encodedKeyPattern = /^[A-Za-z0-9_-]+$/;
 
 interface PasswordHashParameters {
@@ -28,8 +32,8 @@ interface ParsedPasswordHash {
  * @throws {Error} When the password is outside the supported bounds.
  */
 export function validatePassword(password: string): void {
-	if (password.length < 12 || password.length > maximumPasswordLength) {
-		throw new Error('Password must be 12 to 128 characters long.');
+	if (password.length < minimumPasswordLength || password.length > maximumPasswordLength) {
+		throw new Error(`Password must be ${minimumPasswordLength} to ${maximumPasswordLength} characters long.`);
 	}
 }
 
@@ -124,7 +128,7 @@ function derivePasswordKey(password: string, salt: Buffer, parameters: PasswordH
  * @returns {{ N: number; r: number; p: number; maxmem: number }} Scrypt options with a fixed memory ceiling.
  */
 function scryptOptions(parameters: PasswordHashParameters): { N: number; r: number; p: number; maxmem: number } {
-	return { ...parameters, maxmem: 64 * 1024 * 1024 };
+	return { ...parameters, maxmem: scryptMemoryLimitBytes };
 }
 
 /**
@@ -134,26 +138,32 @@ function scryptOptions(parameters: PasswordHashParameters): { N: number; r: numb
  * @returns {ParsedPasswordHash | null} Safe parsed values or null when unsupported.
  */
 function parsePasswordHash(storedHash: string): ParsedPasswordHash | null {
-	if (storedHash.length === 0 || storedHash.length > 512) {
+	if (storedHash.length === 0 || storedHash.length > maximumPasswordHashLength) {
 		return null;
 	}
 
 	const parts = storedHash.split('$');
-	if (parts[0] !== 'scrypt') {
+	const [algorithm] = parts;
+	if (algorithm !== 'scrypt') {
 		return null;
 	}
-	if (parts.length === 3) {
-		const salt = decodeBase64Url(parts[1], saltLength);
-		const expectedKey = decodeBase64Url(parts[2], keyLength);
+	if (parts.length === legacyPasswordHashPartCount) {
+		const [, encodedSalt, encodedKey] = parts;
+		const salt = decodeBase64Url(encodedSalt, saltLength);
+		const expectedKey = decodeBase64Url(encodedKey, keyLength);
 		return salt && expectedKey ? { legacy: true, parameters: currentScryptParameters, salt, expectedKey } : null;
 	}
-	if (parts.length !== 7 || parts[1] !== 'v1') {
+	if (parts.length !== versionedPasswordHashPartCount) {
 		return null;
 	}
 
-	const parameters = parseAllowedParameters(parts[2], parts[3], parts[4]);
-	const salt = decodeBase64Url(parts[5], saltLength);
-	const expectedKey = decodeBase64Url(parts[6], keyLength);
+	const [, version, encodedN, encodedR, encodedP, encodedSalt, encodedKey] = parts;
+	if (version !== 'v1') {
+		return null;
+	}
+	const parameters = parseAllowedParameters(encodedN, encodedR, encodedP);
+	const salt = decodeBase64Url(encodedSalt, saltLength);
+	const expectedKey = decodeBase64Url(encodedKey, keyLength);
 	return parameters && salt && expectedKey ? { legacy: false, parameters, salt, expectedKey } : null;
 }
 

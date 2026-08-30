@@ -133,8 +133,15 @@ interface ItemRow {
 
 const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
 const authHardeningVersion = '2026083001_auth_hardening';
+const requiredInstanceAdministratorCount = 1;
+const singleDatabaseRowChange = 1;
+const sqliteTrue = 1;
+const initialFailureCount = 1;
 const loginAttemptLimit = 5;
-const loginAttemptWindowMilliseconds = 15 * 60 * 1000;
+const millisecondsPerSecond = 1000;
+const loginAttemptWindowMilliseconds = 15 * 60 * millisecondsPerSecond;
+const sessionLifetimeMilliseconds = 30 * 24 * 60 * 60 * millisecondsPerSecond;
+const maximumRequestIpLength = 45;
 const categoryValues = itemCategories.map((category) => `'${category}'`).join(', ');
 const conditionValues = itemConditions.map((condition) => `'${condition}'`).join(', ');
 
@@ -240,13 +247,17 @@ export function createCollectionRepository(
 				});
 				const newAdministratorCount = accountsToCreate.filter(({ instanceAdmin }) => instanceAdmin).length;
 
-				if (!hasAccounts && normalizedAccounts.length > 0 && normalizedAccounts.filter(({ instanceAdmin }) => instanceAdmin).length !== 1) {
+				if (
+					!hasAccounts &&
+					normalizedAccounts.length > 0 &&
+					normalizedAccounts.filter(({ instanceAdmin }) => instanceAdmin).length !== requiredInstanceAdministratorCount
+				) {
 					throw new Error('bootstrap configuration requires exactly one instance administrator');
 				}
 				if (hasAccounts && newAdministratorCount > 0) {
 					throw new Error('bootstrap configuration cannot create another instance administrator');
 				}
-				if (existingAdministratorCount > 1) {
+				if (existingAdministratorCount > requiredInstanceAdministratorCount) {
 					throw new Error('instance administrator role is not unique');
 				}
 
@@ -302,7 +313,7 @@ export function createCollectionRepository(
 						displayName: row.display_name,
 						passwordHash: row.password_hash,
 						tenantName: row.tenant_name,
-						instanceAdmin: row.instance_admin === 1
+						instanceAdmin: row.instance_admin === sqliteTrue
 					}
 				: null;
 		},
@@ -331,7 +342,7 @@ export function createCollectionRepository(
 						username: row.username,
 						displayName: row.display_name,
 						passwordHash: row.password_hash,
-						...(row.password_reset_required === 1 ? { passwordResetRequired: true } : {})
+						...(row.password_reset_required === sqliteTrue ? { passwordResetRequired: true } : {})
 					}
 				: null;
 		},
@@ -394,7 +405,7 @@ export function createCollectionRepository(
 				.run(
 					randomUUID(),
 					tokenHash,
-					new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString(),
+					new Date(Date.now() + sessionLifetimeMilliseconds).toISOString(),
 					new Date().toISOString(),
 					scope.userId,
 					scope.tenantId
@@ -451,11 +462,11 @@ export function createCollectionRepository(
 					if (existing) {
 						database
 							.prepare('UPDATE login_attempts SET failure_count = ?, last_attempt_at = ? WHERE scope = ? AND subject = ?')
-							.run(existing.failure_count + 1, nowMilliseconds, attempt.scope, attempt.subject);
+							.run(existing.failure_count + initialFailureCount, nowMilliseconds, attempt.scope, attempt.subject);
 					} else {
 						database
 							.prepare('INSERT INTO login_attempts (scope, subject, failure_count, window_started_at, last_attempt_at) VALUES (?, ?, ?, ?, ?)')
-							.run(attempt.scope, attempt.subject, 1, nowMilliseconds, nowMilliseconds);
+							.run(attempt.scope, attempt.subject, initialFailureCount, nowMilliseconds, nowMilliseconds);
 					}
 				}
 			});
@@ -1218,7 +1229,10 @@ function getLoginAttemptStatus(database: Database.Database, username: string, re
 	}
 	return {
 		blocked: true,
-		retryAfterSeconds: Math.max(1, Math.ceil((blockingAttempt.window_started_at + loginAttemptWindowMilliseconds - nowMilliseconds) / 1000))
+		retryAfterSeconds: Math.max(
+			1,
+			Math.ceil((blockingAttempt.window_started_at + loginAttemptWindowMilliseconds - nowMilliseconds) / millisecondsPerSecond)
+		)
 	};
 }
 
@@ -1231,7 +1245,7 @@ function getLoginAttemptStatus(database: Database.Database, username: string, re
  */
 function normalizeRequestIp(value: string): string {
 	const normalized = value.trim();
-	if (!/^[0-9a-fA-F:.]{1,45}$/.test(normalized)) {
+	if (!new RegExp(`^[0-9a-fA-F:.]{1,${maximumRequestIpLength}}$`).test(normalized)) {
 		throw new Error('request IP is invalid');
 	}
 	return normalized.toLowerCase();

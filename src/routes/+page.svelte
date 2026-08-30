@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
+	import { minimumPasswordLength } from '$lib/password-policy';
 
 	let { data, form } = $props();
 
@@ -55,7 +56,7 @@
 				</label>
 				<label>
 					<span>Neues Passwort</span>
-					<input name="password" type="password" autocomplete="new-password" minlength="12" required />
+					<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
 				</label>
 				{#if form && 'changePasswordError' in form && form.changePasswordError}
 					<p class="form-error" role="alert">{form.changePasswordError}</p>
@@ -82,7 +83,7 @@
 					</label>
 					<label>
 						<span>Passwort</span>
-						<input name="password" type="password" autocomplete="new-password" minlength="12" required />
+						<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
 					</label>
 					{#if form?.registerError}
 						<p class="form-error" role="alert">{form.registerError}</p>
@@ -120,13 +121,13 @@
 						</label>
 						<label>
 							<span>Neues Passwort</span>
-							<input name="password" type="password" autocomplete="new-password" minlength="12" required />
+							<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
 						</label>
 						{#if form && 'resetError' in form && form.resetError}
 							<p class="form-error" role="alert">{form.resetError}</p>
 						{/if}
 						<button type="submit">Passwort zurücksetzen</button>
-					</form>
+						</form>
 				</details>
 			{/if}
 		</section>
