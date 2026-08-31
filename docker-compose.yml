@@ -13,6 +13,7 @@ services:
       PORT: 4242
       ORIGIN: ${PASSALONG_ORIGIN:-http://localhost:4242}
       PASSALONG_DATABASE_PATH: /data/passalong.sqlite
+      PASSALONG_MEDIA_ROOT: /data/media
       PASSALONG_BOOTSTRAP: ${PASSALONG_BOOTSTRAP:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4242"]

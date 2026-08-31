@@ -18,7 +18,7 @@ marketplaces, or a simple hand-over to friends.
 
 ## Features
 
-- **Item collection** — photos (gallery + cover image), price, category,
+- **Item collection** — photos (upload, cover image), price, category,
   condition, internal notes
 - **Sale channels** — track per item where it is listed (market day, online
   marketplace, shop, …) and its sale status
@@ -101,10 +101,14 @@ Builds the image locally from the Dockerfile. Once the first release is
 published, a prebuilt image is available from GitHub Container Registry
 (`ghcr.io/tilloh-org/passalong:latest`) — then `docker compose up -d` is enough.
 
-Persistent data (SQLite database, uploads) lives in the named volume
-`passalong-data` (`/data` inside the container). When serving the app behind a
-reverse proxy, set `PASSALONG_ORIGIN` to its public origin so SvelteKit can keep
-its cross-site form protection enabled.
+Persistent data (SQLite database, uploaded images) lives in the named volume
+`passalong-data` (`/data` inside the container, media under `/data/media`).
+Uploaded item images are validated PNG, JPEG, or WebP files stored
+content-addressed under `PASSALONG_MEDIA_ROOT` (default `/data/media` in
+Docker); only their relative storage keys are persisted in SQLite. Images are
+served exclusively to tenant-authorized, authenticated sessions. When serving
+the app behind a reverse proxy, set `PASSALONG_ORIGIN` to its public origin so
+SvelteKit can keep its cross-site form protection enabled.
 
 ## Development
 
