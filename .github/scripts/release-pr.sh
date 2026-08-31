@@ -18,7 +18,9 @@ API="${API:-https://api.github.com}"
 BASE="main"
 HEAD="develop"
 LABEL="release-candidate"
-REVIEWER="timlohse1104"
+REVIEWER="tilloh-dev"
+readonly CURL_RETRY_COUNT=3
+readonly GITHUB_API_VERSION=2022-11-28
 BODY="Automatically opened after a merge into develop.
 
 IMPORTANT: Merge this PR using a merge commit, not squash. This keeps the individual Conventional Commits on main so Release Please can generate a detailed changelog.
@@ -32,11 +34,11 @@ api_request() {
   local data="${3:-}"
   local args=(
     --silent --show-error --fail-with-body
-    --retry 3 --retry-all-errors
+    --retry "${CURL_RETRY_COUNT}" --retry-all-errors
     -X "${method}"
     -H "Authorization: Bearer ${GH_TOKEN}"
     -H "Accept: application/vnd.github+json"
-    -H "X-GitHub-Api-Version: 2022-11-28"
+    -H "X-GitHub-Api-Version: ${GITHUB_API_VERSION}"
   )
 
   if [ -n "${data}" ]; then

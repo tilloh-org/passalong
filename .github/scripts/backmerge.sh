@@ -18,7 +18,9 @@ BASE="develop"
 HEAD="main"
 TITLE="chore: merge main into develop (backmerge)"
 LABEL="backmerge"
-REVIEWER="timlohse1104"
+REVIEWER="tilloh-dev"
+readonly CURL_RETRY_COUNT=3
+readonly GITHUB_API_VERSION=2022-11-28
 BODY="Automatically opened after the Release workflow completed.
 
 IMPORTANT: Merge this PR using a merge commit, not squash. The merge commit makes main an ancestor of develop and prevents repeated conflicts in later develop -> main release candidate PRs."
@@ -30,11 +32,11 @@ api_request() {
   local data="${3:-}"
   local args=(
     --silent --show-error --fail-with-body
-    --retry 3 --retry-all-errors
+    --retry "${CURL_RETRY_COUNT}" --retry-all-errors
     -X "${method}"
     -H "Authorization: Bearer ${GH_TOKEN}"
     -H "Accept: application/vnd.github+json"
-    -H "X-GitHub-Api-Version: 2022-11-28"
+    -H "X-GitHub-Api-Version: ${GITHUB_API_VERSION}"
   )
 
   if [ -n "${data}" ]; then
