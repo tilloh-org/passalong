@@ -36,6 +36,8 @@ as a GitHub Actions repository secret.
 
 ## Release sequence
 
+![Release process diagram](./release-process.png)
+
 1. Merge feature and fix pull requests into `develop` using squash.
 2. The Develop pipeline validates the resulting commit, publishes
    `develop-<sha7>` and `develop`, and opens or updates the release candidate.
