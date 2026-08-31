@@ -999,4 +999,79 @@ describe('collection repository', () => {
 		expect(secondOwnerImage).toMatchObject({ storageKey: 'same-content.png', position: 0, isCover: true });
 		expect(otherTenantImage).toMatchObject({ storageKey: 'same-content.png', position: 0, isCover: true });
 	});
+
+	it('migrates legacy items to carry sale fields while preserving every row', () => {
+		// arrange
+		const databasePath = createDatabasePath();
+		const legacyDatabase = new Database(databasePath);
+		legacyDatabase.exec(`
+			CREATE TABLE tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL);
+			CREATE TABLE users (
+				id TEXT PRIMARY KEY,
+				tenant_id TEXT NOT NULL,
+				display_name TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				UNIQUE (id, tenant_id)
+			);
+			CREATE TABLE collections (
+				id TEXT PRIMARY KEY,
+				tenant_id TEXT NOT NULL,
+				owner_id TEXT NOT NULL,
+				name TEXT NOT NULL,
+				created_at TEXT NOT NULL
+			);
+			CREATE TABLE items (
+				id TEXT PRIMARY KEY,
+				collection_id TEXT NOT NULL,
+				title TEXT NOT NULL,
+				price_cents INTEGER NOT NULL,
+				category TEXT NOT NULL,
+				condition TEXT NOT NULL,
+				internal_notes TEXT NOT NULL DEFAULT '',
+				created_at TEXT NOT NULL
+			);
+		`);
+		legacyDatabase
+			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+			.run('sale-tenant', 'Sale household', '2026-01-01T00:00:00.000Z');
+		legacyDatabase
+			.prepare('INSERT INTO users (id, tenant_id, display_name, created_at) VALUES (?, ?, ?, ?)')
+			.run('sale-user', 'sale-tenant', 'Sale owner', '2026-01-01T00:00:00.000Z');
+		legacyDatabase
+			.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
+			.run('sale-collection', 'sale-tenant', 'sale-user', 'Sale collection', '2026-01-01T00:00:00.000Z');
+		legacyDatabase
+			.prepare(
+				'INSERT INTO items (id, collection_id, title, price_cents, category, condition, internal_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+			)
+			.run('sold-item', 'sale-collection', 'Sold legacy item', 500, 'books', 'good', '', '2026-01-01T00:00:00.000Z');
+		legacyDatabase.close();
+
+		// act
+		const repository = createCollectionRepository({ databasePath });
+		const saleScope = { userId: 'sale-user', tenantId: 'sale-tenant' };
+		const database = new Database(databasePath, { readonly: true });
+		const itemColumns = (database.prepare('PRAGMA table_info(items)').all() as { name: string }[]).map(
+			({ name }) => name
+		);
+		const legacyItemCount = database.prepare('SELECT COUNT(*) AS count FROM items').get();
+		const foreignKeyErrors = database.prepare('PRAGMA foreign_key_check').all();
+		database.close();
+
+		// assume
+		expect(itemColumns).toEqual(
+			expect.arrayContaining(['sale_channel', 'sold_at', 'sale_proceeds_cents'])
+		);
+		expect(legacyItemCount).toEqual({ count: 1 });
+		expect(foreignKeyErrors).toEqual([]);
+		expect(repository.listItemsForOwner('sale-collection', saleScope)).toEqual([
+			expect.objectContaining({
+				id: 'sold-item',
+				title: 'Sold legacy item',
+				saleChannel: null,
+				soldAt: null,
+				saleProceedsCents: null
+			})
+		]);
+	});
 });

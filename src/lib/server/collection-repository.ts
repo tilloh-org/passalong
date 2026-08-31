@@ -17,8 +17,17 @@ export const itemCategories = [
 
 export const itemConditions = ['new', 'like-new', 'good', 'fair', 'poor'] as const;
 
+export const saleChannels = [
+	'flea-market',
+	'online-marketplace',
+	'shop',
+	'private-sale',
+	'other'
+] as const;
+
 export type ItemCategory = (typeof itemCategories)[number];
 export type ItemCondition = (typeof itemConditions)[number];
+export type SaleChannel = (typeof saleChannels)[number];
 
 export interface Collection {
 	id: string;
@@ -34,6 +43,15 @@ export interface Item {
 	category: ItemCategory;
 	condition: ItemCondition;
 	internalNotes: string;
+	saleChannel: SaleChannel | null;
+	soldAt: string | null;
+	saleProceedsCents: number | null;
+}
+
+export interface MarkItemSoldInput {
+	channel: SaleChannel;
+	soldAt: string;
+	proceedsCents: number;
 }
 
 export interface CreateInitialAdminInput {
@@ -123,6 +141,8 @@ export interface CollectionRepository {
 	updatePassword(scope: SessionScope, passwordHash: string): void;
 	createItem(input: CreateItemInput, scope: SessionScope): Item;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
+	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
+	unmarkItemSold(itemId: string, scope: SessionScope): Item;
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
 	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
 	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
@@ -133,7 +153,6 @@ export interface CollectionRepository {
 interface CreateCollectionRepositoryOptions {
 	databasePath: string;
 }
-
 interface ItemRow {
 	id: string;
 	collection_id: string;
@@ -142,6 +161,9 @@ interface ItemRow {
 	category: ItemCategory;
 	condition: ItemCondition;
 	internal_notes: string;
+	sale_channel: SaleChannel | null;
+	sold_at: string | null;
+	sale_proceeds_cents: number | null;
 }
 
 interface ImageRow {
@@ -153,7 +175,8 @@ interface ImageRow {
 
 const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
 const authHardeningVersion = '2026083001_auth_hardening';
-const tenantScopedImageKeysVersion = '2026083101_item_scoped_image_keys';
+const itemScopedImageKeysVersion = '2026083101_item_scoped_image_keys';
+const saleStatusVersion = '2026083102_item_sale_status';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -177,6 +200,7 @@ const usernamePattern = new RegExp(`^[a-z0-9._+-]{${minimumUsernameLength},${max
 const requestIpPattern = new RegExp(`^[0-9a-fA-F:.]{${minimumRequestIpLength},${maximumRequestIpLength}}$`);
 const categoryValues = itemCategories.map((category) => `'${category}'`).join(', ');
 const conditionValues = itemConditions.map((condition) => `'${condition}'`).join(', ');
+const saleChannelValues = saleChannels.map((channel) => `'${channel}'`).join(', ');
 
 /**
  * Create a SQLite-backed repository for the core collection domain.
@@ -612,7 +636,10 @@ export function createCollectionRepository(
 				priceCents: input.priceCents,
 				category: input.category,
 				condition: input.condition,
-				internalNotes
+				internalNotes,
+				saleChannel: null,
+				soldAt: null,
+				saleProceedsCents: null
 			};
 
 			const result = database
@@ -641,10 +668,49 @@ export function createCollectionRepository(
 			return item;
 		},
 
+		markItemSold(itemId, sale, scope) {
+			const channel = requireValidSaleChannel(sale.channel);
+			const soldAt = requireIsoTimestamp(sale.soldAt);
+			const proceedsCents = requireNonNegativeInteger(sale.proceedsCents, 'proceedsCents');
+			return runImmediateTransaction(database, () => {
+				const updated = database
+					.prepare(
+						'UPDATE items SET sale_channel = ?, sold_at = ?, sale_proceeds_cents = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+					)
+					.run(channel, soldAt, proceedsCents, itemId, scope.userId, scope.tenantId);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('item was not found');
+				}
+				return mapItemRow(
+					database
+						.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
+						.get(itemId, scope.tenantId) as ItemRow
+				);
+			});
+		},
+
+		unmarkItemSold(itemId, scope) {
+			return runImmediateTransaction(database, () => {
+				const updated = database
+					.prepare(
+						'UPDATE items SET sale_channel = NULL, sold_at = NULL, sale_proceeds_cents = NULL WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+					)
+					.run(itemId, scope.userId, scope.tenantId);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('item was not found');
+				}
+				return mapItemRow(
+					database
+						.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
+						.get(itemId, scope.tenantId) as ItemRow
+				);
+			});
+		},
+
 		listItemsForOwner(collectionId, scope) {
 			return database
 				.prepare(
-					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes
+					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes, items.sale_channel, items.sold_at, items.sale_proceeds_cents
 					 FROM items
 					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
@@ -905,8 +971,8 @@ function initializeSchema(database: Database.Database): void {
 			createIndexes(database);
 			const appliedAt = new Date().toISOString();
 			database
-				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?)')
-				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, tenantScopedImageKeysVersion, appliedAt);
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?)')
+				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, itemScopedImageKeysVersion, appliedAt, saleStatusVersion, appliedAt);
 		})();
 		return;
 	}
@@ -1002,6 +1068,9 @@ function createSchema(database: Database.Database): void {
 			category TEXT NOT NULL CHECK (category IN (${categoryValues})),
 			condition TEXT NOT NULL CHECK (condition IN (${conditionValues})),
 			internal_notes TEXT NOT NULL DEFAULT '',
+			sale_channel TEXT CHECK (sale_channel IS NULL OR sale_channel IN (${saleChannelValues})),
+			sold_at TEXT,
+			sale_proceeds_cents INTEGER CHECK (sale_proceeds_cents IS NULL OR sale_proceeds_cents >= 0),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
@@ -1091,6 +1160,34 @@ function migrateSchema(database: Database.Database): void {
 
 	migrateAuthHardeningSchema(database);
 	migrateTenantScopedImageKeys(database);
+	migrateSaleStatus(database);
+}
+
+/**
+ * Add sale-tracking fields to items on databases that predate sale support.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateSaleStatus(database: Database.Database): void {
+	if (hasMigrationVersion(database, saleStatusVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'items', 'sale_channel')) {
+			database.exec('ALTER TABLE items ADD COLUMN sale_channel TEXT CHECK (sale_channel IS NULL OR sale_channel IN (' + saleChannelValues + '))');
+		}
+		if (!hasColumn(database, 'items', 'sold_at')) {
+			database.exec('ALTER TABLE items ADD COLUMN sold_at TEXT');
+		}
+		if (!hasColumn(database, 'items', 'sale_proceeds_cents')) {
+			database.exec('ALTER TABLE items ADD COLUMN sale_proceeds_cents INTEGER CHECK (sale_proceeds_cents IS NULL OR sale_proceeds_cents >= 0)');
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(saleStatusVersion, new Date().toISOString());
+	});
 }
 
 /**
@@ -1104,7 +1201,7 @@ function migrateSchema(database: Database.Database): void {
  * @returns {void}
  */
 function migrateTenantScopedImageKeys(database: Database.Database): void {
-	if (hasMigrationVersion(database, tenantScopedImageKeysVersion)) {
+	if (hasMigrationVersion(database, itemScopedImageKeysVersion)) {
 		return;
 	}
 
@@ -1134,7 +1231,7 @@ function migrateTenantScopedImageKeys(database: Database.Database): void {
 			createIndexes(database);
 			database
 				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
-				.run(tenantScopedImageKeysVersion, new Date().toISOString());
+				.run(itemScopedImageKeysVersion, new Date().toISOString());
 		})();
 	} finally {
 		database.pragma('foreign_keys = ON');
@@ -1327,6 +1424,9 @@ function rebuildItems(database: Database.Database): void {
 			category TEXT NOT NULL CHECK (category IN (${categoryValues})),
 			condition TEXT NOT NULL CHECK (condition IN (${conditionValues})),
 			internal_notes TEXT NOT NULL DEFAULT '',
+			sale_channel TEXT CHECK (sale_channel IS NULL OR sale_channel IN (${saleChannelValues})),
+			sold_at TEXT,
+			sale_proceeds_cents INTEGER CHECK (sale_proceeds_cents IS NULL OR sale_proceeds_cents >= 0),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
@@ -1495,8 +1595,56 @@ function mapItemRow(row: ItemRow): Item {
 		priceCents: row.price_cents,
 		category: row.category,
 		condition: row.condition,
-		internalNotes: row.internal_notes
+		internalNotes: row.internal_notes,
+		saleChannel: row.sale_channel,
+		soldAt: row.sold_at,
+		saleProceedsCents: row.sale_proceeds_cents
 	};
+}
+
+const isoTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+
+/**
+ * Validate the submitted sale channel against the supported allowlist.
+ *
+ * @param {SaleChannel} channel - Channel claimed by the caller.
+ * @returns {SaleChannel} The validated channel.
+ * @throws {Error} If the channel is not supported.
+ */
+function requireValidSaleChannel(channel: SaleChannel): SaleChannel {
+	if (!(saleChannels as readonly string[]).includes(channel)) {
+		throw new Error('channel is not a supported sale channel');
+	}
+	return channel;
+}
+
+/**
+ * Require a canonical ISO-8601 UTC timestamp string.
+ *
+ * @param {string} value - Timestamp supplied by the caller.
+ * @returns {string} The validated timestamp.
+ * @throws {Error} If the timestamp is not canonical UTC ISO format.
+ */
+function requireIsoTimestamp(value: string): string {
+	if (!isoTimestampPattern.test(value) || Number.isNaN(Date.parse(value))) {
+		throw new Error('soldAt must be a canonical UTC ISO timestamp');
+	}
+	return value;
+}
+
+/**
+ * Require a safe non-negative integer amount.
+ *
+ * @param {number} value - Amount supplied by the caller.
+ * @param {string} fieldName - Field name used in validation errors.
+ * @returns {number} The validated amount.
+ * @throws {Error} If the amount is not a safe non-negative integer.
+ */
+function requireNonNegativeInteger(value: number, fieldName: string): number {
+	if (!Number.isSafeInteger(value) || value < 0) {
+		throw new Error(`${fieldName} must be a non-negative integer`);
+	}
+	return value;
 }
 
 /**
