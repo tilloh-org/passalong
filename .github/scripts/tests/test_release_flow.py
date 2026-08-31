@@ -91,6 +91,9 @@ class ReleaseFlowTests(unittest.TestCase):
 
     def test_release_candidate_fails_when_develop_is_behind(self) -> None:
         """A stale merge base must block candidate creation."""
+        # arrange
+
+        # act
         result = self.run_script(
             "release-pr.sh",
             {
@@ -100,11 +103,16 @@ class ReleaseFlowTests(unittest.TestCase):
                 )
             },
         )
+
+        # assume
         self.assertEqual(result.returncode, 1)
         self.assertIn("develop is 1 commit(s) behind main", result.stderr)
 
     def test_release_candidate_uses_neutral_title_for_breaking_change(self) -> None:
         """A merge-based candidate must not collapse breaking commits into its title."""
+        # arrange
+
+        # act
         result = self.run_script(
             "release-pr.sh",
             {
@@ -118,12 +126,17 @@ class ReleaseFlowTests(unittest.TestCase):
                 ),
             },
         )
+
+        # assume
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("chore: release develop to main", result.stdout)
         self.assertIn("Would update release candidate PR #42", result.stdout)
 
     def test_release_candidate_uses_neutral_title_for_mixed_changes(self) -> None:
         """A merge-based candidate must keep individual commits for Release Please."""
+        # arrange
+
+        # act
         result = self.run_script(
             "release-pr.sh",
             {
@@ -142,6 +155,8 @@ class ReleaseFlowTests(unittest.TestCase):
                 ),
             },
         )
+
+        # assume
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("chore: release develop to main", result.stdout)
 
@@ -149,6 +164,9 @@ class ReleaseFlowTests(unittest.TestCase):
         """Breaking commits must remain individual commits in a merge-based release."""
         for footer in ("BREAKING CHANGE", "BREAKING-CHANGE"):
             with self.subTest(footer=footer):
+                # arrange
+
+                # act
                 result = self.run_script(
                     "release-pr.sh",
                     {
@@ -164,11 +182,16 @@ class ReleaseFlowTests(unittest.TestCase):
                         ),
                     },
                 )
+
+                # assume
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn("chore: release develop to main", result.stdout)
 
     def test_release_candidate_rejects_contentless_squash_backmerge(self) -> None:
         """Identical trees must not hide missing main ancestry."""
+        # arrange
+
+        # act
         result = self.run_script(
             "release-pr.sh",
             {
@@ -178,11 +201,16 @@ class ReleaseFlowTests(unittest.TestCase):
                 )
             },
         )
+
+        # assume
         self.assertEqual(result.returncode, 1)
         self.assertIn("develop is 1 commit(s) behind main", result.stderr)
 
     def test_release_candidate_skips_contentless_true_backmerge(self) -> None:
         """A true merge commit without a tree difference must not create a candidate."""
+        # arrange
+
+        # act
         result = self.run_script(
             "release-pr.sh",
             {
@@ -192,20 +220,30 @@ class ReleaseFlowTests(unittest.TestCase):
                 )
             },
         )
+
+        # assume
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("No content changes to promote", result.stdout)
 
     def test_release_candidate_fails_closed_on_invalid_compare(self) -> None:
         """An incomplete API response must never bypass the guard."""
+        # arrange
+
+        # act
         result = self.run_script(
             "release-pr.sh",
             {"/repos/example/passalong/compare/main...develop": (200, {})},
         )
+
+        # assume
         self.assertEqual(result.returncode, 1)
         self.assertIn("invalid compare response", result.stderr)
 
     def test_backmerge_waits_for_release_please_pr(self) -> None:
         """Backmerge creation must wait until the release PR is merged."""
+        # arrange
+
+        # act
         result = self.run_script(
             "backmerge.sh",
             {
@@ -220,11 +258,16 @@ class ReleaseFlowTests(unittest.TestCase):
                 )
             },
         )
+
+        # assume
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("deferring the backmerge", result.stdout)
 
     def test_backmerge_is_created_after_release_flow_settles(self) -> None:
         """A main commit without an open release PR must produce a backmerge."""
+        # arrange
+
+        # act
         result = self.run_script(
             "backmerge.sh",
             {
@@ -239,6 +282,8 @@ class ReleaseFlowTests(unittest.TestCase):
                 ),
             },
         )
+
+        # assume
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Would create backmerge PR", result.stdout)
 

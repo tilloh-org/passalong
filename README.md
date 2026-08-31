@@ -66,11 +66,36 @@ instance-admin flag, and password, otherwise startup stops without writes.
 
 Without a bootstrap manifest, or whenever the global account count is zero,
 passalong offers open first registration. The first successfully created
-account receives the instance-admin role. The password is stored as a salted
-scrypt hash; the browser receives a 30-day, HttpOnly session cookie while only
-its hash is stored in SQLite. Later visits show the login form. Without an
-active session, a known collection URL cannot reveal collection data or
-internal notes.
+account receives the instance-admin role. The password is stored as a salted,
+versioned scrypt hash; the browser receives a finite HttpOnly session cookie
+while only its hash is stored in SQLite. Later visits show the login form.
+Without an active session, a known collection URL cannot reveal collection data
+or internal notes.
+
+### Instance-admin password recovery
+
+The authenticated instance administrator can issue a single-use, one-hour
+password-reset secret in **Instanzverwaltung**. This is a normal, server-side
+authorized application action: the active session and the `instance_admin` role
+are checked for every request. Issuing a secret immediately revokes the target
+account's existing sessions. Only the secret's SHA-256 hash is persisted; copy
+the displayed secret once and transfer it through an appropriate private channel.
+
+### Break-glass recovery
+
+Use the container helper only when no instance administrator can authenticate
+(for example, the singleton instance administrator is locked out). It provides
+the same one-time, hash-only reset flow and immediately revokes the target
+account's existing sessions:
+
+```bash
+docker compose exec passalong node build/scripts/create-password-reset.js <username>
+```
+
+Do not redirect the command output to persistent logs or shell history. The
+account holder opens the password-reset section on the login page, submits the
+username, secret, and a new password. A successful reset consumes the secret and
+creates a new session.
 
 Builds the image locally from the Dockerfile. Once the first release is
 published, a prebuilt image is available from GitHub Container Registry

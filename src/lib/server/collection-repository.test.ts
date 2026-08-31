@@ -77,40 +77,59 @@ afterEach(() => {
 
 describe('collection repository', () => {
 	it('creates the initial instance administrator only when no accounts exist', () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const repository = createCollectionRepository({ databasePath });
 
-		expect(repository.hasAdminAccount()).toBe(false);
-		expect(repository.hasAccounts()).toBe(false);
+		// act
+		const initiallyHasAdminAccount = repository.hasAdminAccount();
+		const initiallyHasAccounts = repository.hasAccounts();
+
+		// assume
+		expect(initiallyHasAdminAccount).toBe(false);
+		expect(initiallyHasAccounts).toBe(false);
+
+		// act
 		const admin = repository.createInitialAdmin({
 			username: 'avery',
 			displayName: 'Avery',
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
+		const hasAdminAccount = repository.hasAdminAccount();
+		const loginUser = repository.getUserForLogin('avery');
 
-		expect(repository.hasAdminAccount()).toBe(true);
-		expect(repository.getUserForLogin('avery')).toEqual({
+		// assume
+		expect(hasAdminAccount).toBe(true);
+		expect(loginUser).toEqual({
 			...admin,
 			username: 'avery',
 			displayName: 'Avery',
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
-		expect(() =>
+
+		let duplicateAdminError: unknown;
+
+		// act
+		try {
 			repository.createInitialAdmin({
 				username: 'blake',
 				displayName: 'Blake',
 				passwordHash: 'scrypt$another-salt$another-key'
-			})
-		).toThrow('an initial admin account already exists');
-
+			});
+		} catch (error) {
+			duplicateAdminError = error;
+		}
 		const database = new Database(databasePath, { readonly: true });
-		expect(database.prepare('SELECT user_id, role FROM instance_roles').all()).toEqual([
-			{ user_id: admin.userId, role: 'instance_admin' }
-		]);
+		const instanceRoles = database.prepare('SELECT user_id, role FROM instance_roles').all();
 		database.close();
+
+		// assume
+		expect(duplicateAdminError).toMatchObject({ message: 'an initial admin account already exists' });
+		expect(instanceRoles).toEqual([{ user_id: admin.userId, role: 'instance_admin' }]);
 	});
 
 	it('enforces a database-level singleton for the instance administrator role', () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const repository = createCollectionRepository({ databasePath });
 		const administrator = repository.createInitialAdmin({
@@ -126,15 +145,51 @@ describe('collection repository', () => {
 			)
 			.run('second-user', administrator.tenantId, 'blake', 'Blake', 'scrypt$test-salt$test-key', '2026-01-01T00:00:00.000Z');
 
-		expect(() =>
+		let singletonRoleError: unknown;
+
+		// act
+		try {
 			database
 				.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
-				.run('second-user', 'instance_admin', '2026-01-01T00:00:00.000Z')
-		).toThrow(/UNIQUE constraint failed/);
+				.run('second-user', 'instance_admin', '2026-01-01T00:00:00.000Z');
+		} catch (error) {
+			singletonRoleError = error;
+		}
+
+		// assume
+		expect(singletonRoleError).toMatchObject({ message: expect.stringMatching(/UNIQUE constraint failed/) });
 		database.close();
 	});
 
+	it('recognizes only the singleton instance administrator as privileged', () => {
+		// arrange
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const instanceAdministrator = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const database = new Database(databasePath);
+		database
+			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+			.run('member-tenant', 'Member household', '2026-01-01T00:00:00.000Z');
+		database
+			.prepare('INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+			.run('member-user', 'member-tenant', 'blake', 'Blake', 'scrypt$test-salt$test-key', '2026-01-01T00:00:00.000Z');
+		database.close();
+
+		// act
+		const administratorIsPrivileged = repository.isInstanceAdmin(instanceAdministrator);
+		const memberIsPrivileged = repository.isInstanceAdmin({ userId: 'member-user', tenantId: 'member-tenant' });
+
+		// assume
+		expect(administratorIsPrivileged).toBe(true);
+		expect(memberIsPrivileged).toBe(false);
+	});
+
 	it('creates a multi-account bootstrap manifest once with exactly one instance administrator', () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const repository = createCollectionRepository({ databasePath });
 		const accounts = [
@@ -156,8 +211,10 @@ describe('collection repository', () => {
 			}
 		];
 
+		// act
 		repository.provisionBootstrapAccounts(accounts);
 
+		// assume
 		expect(repository.getBootstrapAccount('avery')).toEqual({
 			username: 'avery',
 			displayName: 'Avery',
@@ -178,12 +235,15 @@ describe('collection repository', () => {
 	});
 
 	it('lets an authenticated admin create a collection and persist an item', () => {
+		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
 		const admin = repository.createInitialAdmin({
 			username: 'avery',
 			displayName: 'Avery',
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
+
+		// act
 		const collection = repository.createCollection({ name: 'Living room clear-out' }, admin);
 
 		const item = repository.createItem(
@@ -198,6 +258,7 @@ describe('collection repository', () => {
 			admin
 		);
 
+		// assume
 		expect(repository.listItemsForOwner(collection.id, admin)).toEqual([
 			expect.objectContaining({
 				id: item.id,
@@ -211,6 +272,7 @@ describe('collection repository', () => {
 	});
 
 	it('scopes collection and item access to the authenticated owner and tenant', () => {
+		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
 		const admin = repository.createInitialAdmin({
 			username: 'avery',
@@ -219,11 +281,13 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Books' }, admin);
 		const anotherScope = { userId: 'another-user', tenantId: admin.tenantId };
+		let foreignItemCreationError: unknown;
 
-		expect(repository.getCollectionForOwner(collection.id, anotherScope)).toBeNull();
-		expect(repository.listCollectionsForOwner(anotherScope)).toEqual([]);
-		expect(repository.listItemsForOwner(collection.id, anotherScope)).toEqual([]);
-		expect(() =>
+		// act
+		const foreignCollection = repository.getCollectionForOwner(collection.id, anotherScope);
+		const foreignCollections = repository.listCollectionsForOwner(anotherScope);
+		const foreignItems = repository.listItemsForOwner(collection.id, anotherScope);
+		try {
 			repository.createItem(
 				{
 					collectionId: collection.id,
@@ -234,43 +298,63 @@ describe('collection repository', () => {
 					internalNotes: ''
 				},
 				anotherScope
-			)
-		).toThrow('collection was not found');
+			);
+		} catch (error) {
+			foreignItemCreationError = error;
+		}
+
+		// assume
+		expect(foreignCollection).toBeNull();
+		expect(foreignCollections).toEqual([]);
+		expect(foreignItems).toEqual([]);
+		expect(foreignItemCreationError).toMatchObject({ message: 'collection was not found' });
 	});
 
 	it('migrates the original core collection fixture atomically and idempotently', () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		createOriginalCoreCollectionDatabase(databasePath);
 
+		// act
 		const repository = createCollectionRepository({ databasePath });
 		const legacyScope = { userId: 'legacy-user', tenantId: 'legacy-tenant' };
-		expect(repository.getCollectionForOwner('legacy-collection', legacyScope)).toMatchObject({
-			id: 'legacy-collection',
-			name: 'Legacy collection'
-		});
-
+		const legacyCollection = repository.getCollectionForOwner('legacy-collection', legacyScope);
 		const migratedDatabase = new Database(databasePath, { readonly: true });
-		expect(
-			migratedDatabase
-				.prepare('SELECT tenant_id, owner_id, collection_id FROM items WHERE id = ?')
-				.get('legacy-item')
-		).toEqual({ tenant_id: 'legacy-tenant', owner_id: 'legacy-user', collection_id: 'legacy-collection' });
-		expect(migratedDatabase.prepare('SELECT COUNT(*) AS count FROM sessions').get()).toEqual({ count: 0 });
-		expect(migratedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get()).toEqual({ count: 0 });
-		expect(migratedDatabase.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+		const migratedItem = migratedDatabase
+			.prepare('SELECT tenant_id, owner_id, collection_id FROM items WHERE id = ?')
+			.get('legacy-item');
+		const migratedSessionCount = migratedDatabase.prepare('SELECT COUNT(*) AS count FROM sessions').get();
+		const migratedImageCount = migratedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get();
+		const migratedForeignKeyErrors = migratedDatabase.prepare('PRAGMA foreign_key_check').all();
 		migratedDatabase.close();
 
+		// assume
+		expect(legacyCollection).toMatchObject({ id: 'legacy-collection', name: 'Legacy collection' });
+		expect(migratedItem).toEqual({ tenant_id: 'legacy-tenant', owner_id: 'legacy-user', collection_id: 'legacy-collection' });
+		expect(migratedSessionCount).toEqual({ count: 0 });
+		expect(migratedImageCount).toEqual({ count: 0 });
+		expect(migratedForeignKeyErrors).toEqual([]);
+
+		// act
 		createCollectionRepository({ databasePath });
 		const reopenedDatabase = new Database(databasePath, { readonly: true });
-		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 1 });
-		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM items').get()).toEqual({ count: 1 });
-		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM sessions').get()).toEqual({ count: 0 });
-		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get()).toEqual({ count: 0 });
-		expect(reopenedDatabase.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+		const reopenedUserCount = reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get();
+		const reopenedItemCount = reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM items').get();
+		const reopenedSessionCount = reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM sessions').get();
+		const reopenedImageCount = reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get();
+		const reopenedForeignKeyErrors = reopenedDatabase.prepare('PRAGMA foreign_key_check').all();
 		reopenedDatabase.close();
+
+		// assume
+		expect(reopenedUserCount).toEqual({ count: 1 });
+		expect(reopenedItemCount).toEqual({ count: 1 });
+		expect(reopenedSessionCount).toEqual({ count: 0 });
+		expect(reopenedImageCount).toEqual({ count: 0 });
+		expect(reopenedForeignKeyErrors).toEqual([]);
 	});
 
 	it('rolls back every migration write when legacy usernames collide case-insensitively', () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const legacyDatabase = new Database(databasePath);
 		legacyDatabase.exec(`
@@ -311,7 +395,17 @@ describe('collection repository', () => {
 			.run('user-b', 'tenant-a', 'alice', 'Alice duplicate', createdAt);
 		legacyDatabase.close();
 
-		expect(() => createCollectionRepository({ databasePath })).toThrow(/UNIQUE constraint failed/);
+		let migrationError: unknown;
+
+		// act
+		try {
+			createCollectionRepository({ databasePath });
+		} catch (error) {
+			migrationError = error;
+		}
+
+		// assume
+		expect(migrationError).toMatchObject({ message: expect.stringMatching(/UNIQUE constraint failed/) });
 
 		const unchangedDatabase = new Database(databasePath, { readonly: true });
 		expect(
@@ -327,6 +421,7 @@ describe('collection repository', () => {
 	});
 
 	it('rejects mixed-tenant foreign-key relationships and creates tenant indexes', () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const repository = createCollectionRepository({ databasePath });
 		const alpha = repository.createInitialAdmin({
@@ -353,32 +448,48 @@ describe('collection repository', () => {
 			.prepare('INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
 			.run('user-b', 'tenant-b', 'beta', 'Beta', 'scrypt$beta$hash', '2026-01-01T00:00:00.000Z');
 
-		expect(() =>
-			database
-				.prepare('INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-				.run('session-b', alpha.userId, 'tenant-b', 'token-b', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
-		).toThrow(/FOREIGN KEY constraint failed/);
-		expect(() =>
-			database
-				.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
-				.run('collection-b', 'tenant-b', alpha.userId, 'Mixed collection', '2026-01-01T00:00:00.000Z')
-		).toThrow(/FOREIGN KEY constraint failed/);
-		expect(() =>
-			database
-				.prepare('INSERT INTO items (id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-				.run('item-b', 'tenant-b', alpha.userId, collection.id, 'Mixed item', 100, 'home', 'good', '', '2026-01-01T00:00:00.000Z')
-		).toThrow(/FOREIGN KEY constraint failed/);
-		expect(() =>
-			database
-				.prepare('INSERT INTO item_images (id, tenant_id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-				.run('image-b', 'tenant-b', item.id, 'items/mixed.jpg', 0, 1, '2026-01-01T00:00:00.000Z')
-		).toThrow(/FOREIGN KEY constraint failed/);
+		const captureConstraintError = (operation: () => void): unknown => {
+			try {
+				operation();
+				return undefined;
+			} catch (error) {
+				return error;
+			}
+		};
 
+		// act
+		const constraintErrors = [
+			captureConstraintError(() =>
+				database
+					.prepare('INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+					.run('session-b', alpha.userId, 'tenant-b', 'token-b', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+			),
+			captureConstraintError(() =>
+				database
+					.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
+					.run('collection-b', 'tenant-b', alpha.userId, 'Mixed collection', '2026-01-01T00:00:00.000Z')
+			),
+			captureConstraintError(() =>
+				database
+					.prepare('INSERT INTO items (id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+					.run('item-b', 'tenant-b', alpha.userId, collection.id, 'Mixed item', 100, 'home', 'good', '', '2026-01-01T00:00:00.000Z')
+			),
+			captureConstraintError(() =>
+				database
+					.prepare('INSERT INTO item_images (id, tenant_id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+					.run('image-b', 'tenant-b', item.id, 'items/mixed.jpg', 0, 1, '2026-01-01T00:00:00.000Z')
+			)
+		];
 		const indexNames = new Set(
 			['users', 'sessions', 'collections', 'items', 'item_images'].flatMap((tableName) =>
 				(database.prepare(`PRAGMA index_list(${tableName})`).all() as { name: string }[]).map(({ name }) => name)
 			)
 		);
+
+		// assume
+		for (const constraintError of constraintErrors) {
+			expect(constraintError).toMatchObject({ message: expect.stringMatching(/FOREIGN KEY constraint failed/) });
+		}
 		expect([...indexNames]).toEqual(
 			expect.arrayContaining([
 				'users_tenant_id_idx',
@@ -393,6 +504,7 @@ describe('collection repository', () => {
 	});
 
 	it('migrates a legacy owner schema without deleting existing records', () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const legacyDatabase = new Database(databasePath);
 		legacyDatabase.exec(`
@@ -423,10 +535,12 @@ describe('collection repository', () => {
 			.run('legacy-collection', 'legacy-tenant', 'legacy-user', 'Legacy collection', '2026-01-01T00:00:00.000Z');
 		legacyDatabase.close();
 
+		// act
 		const repository = createCollectionRepository({ databasePath });
 		const legacyScope = { userId: 'legacy-user', tenantId: 'legacy-tenant' };
 		const migratedDatabase = new Database(databasePath, { readonly: true });
 
+		// assume
 		expect(repository.getCollectionForOwner('legacy-collection', legacyScope)).toMatchObject({
 			id: 'legacy-collection',
 			name: 'Legacy collection'
@@ -446,6 +560,7 @@ describe('collection repository', () => {
 	});
 
 	it('stores only hashes for browser sessions and resolves their owner scope', () => {
+		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
 		const admin = repository.createInitialAdmin({
 			username: 'avery',
@@ -453,8 +568,10 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 
+		// act
 		repository.createSessionForUser(admin, 'test-token-hash');
 
+		// assume
 		expect(repository.getSession('test-token-hash')).toEqual({
 			userId: admin.userId,
 			tenantId: admin.tenantId
@@ -463,6 +580,7 @@ describe('collection repository', () => {
 	});
 
 	it('migrates existing tenant records idempotently without granting instance administrators cross-tenant access', () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const legacyDatabase = new Database(databasePath);
 		legacyDatabase.exec(`
@@ -556,10 +674,12 @@ describe('collection repository', () => {
 			.run('session-b', 'user-b', 'tenant-b', 'beta-token', '2099-01-01T00:00:00.000Z', createdAt);
 		legacyDatabase.close();
 
+		// act
 		const repository = createCollectionRepository({ databasePath });
 		const instanceAdminScope = { userId: 'user-a', tenantId: 'tenant-a' };
 		const normalAccountScope = { userId: 'user-b', tenantId: 'tenant-b' };
 
+		// assume
 		expect(repository.getUserForLogin('BETA-USER')).toEqual({
 			...normalAccountScope,
 			username: 'beta-user',
@@ -576,12 +696,20 @@ describe('collection repository', () => {
 		expect(repository.listCollectionsForOwner(normalAccountScope)).toMatchObject([
 			{ id: 'collection-b', name: 'Beta collection' }
 		]);
-		expect(repository.createCollection({ name: 'Beta follow-up' }, normalAccountScope)).toMatchObject({
+
+		// act
+		const betaFollowUpCollection = repository.createCollection({ name: 'Beta follow-up' }, normalAccountScope);
+
+		// assume
+		expect(betaFollowUpCollection).toMatchObject({
 			name: 'Beta follow-up',
 			ownerName: 'Beta User'
 		});
 
+		// act
 		const migratedDatabase = new Database(databasePath, { readonly: true });
+
+		// assume
 		expect(migratedDatabase.prepare('SELECT version FROM schema_migrations').all()).toEqual([
 			{ version: '2026082601_tenant_schema_foundation' }
 		]);
@@ -624,8 +752,11 @@ describe('collection repository', () => {
 		expect(migratedDatabase.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 		migratedDatabase.close();
 
+		// act
 		createCollectionRepository({ databasePath });
 		const reopenedDatabase = new Database(databasePath, { readonly: true });
+
+		// assume
 		expect(reopenedDatabase.prepare('SELECT version FROM schema_migrations').all()).toEqual([
 			{ version: '2026082601_tenant_schema_foundation' }
 		]);
@@ -634,5 +765,86 @@ describe('collection repository', () => {
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get()).toEqual({ count: 1 });
 		expect(reopenedDatabase.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 		reopenedDatabase.close();
+	});
+
+	it('revokes sessions, rejects expired sessions, enforces durable login limits, and consumes reset secrets once', () => {
+		// arrange
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const admin = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const now = new Date('2030-01-01T00:00:00.000Z');
+
+		// act
+		repository.createSessionForUser(admin, 'session-token-hash');
+		repository.revokeSession('session-token-hash');
+		const revokedSession = repository.getSession('session-token-hash');
+
+		// assume
+		expect(revokedSession).toBeNull();
+
+		// act
+		const database = new Database(databasePath);
+		database
+			.prepare('INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+			.run('expired-session', admin.userId, admin.tenantId, 'expired-token-hash', '2000-01-01T00:00:00.000Z', '2000-01-01T00:00:00.000Z');
+		database.close();
+		const expiredSession = repository.getSession('expired-token-hash');
+
+		// assume
+		expect(expiredSession).toBeNull();
+
+		// act
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			repository.recordLoginFailure(' AVERY ', '127.0.0.1', now);
+		}
+		const usernameLimitedStatus = repository.getLoginAttemptStatus('avery', '127.0.0.1', now);
+		const addressLimitedStatus = repository.getLoginAttemptStatus('avery', '127.0.0.2', now);
+		const combinedLimitedStatus = repository.getLoginAttemptStatus('blake', '127.0.0.1', now);
+
+		// assume
+		expect(usernameLimitedStatus).toEqual({ blocked: true, retryAfterSeconds: 900 });
+		expect(addressLimitedStatus).toEqual({ blocked: true, retryAfterSeconds: 900 });
+		expect(combinedLimitedStatus).toEqual({ blocked: true, retryAfterSeconds: 900 });
+
+		// act
+		repository.clearLoginFailures('avery', '127.0.0.1');
+		const clearedAddressStatus = repository.getLoginAttemptStatus('avery', '127.0.0.9', now);
+		const preservedCombinedStatus = repository.getLoginAttemptStatus('blake', '127.0.0.1', now);
+		const preservedUsernameStatus = repository.getLoginAttemptStatus('avery', '127.0.0.1', now);
+
+		// assume
+		expect(clearedAddressStatus).toEqual({ blocked: false, retryAfterSeconds: 0 });
+		expect(preservedCombinedStatus).toEqual({ blocked: true, retryAfterSeconds: 900 });
+		expect(preservedUsernameStatus).toEqual({ blocked: true, retryAfterSeconds: 900 });
+
+		// act
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			repository.recordLoginFailure('!', '127.0.0.3', now);
+		}
+		const unrelatedUserStatus = repository.getLoginAttemptStatus('unrelated-user', '127.0.0.3', now);
+
+		// assume
+		expect(unrelatedUserStatus).toEqual({ blocked: true, retryAfterSeconds: 900 });
+
+		// act
+		repository.createSessionForUser(admin, 'reset-issuance-session-hash');
+		const createdReset = repository.createPasswordResetForUsername('avery', 'reset-secret-hash', '2030-01-02T00:00:00.000Z');
+		const resetIssuanceSession = repository.getSession('reset-issuance-session-hash');
+		const resetScope = repository.consumePasswordReset('avery', 'reset-secret-hash', 'scrypt$v1$16384$8$1$salt$key');
+		const consumedResetScope = repository.consumePasswordReset('avery', 'reset-secret-hash', 'scrypt$v1$16384$8$1$salt$key');
+		const originalSession = repository.getSession('session-token-hash');
+		const resetUser = repository.getUserForLogin('avery');
+
+		// assume
+		expect(createdReset).toBe(true);
+		expect(resetIssuanceSession).toBeNull();
+		expect(resetScope).toEqual({ userId: admin.userId, tenantId: admin.tenantId });
+		expect(consumedResetScope).toBeNull();
+		expect(originalSession).toBeNull();
+		expect(resetUser).toMatchObject({ passwordHash: 'scrypt$v1$16384$8$1$salt$key' });
 	});
 });

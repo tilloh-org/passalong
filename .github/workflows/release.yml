@@ -65,7 +65,8 @@ jobs:
         run: |
           raw_tag="${RECOVERY_IMAGE_TAG:-$RELEASE_TAG_NAME}"
           image_version="${raw_tag#v}"
-          if ! [[ "$image_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$ ]]; then
+          readonly SEMANTIC_VERSION_TAG_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)?$'
+          if ! [[ "$image_version" =~ $SEMANTIC_VERSION_TAG_PATTERN ]]; then
             echo "Expected a semantic version tag, got: $raw_tag" >&2
             exit 1
           fi

@@ -6,12 +6,36 @@ import {
 	type ItemCondition,
 	type SessionScope
 } from '$lib/server/collection-repository';
-import { hashPassword, validatePassword, verifyPassword } from '$lib/server/password';
+import { hasSameOrigin } from '$lib/server/csrf';
+import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
+import { hashPassword, needsPasswordRehash, validatePassword, verifyPassword } from '$lib/server/password';
 import { getCollectionRepository } from '$lib/server/repository';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
 import type { Actions, PageServerLoad } from './$types';
 
 const sessionCookieName = 'passalong_session';
+const millisecondsPerSecond = 1000;
+const secondsPerMinute = 60;
+const minutesPerHour = 60;
+const hoursPerDay = 24;
+const passwordResetLifetimeHours = 1;
+const sessionLifetimeDays = 30;
+const firstCollectionIndex = 0;
+const maximumPriceCents = 10_000_000;
+const wholeNumberPattern = /^\d+$/;
+const httpStatus = {
+	seeOther: 303,
+	badRequest: 400,
+	unauthorized: 401,
+	forbidden: 403,
+	notFound: 404,
+	conflict: 409,
+	tooManyRequests: 429
+} as const;
+const passwordResetLifetimeMilliseconds = passwordResetLifetimeHours * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
+const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
+const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
+const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
 
 /**
  * Load account-aware and tenant-scoped collection data.
@@ -23,8 +47,9 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	const repository = getCollectionRepository();
 	const scope = getSessionScope(cookies.get(sessionCookieName));
 	const collections = scope ? repository.listCollectionsForOwner(scope) : [];
+	const isInstanceAdmin = scope ? repository.isInstanceAdmin(scope) : false;
 	const requestedCollectionId = url.searchParams.get('collection');
-	const collectionId = requestedCollectionId ?? collections[0]?.id;
+	const collectionId = requestedCollectionId ?? collections[firstCollectionIndex]?.id;
 	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
 
 	return {
@@ -34,15 +59,19 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
 		isAuthenticated: Boolean(scope),
-		isInitialSetup: !repository.hasAccounts()
+		isInitialSetup: !repository.hasAccounts(),
+		isInstanceAdmin
 	};
 };
 
 export const actions: Actions = {
-	register: async ({ cookies, request }) => {
+	register: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
 		const repository = getCollectionRepository();
 		if (repository.hasAccounts()) {
-			return fail(409, { registerError: 'Der erste Zugang wurde bereits erstellt. Bitte melde dich an.' });
+			return fail(httpStatus.conflict, { registerError: 'Der erste Zugang wurde bereits erstellt. Bitte melde dich an.' });
 		}
 
 		const formData = await request.formData();
@@ -54,39 +83,148 @@ export const actions: Actions = {
 				displayName: getFormText(formData, 'displayName'),
 				passwordHash: await hashPassword(password)
 			});
-			setSessionCookie(cookies, admin);
+			setSessionCookie(cookies, admin, url);
 		} catch (error) {
-			return fail(400, { registerError: getErrorMessage(error) });
+			return fail(httpStatus.badRequest, { registerError: getErrorMessage(error) });
 		}
 
-		redirect(303, '/');
+		redirect(httpStatus.seeOther, '/');
 	},
 
-	login: async ({ cookies, request }) => {
+	login: async ({ cookies, getClientAddress, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
 		const formData = await request.formData();
-		let user;
+		const username = getFormText(formData, 'username');
+		const password = getFormText(formData, 'password');
+		const repository = getCollectionRepository();
+		const requestIp = getClientAddress();
 		try {
-			user = getCollectionRepository().getUserForLogin(getFormText(formData, 'username'));
+			const rateLimit = repository.getLoginAttemptStatus(username, requestIp);
+			if (rateLimit.blocked) {
+				return fail(httpStatus.tooManyRequests, { loginError: `Zu viele Anmeldeversuche. Bitte warte ${rateLimit.retryAfterSeconds} Sekunden.` });
+			}
+			let user;
+			try {
+				user = repository.getUserForLogin(username);
+			} catch {
+				user = null;
+			}
+			if (!user || !(await verifyPassword(password, user.passwordHash)) || user.passwordResetRequired) {
+				repository.recordLoginFailure(username, requestIp);
+				return fail(httpStatus.unauthorized, { loginError: invalidCredentialsError });
+			}
+			if (needsPasswordRehash(user.passwordHash)) {
+				repository.updatePassword(user, await hashPassword(password));
+			}
+			repository.clearLoginFailures(username, requestIp);
+			setSessionCookie(cookies, user, url);
 		} catch {
-			return fail(401, { loginError: 'Benutzername oder Passwort ist nicht korrekt.' });
-		}
-		if (!user || !(await verifyPassword(getFormText(formData, 'password'), user.passwordHash))) {
-			return fail(401, { loginError: 'Benutzername oder Passwort ist nicht korrekt.' });
+			return fail(httpStatus.unauthorized, { loginError: invalidCredentialsError });
 		}
 
-		setSessionCookie(cookies, user);
-		redirect(303, '/');
+		redirect(httpStatus.seeOther, '/');
 	},
 
-	logout: ({ cookies }) => {
+	logout: ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const token = cookies.get(sessionCookieName);
+		if (token) {
+			getCollectionRepository().revokeSession(hashSessionToken(token));
+		}
 		cookies.delete(sessionCookieName, { path: '/' });
-		redirect(303, '/');
+		redirect(httpStatus.seeOther, '/');
 	},
 
-	createCollection: async ({ cookies, request }) => {
+	createPasswordReset: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(401, { createCollectionError: 'Bitte melde dich zuerst an.' });
+			return fail(httpStatus.unauthorized, { passwordResetIssueError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+		const repository = getCollectionRepository();
+		if (!repository.isInstanceAdmin(scope)) {
+			return fail(httpStatus.forbidden, { passwordResetIssueError: 'Du bist nicht für die Instanzverwaltung berechtigt.' });
+		}
+
+		try {
+			const resetSecret = createSessionToken();
+			const resetCreated = repository.createPasswordResetForUsername(
+				getFormText(await request.formData(), 'username'),
+				hashSessionToken(resetSecret),
+				new Date(Date.now() + passwordResetLifetimeMilliseconds).toISOString()
+			);
+			if (!resetCreated) {
+				return fail(httpStatus.notFound, { passwordResetIssueError: 'Das angegebene Konto wurde nicht gefunden.' });
+			}
+			return { passwordResetSecret: resetSecret };
+		} catch (error) {
+			return fail(httpStatus.badRequest, { passwordResetIssueError: getErrorMessage(error) });
+		}
+	},
+
+	resetPassword: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const formData = await request.formData();
+		try {
+			const password = getFormText(formData, 'password');
+			validatePassword(password);
+			const scope = getCollectionRepository().consumePasswordReset(
+				getFormText(formData, 'username'),
+				hashSessionToken(getFormText(formData, 'resetSecret')),
+				await hashPassword(password)
+			);
+			if (!scope) {
+				return fail(httpStatus.badRequest, { resetError: 'Der Zurücksetzungscode ist ungültig oder abgelaufen.' });
+			}
+			setSessionCookie(cookies, scope, url);
+		} catch {
+			return fail(httpStatus.badRequest, { resetError: 'Der Zurücksetzungscode ist ungültig oder abgelaufen.' });
+		}
+		redirect(httpStatus.seeOther, '/');
+	},
+
+	changePassword: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const token = cookies.get(sessionCookieName);
+		const scope = getSessionScope(token);
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { changePasswordError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+		const formData = await request.formData();
+		try {
+			const currentPasswordHash = getCollectionRepository().getPasswordHashForScope(scope);
+			if (!currentPasswordHash || !(await verifyPassword(getFormText(formData, 'currentPassword'), currentPasswordHash))) {
+				return fail(httpStatus.badRequest, { changePasswordError: invalidCredentialsError });
+			}
+			const password = getFormText(formData, 'password');
+			validatePassword(password);
+			const repository = getCollectionRepository();
+			repository.updatePassword(scope, await hashPassword(password));
+			repository.revokeSessionsForUser(scope);
+			setSessionCookie(cookies, scope, url);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { changePasswordError: getErrorMessage(error) });
+		}
+		redirect(httpStatus.seeOther, '/');
+	},
+
+	createCollection: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { createCollectionError: 'Bitte melde dich zuerst an.' });
 		}
 
 		const formData = await request.formData();
@@ -97,23 +235,26 @@ export const actions: Actions = {
 				scope
 			);
 		} catch (error) {
-			return fail(400, { createCollectionError: getErrorMessage(error) });
+			return fail(httpStatus.badRequest, { createCollectionError: getErrorMessage(error) });
 		}
 
-		redirect(303, `/?collection=${encodeURIComponent(collection.id)}`);
+		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collection.id)}`);
 	},
 
-	addItem: async ({ cookies, request }) => {
+	addItem: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
 		const formData = await request.formData();
 		const repository = getCollectionRepository();
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(401, { addItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, { addItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
 		}
 
 		const collectionId = getFormText(formData, 'collectionId');
 		if (!repository.getCollectionForOwner(collectionId, scope)) {
-			return fail(404, { addItemError: 'Die Sammlung wurde nicht gefunden.' });
+			return fail(httpStatus.notFound, { addItemError: 'Die Sammlung wurde nicht gefunden.' });
 		}
 
 		try {
@@ -129,10 +270,10 @@ export const actions: Actions = {
 				scope
 			);
 		} catch (error) {
-			return fail(400, { addItemError: getErrorMessage(error) });
+			return fail(httpStatus.badRequest, { addItemError: getErrorMessage(error) });
 		}
 
-		redirect(303, `/?collection=${encodeURIComponent(collectionId)}`);
+		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collectionId)}`);
 	}
 };
 
@@ -157,11 +298,11 @@ function getFormText(formData: FormData, name: string): string {
  */
 function getPriceCents(formData: FormData): number {
 	const value = getFormText(formData, 'priceCents').trim();
-	if (!/^\d+$/.test(value)) {
+	if (!wholeNumberPattern.test(value)) {
 		throw new Error('Bitte gib einen Preis in Cent als ganze Zahl ein.');
 	}
 	const priceCents = Number(value);
-	if (!Number.isSafeInteger(priceCents) || priceCents > 10_000_000) {
+	if (!Number.isSafeInteger(priceCents) || priceCents > maximumPriceCents) {
 		throw new Error('Der Preis liegt außerhalb des erlaubten Bereichs.');
 	}
 	return priceCents;
@@ -182,17 +323,18 @@ function getSessionScope(token: string | undefined): SessionScope | null {
  *
  * @param {Cookies} cookies - SvelteKit cookie helper.
  * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @param {URL} url - Resolved application request URL.
  * @returns {void}
  */
-function setSessionCookie(cookies: Cookies, scope: SessionScope): void {
+function setSessionCookie(cookies: Cookies, scope: SessionScope, url: URL): void {
 	const token = createSessionToken();
 	getCollectionRepository().createSessionForUser(scope, hashSessionToken(token));
 	cookies.set(sessionCookieName, token, {
 		httpOnly: true,
 		path: '/',
 		sameSite: 'lax',
-		secure: process.env.NODE_ENV === 'production',
-		maxAge: 60 * 60 * 24 * 30
+		secure: url.protocol === 'https:' || process.env.NODE_ENV === 'production',
+		maxAge: sessionMaxAgeSeconds
 	});
 }
 
