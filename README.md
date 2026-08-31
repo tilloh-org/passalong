@@ -105,7 +105,10 @@ Persistent data (SQLite database, uploaded images) lives in the named volume
 `passalong-data` (`/data` inside the container, media under `/data/media`).
 Uploaded item images are validated PNG, JPEG, or WebP files stored
 content-addressed under `PASSALONG_MEDIA_ROOT` (default `/data/media` in
-Docker); only their relative storage keys are persisted in SQLite. Images are
+Docker); only their relative storage keys are persisted in SQLite. The upload
+body limit is raised to `BODY_SIZE_LIMIT: 6M` in Docker (the adapter's 512 KB
+default would reject images above 512 KB before the app can apply its own 5 MB
+limit). Images are
 served exclusively to tenant-authorized, authenticated sessions. When serving
 the app behind a reverse proxy, set `PASSALONG_ORIGIN` to its public origin so
 SvelteKit can keep its cross-site form protection enabled.
