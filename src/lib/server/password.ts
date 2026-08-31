@@ -10,6 +10,7 @@ const scryptMemoryLimitBytes = 64 * 1024 * 1024;
 const currentScryptParameters = { N: 16_384, r: 8, p: 1 } as const;
 const allowedScryptParameters = [currentScryptParameters] as const;
 const encodedKeyPattern = /^[A-Za-z0-9_-]+$/;
+const positiveIntegerPattern = /^[1-9]\d*$/;
 
 interface PasswordHashParameters {
 	N: number;
@@ -189,7 +190,7 @@ function parseAllowedParameters(encodedN: string | undefined, encodedR: string |
  * @returns {number | null} A safe integer or null.
  */
 function parseInteger(value: string | undefined): number | null {
-	if (!value || !/^[1-9]\d*$/.test(value)) {
+	if (!value || !positiveIntegerPattern.test(value)) {
 		return null;
 	}
 	const number = Number(value);

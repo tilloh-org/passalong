@@ -138,11 +138,23 @@ const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
 const initialFailureCount = 1;
+const minimumRetryAfterSeconds = 1;
 const loginAttemptLimit = 5;
 const millisecondsPerSecond = 1000;
-const loginAttemptWindowMilliseconds = 15 * 60 * millisecondsPerSecond;
-const sessionLifetimeMilliseconds = 30 * 24 * 60 * 60 * millisecondsPerSecond;
+const secondsPerMinute = 60;
+const minutesPerHour = 60;
+const hoursPerDay = 24;
+const loginAttemptWindowMinutes = 15;
+const sessionLifetimeDays = 30;
+const loginAttemptWindowMilliseconds = loginAttemptWindowMinutes * secondsPerMinute * millisecondsPerSecond;
+const sessionLifetimeMilliseconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
+const databaseBusyTimeoutMilliseconds = 5000;
+const minimumRequestIpLength = 1;
 const maximumRequestIpLength = 45;
+const minimumUsernameLength = 3;
+const maximumUsernameLength = 64;
+const usernamePattern = new RegExp(`^[a-z0-9._+-]{${minimumUsernameLength},${maximumUsernameLength}}$`);
+const requestIpPattern = new RegExp(`^[0-9a-fA-F:.]{${minimumRequestIpLength},${maximumRequestIpLength}}$`);
 const categoryValues = itemCategories.map((category) => `'${category}'`).join(', ');
 const conditionValues = itemConditions.map((condition) => `'${condition}'`).join(', ');
 
@@ -158,7 +170,7 @@ export function createCollectionRepository(
 	const database = new Database(options.databasePath);
 	database.pragma('foreign_keys = ON');
 	database.pragma('journal_mode = WAL');
-	database.pragma('busy_timeout = 5000');
+	database.pragma(`busy_timeout = ${databaseBusyTimeoutMilliseconds}`);
 	initializeSchema(database);
 
 	return {
@@ -359,7 +371,7 @@ export function createCollectionRepository(
 					 WHERE id = ? AND tenant_id = ?`
 				)
 				.run(collectionId, name, new Date().toISOString(), scope.userId, scope.tenantId);
-			if (result.changes !== 1) {
+			if (result.changes !== singleDatabaseRowChange) {
 				throw new Error('authenticated owner was not found');
 			}
 			return { id: collectionId, name, ownerName: getOwnerDisplayName(database, scope) };
@@ -411,7 +423,7 @@ export function createCollectionRepository(
 					scope.userId,
 					scope.tenantId
 				);
-			if (result.changes !== 1) {
+			if (result.changes !== singleDatabaseRowChange) {
 				throw new Error('authenticated owner was not found');
 			}
 		},
@@ -564,7 +576,7 @@ export function createCollectionRepository(
 			const result = database
 				.prepare('UPDATE users SET password_hash = ?, password_reset_required = 0 WHERE id = ? AND tenant_id = ?')
 				.run(requireText(passwordHash, 'passwordHash'), scope.userId, scope.tenantId);
-			if (result.changes !== 1) {
+			if (result.changes !== singleDatabaseRowChange) {
 				throw new Error('authenticated owner was not found');
 			}
 		},
@@ -603,7 +615,7 @@ export function createCollectionRepository(
 					scope.userId,
 					scope.tenantId
 				);
-			if (result.changes !== 1) {
+			if (result.changes !== singleDatabaseRowChange) {
 				throw new Error('collection was not found');
 			}
 			return item;
@@ -656,7 +668,7 @@ function readBootstrapAccount(database: Database.Database, username: string): Bo
 				displayName: row.display_name,
 				passwordHash: row.password_hash,
 				tenantName: row.tenant_name,
-				instanceAdmin: row.instance_admin === 1
+				instanceAdmin: row.instance_admin === sqliteTrue
 			}
 		: null;
 }
@@ -1257,7 +1269,7 @@ function getLoginAttemptStatus(database: Database.Database, username: string, re
 	return {
 		blocked: true,
 		retryAfterSeconds: Math.max(
-			1,
+			minimumRetryAfterSeconds,
 			Math.ceil((blockingAttempt.window_started_at + loginAttemptWindowMilliseconds - nowMilliseconds) / millisecondsPerSecond)
 		)
 	};
@@ -1272,7 +1284,7 @@ function getLoginAttemptStatus(database: Database.Database, username: string, re
  */
 function normalizeRequestIp(value: string): string {
 	const normalized = value.trim();
-	if (!new RegExp(`^[0-9a-fA-F:.]{1,${maximumRequestIpLength}}$`).test(normalized)) {
+	if (!requestIpPattern.test(normalized)) {
 		throw new Error('request IP is invalid');
 	}
 	return normalized.toLowerCase();
@@ -1301,9 +1313,9 @@ function normalizeLoginAttemptUsername(value: string): string {
  */
 function normalizeUsername(value: string): string {
 	const normalized = value.trim().toLowerCase();
-	if (!/^[a-z0-9._+-]{3,64}$/.test(normalized)) {
+	if (!usernamePattern.test(normalized)) {
 		throw new Error(
-			'username must contain 3 to 64 lowercase letters, numbers, periods, underscores, plus signs, or hyphens'
+			`username must contain ${minimumUsernameLength} to ${maximumUsernameLength} lowercase letters, numbers, periods, underscores, plus signs, or hyphens`
 		);
 	}
 	return normalized;

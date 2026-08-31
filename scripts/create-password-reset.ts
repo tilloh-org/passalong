@@ -7,8 +7,10 @@ const resetSecretByteLength = 32;
 const millisecondsPerSecond = 1000;
 const secondsPerMinute = 60;
 const minutesPerHour = 60;
+const minimumUsernameLength = 3;
+const maximumUsernameLength = 64;
 const resetSecretLifetimeMilliseconds = minutesPerHour * secondsPerMinute * millisecondsPerSecond;
-const usernamePattern = /^[a-z0-9._+-]{3,64}$/;
+const usernamePattern = new RegExp(`^[a-z0-9._+-]{${minimumUsernameLength},${maximumUsernameLength}}$`);
 
 interface AccountScope {
 	id: string;
