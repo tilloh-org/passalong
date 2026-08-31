@@ -2,10 +2,14 @@ import { fail, redirect, type Cookies } from '@sveltejs/kit';
 import {
 	itemCategories,
 	itemConditions,
+	type Item,
 	type ItemCategory,
 	type ItemCondition,
+	type ItemImage,
 	type SessionScope
 } from '$lib/server/collection-repository';
+import { readFileSync } from 'node:fs';
+import { isAbsolute, join, relative } from 'node:path';
 import { hasSameOrigin } from '$lib/server/csrf';
 import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
 import { getMediaRoot } from '$lib/server/media-root';
@@ -38,6 +42,16 @@ const passwordResetLifetimeMilliseconds = passwordResetLifetimeHours * minutesPe
 const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
+const pngFileExtension = '.png';
+const jpegFileExtension = '.jpg';
+const pngMimeType = 'image/png';
+const jpegMimeType = 'image/jpeg';
+const webpMimeType = 'image/webp';
+
+interface ItemWithImages extends Item {
+	images: ItemImage[];
+	coverImageKey: string | null;
+}
 
 /**
  * Load account-aware and tenant-scoped collection data.
@@ -51,13 +65,18 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	const collections = scope ? repository.listCollectionsForOwner(scope) : [];
 	const isInstanceAdmin = scope ? repository.isInstanceAdmin(scope) : false;
 	const requestedCollectionId = url.searchParams.get('collection');
+	const requestedImageKey = url.searchParams.get('image');
+	if (scope && requestedImageKey) {
+		throw serveAuthorizedImage(requestedImageKey, scope);
+	}
 	const collectionId = requestedCollectionId ?? collections[firstCollectionIndex]?.id;
 	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
+	const items = collection && scope ? repository.listItemsForOwner(collection.id, scope).map(enrichItemWithImages(scope)) : [];
 
 	return {
 		collection,
 		collections,
-		items: collection && scope ? repository.listItemsForOwner(collection.id, scope) : [],
+		items,
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
 		isAuthenticated: Boolean(scope),
@@ -398,4 +417,78 @@ function setSessionCookie(cookies: Cookies, scope: SessionScope, url: URL): void
  */
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : 'Die Eingabe konnte nicht gespeichert werden.';
+}
+
+/**
+ * Serve an uploaded image only to members of the tenant that owns it.
+ *
+ * @param {string} requestedImageKey - File name requested through the image query parameter.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {Response} The image bytes or a 404 response.
+/**
+ * Serve an uploaded image only to members of the tenant that owns it.
+ *
+ * @param {string} requestedImageKey - File name requested through the image query parameter.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {Response} The image bytes or a 404 response.
+ */
+function serveAuthorizedImage(requestedImageKey: string, scope: SessionScope): Response {
+	const repository = getCollectionRepository();
+	const imageMetadata = repository.findImageMetadataForTenant(requestedImageKey, scope);
+	if (!imageMetadata) {
+		return new Response(null, { status: httpStatus.notFound });
+	}
+	const storagePath = join(getMediaRoot(), imageMetadata.storageKey);
+	if (!isPathInsideMediaRoot(storagePath)) {
+		return new Response(null, { status: httpStatus.notFound });
+	}
+	const filePayload = readFileSync(storagePath);
+	return new Response(new Uint8Array(filePayload), {
+		headers: {
+			'Content-Type': getContentType(imageMetadata.storageKey),
+			'Cache-Control': 'private, no-store',
+			'Content-Length': String(filePayload.length)
+		}
+	});
+}
+
+/**
+ * Enrich every item with its tenant-scoped image metadata.
+ *
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {(item: Item) => ItemWithImages} Item mapper including image metadata.
+ */
+function enrichItemWithImages(scope: SessionScope): (item: Item) => ItemWithImages {
+	return (item) => {
+		const images = getCollectionRepository().listItemImages(item.id, scope);
+		const coverImage = images.find((image) => image.isCover);
+		return { ...item, images, coverImageKey: coverImage?.storageKey ?? null };
+	};
+}
+
+/**
+ * Ensure a resolved storage path stays inside the configured media root.
+ *
+ * @param {string} storagePath - Absolute candidate path.
+ * @returns {boolean} Whether the path is inside the media root.
+ */
+function isPathInsideMediaRoot(storagePath: string): boolean {
+	const pathRelativeToMediaRoot = relative(getMediaRoot(), storagePath);
+	return pathRelativeToMediaRoot.length > 0 && !pathRelativeToMediaRoot.startsWith('..') && !isAbsolute(pathRelativeToMediaRoot);
+}
+
+/**
+ * Map a storage key extension to its safe response content type.
+ *
+ * @param {string} storageKey - Content-derived file name.
+ * @returns {string} The verified image MIME type.
+ */
+function getContentType(storageKey: string): string {
+	if (storageKey.endsWith(pngFileExtension)) {
+		return pngMimeType;
+	}
+	if (storageKey.endsWith(jpegFileExtension)) {
+		return jpegMimeType;
+	}
+	return webpMimeType;
 }

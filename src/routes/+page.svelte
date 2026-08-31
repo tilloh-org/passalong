@@ -239,22 +239,56 @@
 					</div>
 				</div>
 				{#if data.items.length}
-					<div class="item-grid">
-						{#each data.items as item}
-							<article>
+				<div class="item-grid">
+					{#each data.items as item}
+						<article data-testid="item-card">
+							{#if item.coverImageKey}
+								<img class="item-image photo" src={`/?image=${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />
+							{:else}
 								<div class="item-image" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
-								<div class="item-copy">
-									<h2>{item.title}</h2>
-									<p class="price">{formatPrice(item.priceCents)} €</p>
-									<p class="metadata">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</p>
-									{#if item.internalNotes}
-										<p class="notes">{item.internalNotes}</p>
-									{/if}
-								</div>
-							</article>
-						{/each}
-					</div>
-				{:else}
+							{/if}
+							<div class="item-copy">
+								<h2>{item.title}</h2>
+								<p class="price">{formatPrice(item.priceCents)} €</p>
+								<p class="metadata">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</p>
+								{#if item.internalNotes}
+									<p class="notes">{item.internalNotes}</p>
+								{/if}
+								<details class="image-management">
+									<summary>Fotos verwalten</summary>
+									<form method="POST" action="?/uploadItemImage" enctype="multipart/form-data">
+										<input name="itemId" type="hidden" value={item.id} />
+										<label>
+											<span>Foto hinzufügen</span>
+											<input
+												name="image"
+												type="file"
+												accept="image/png,image/jpeg,image/webp"
+												data-testid="item-image-input"
+												required
+											/>
+										</label>
+										{#if form?.uploadImageError}
+											<p class="form-error" role="alert">{form.uploadImageError}</p>
+										{/if}
+										<button type="submit">Foto speichern</button>
+									</form>
+									{#each item.images ?? [] as image}
+										<div class="image-row">
+											<span class="image-name" data-testid="item-image-key">{image.storageKey}{image.isCover ? ' (Titelbild)' : ''}</span>
+											<form method="POST" action="?/removeItemImage" class="inline-form">
+												<input name="itemId" type="hidden" value={item.id} />
+												<input name="imageId" type="hidden" value={image.id} />
+												<button type="submit" data-testid="remove-item-image">Entfernen</button>
+											</form>
+										</div>
+									{/each}
+								</details>
+							</div>
+						</article>
+					{/each}
+				</div>
+			{:else}
 					<p class="empty">Deine Sammlung wartet auf ihren ersten Artikel.</p>
 				{/if}
 			</section>

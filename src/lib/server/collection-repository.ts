@@ -127,6 +127,7 @@ export interface CollectionRepository {
 	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
 	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
 	deleteItemImage(itemId: string, imageId: string, scope: SessionScope): void;
+	findImageMetadataForTenant(storageKey: string, scope: SessionScope): ItemImage | null;
 }
 
 interface CreateCollectionRepositoryOptions {
@@ -730,6 +731,20 @@ export function createCollectionRepository(
 						.run(sqliteTrue, remainingImages[0].id, itemId, scope.tenantId);
 				}
 			});
+		},
+
+		findImageMetadataForTenant(storageKey, scope) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare(
+					`SELECT item_images.id, item_images.storage_key, item_images.position, item_images.is_cover
+					 FROM item_images
+					 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
+					 WHERE item_images.storage_key = ? AND item_images.tenant_id = ? AND collections.owner_id = ?`
+				)
+				.get(validatedStorageKey, scope.tenantId, scope.userId) as ImageRow | undefined;
+			return row ? mapImageRow(row) : null;
 		}
 	};
 }
