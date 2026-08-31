@@ -8,6 +8,8 @@ import {
 } from '$lib/server/collection-repository';
 import { hasSameOrigin } from '$lib/server/csrf';
 import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
+import { getMediaRoot } from '$lib/server/media-root';
+import { saveUploadedImage } from '$lib/server/media-storage';
 import { hashPassword, needsPasswordRehash, validatePassword, verifyPassword } from '$lib/server/password';
 import { getCollectionRepository } from '$lib/server/repository';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
@@ -274,6 +276,56 @@ export const actions: Actions = {
 		}
 
 		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collectionId)}`);
+	},
+
+	uploadItemImage: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { uploadImageError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		const itemId = getFormText(formData, 'itemId');
+		const upload = formData.get('image');
+		if (!(upload instanceof File) || upload.size === 0) {
+			return fail(httpStatus.badRequest, { uploadImageError: 'Bitte wähle ein Bild aus.' });
+		}
+
+		try {
+			const payload = Buffer.from(await upload.arrayBuffer());
+			const storageKey = await saveUploadedImage(getMediaRoot(), upload.type, payload);
+			getCollectionRepository().addItemImage(itemId, storageKey, scope);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { uploadImageError: getErrorMessage(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
+	},
+
+	removeItemImage: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { removeImageError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		try {
+			getCollectionRepository().deleteItemImage(
+				getFormText(formData, 'itemId'),
+				getFormText(formData, 'imageId'),
+				scope
+			);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { removeImageError: getErrorMessage(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
 	}
 };
 
