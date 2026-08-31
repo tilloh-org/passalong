@@ -6,6 +6,7 @@ import {
 	type ItemCategory,
 	type ItemCondition,
 	type ItemImage,
+	type SaleChannel,
 	type SessionScope
 } from '$lib/server/collection-repository';
 import { readFileSync } from 'node:fs';
@@ -341,6 +342,52 @@ export const actions: Actions = {
 		}
 
 		redirect(httpStatus.seeOther, '/');
+	},
+
+	markItemSold: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		try {
+			getCollectionRepository().markItemSold(
+				getFormText(formData, 'itemId'),
+				{
+					channel: getFormText(formData, 'channel') as SaleChannel,
+					soldAt: getFormText(formData, 'soldAt'),
+					proceedsCents: getSaleProceedsCents(formData)
+				},
+				scope
+			);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { saleStatusError: saleStatusError(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
+	},
+
+	unmarkItemSold: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		try {
+			getCollectionRepository().unmarkItemSold(getFormText(formData, 'itemId'), scope);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { saleStatusError: saleStatusError(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
 	}
 };
 
@@ -373,6 +420,25 @@ function getPriceCents(formData: FormData): number {
 		throw new Error('Der Preis liegt außerhalb des erlaubten Bereichs.');
 	}
 	return priceCents;
+}
+
+/**
+ * Parse the submitted sale proceeds submitted as a non-negative integer.
+ *
+ * @param {FormData} formData - Submitted form values.
+ * @returns {number} The sale proceeds in euro cents.
+ * @throws {Error} When the submitted proceeds are missing or invalid.
+ */
+function getSaleProceedsCents(formData: FormData): number {
+	const value = getFormText(formData, 'proceedsCents').trim();
+	if (!wholeNumberPattern.test(value)) {
+		throw new Error('proceedsCents must be a non-negative integer');
+	}
+	const proceedsCents = Number(value);
+	if (!Number.isSafeInteger(proceedsCents) || proceedsCents > maximumPriceCents) {
+		throw new Error('proceedsCents must be a non-negative integer');
+	}
+	return proceedsCents;
 }
 
 /**
@@ -438,6 +504,31 @@ function imageActionError(error: unknown): string {
 		return error.message;
 	}
 	return imageErrorMessage;
+}
+
+const userFacingSaleMessages = [
+	'item was not found',
+	'channel is not a supported sale channel',
+	'soldAt must be a canonical UTC ISO timestamp'
+] as const;
+const saleStatusGenericError =
+	'Die Verkaufsinformation konnte nicht gespeichert werden. Bitte prüfe die Angaben.';
+
+/**
+ * Map sale-status action failures to fixed user-facing messages without leaking
+ * internal error details.
+ *
+ * @param {unknown} error - The thrown value.
+ * @returns {string} A safe, fixed user-facing message.
+ */
+function saleStatusError(error: unknown): string {
+	if (error instanceof Error && (userFacingSaleMessages as readonly string[]).includes(error.message)) {
+		return error.message === 'item was not found' ? 'Der Artikel wurde nicht gefunden.' : error.message;
+	}
+	if (error instanceof Error && error.message.includes('proceedsCents')) {
+		return 'Bitte gib einen gültigen Erlös in Cent als ganze Zahl ein.';
+	}
+	return saleStatusGenericError;
 }
 
 /**

@@ -24,6 +24,14 @@
 		fair: 'Gebraucht',
 		poor: 'Stark gebraucht'
 	};
+
+	const saleChannelLabels: Record<string, string> = {
+		'flea-market': 'Flohmarkt',
+		'online-marketplace': 'Online-Marktplatz',
+		shop: 'Laden',
+		'private-sale': 'Privatverkauf',
+		other: 'Sonstiges'
+	};
 </script>
 
 <svelte:head>
@@ -251,6 +259,9 @@
 								<h2>{item.title}</h2>
 								<p class="price">{formatPrice(item.priceCents)} €</p>
 								<p class="metadata">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</p>
+								{#if item.soldAt}
+									<p class="sold-badge" data-testid="item-sold-badge">Verkauft · {saleChannelLabels[item.saleChannel ?? 'other']}{item.saleProceedsCents !== null ? ` · Erlös ${formatPrice(item.saleProceedsCents)} €` : ''}</p>
+								{/if}
 								{#if item.internalNotes}
 									<p class="notes">{item.internalNotes}</p>
 								{/if}
@@ -283,6 +294,47 @@
 											</form>
 										</div>
 									{/each}
+								</details>
+								<details class="sale-management" data-testid="item-sale-section">
+									<summary>Verkauf erfassen</summary>
+									{#if item.soldAt}
+										<p class="sold-summary">
+											Verkauft am {new Date(item.soldAt).toLocaleDateString('de-DE')} über {saleChannelLabels[item.saleChannel ?? 'other']}
+											{#if item.saleProceedsCents !== null}
+												· Erlös {formatPrice(item.saleProceedsCents)} €
+											{/if}
+										</p>
+										<form method="POST" action="?/unmarkItemSold">
+											<input name="itemId" type="hidden" value={item.id} />
+											<button type="submit" data-testid="unmark-item-sold">Verkauf zurücknehmen</button>
+										</form>
+									{:else}
+										<form method="POST" action="?/markItemSold">
+											<input name="itemId" type="hidden" value={item.id} />
+											<div class="form-grid">
+												<label>
+													<span>Kanal</span>
+													<select name="channel" aria-label="Verkaufskanal">
+														{#each Object.entries(saleChannelLabels) as [channel, label]}
+															<option value={channel}>{label}</option>
+														{/each}
+													</select>
+												</label>
+												<label>
+													<span>Verkauft am</span>
+													<input name="soldAt" type="date" required data-testid="item-sold-date" />
+												</label>
+												<label>
+													<span>Erlös in Cent</span>
+													<input name="proceedsCents" type="number" min="0" step="1" required data-testid="item-proceeds" />
+												</label>
+											</div>
+											{#if form?.saleStatusError}
+												<p class="form-error" role="alert">{form.saleStatusError}</p>
+											{/if}
+											<button type="submit" data-testid="mark-item-sold">Als verkauft erfassen</button>
+										</form>
+									{/if}
 								</details>
 							</div>
 						</article>
@@ -562,6 +614,36 @@
 	.notes {
 		border-top: 1px solid var(--color-border);
 		padding-top: 0.55rem;
+	}
+
+	.sold-badge {
+		color: var(--color-success, #2f9e6e);
+		font-size: 0.85rem;
+		font-weight: 700;
+		margin: 0.55rem 0 0;
+	}
+
+	.sold-summary {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		margin: 0.75rem 0;
+	}
+
+	.sale-management {
+		border-top: 1px solid var(--color-border);
+		margin-top: 0.75rem;
+		padding-top: 0.55rem;
+	}
+
+	.sale-management summary {
+		color: var(--color-text-muted);
+		cursor: pointer;
+		font-size: 0.85rem;
+		font-weight: 700;
+	}
+
+	.sale-management form {
+		margin-top: 0.75rem;
 	}
 
 	@media (max-width: 48rem) {
