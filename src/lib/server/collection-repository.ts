@@ -64,6 +64,13 @@ export interface CreateItemInput {
 	internalNotes: string;
 }
 
+export interface ItemImage {
+	id: string;
+	storageKey: string;
+	position: number;
+	isCover: boolean;
+}
+
 export interface SessionScope {
 	userId: string;
 	tenantId: string;
@@ -116,6 +123,10 @@ export interface CollectionRepository {
 	updatePassword(scope: SessionScope, passwordHash: string): void;
 	createItem(input: CreateItemInput, scope: SessionScope): Item;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
+	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
+	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
+	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
+	deleteItemImage(itemId: string, imageId: string, scope: SessionScope): void;
 }
 
 interface CreateCollectionRepositoryOptions {
@@ -130,6 +141,13 @@ interface ItemRow {
 	category: ItemCategory;
 	condition: ItemCondition;
 	internal_notes: string;
+}
+
+interface ImageRow {
+	id: string;
+	storage_key: string;
+	position: number;
+	is_cover: number;
 }
 
 const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
@@ -633,6 +651,85 @@ export function createCollectionRepository(
 				)
 				.all(collectionId, scope.userId, scope.tenantId)
 				.map((row) => mapItemRow(row as ItemRow));
+			},
+
+		addItemImage(itemId, storageKey, scope) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			return runImmediateTransaction(database, () => {
+				const item = requireOwnedItem(database, itemId, scope);
+				const nextPosition = (
+					database
+						.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM item_images WHERE item_id = ? AND tenant_id = ?')
+						.get(item.id, scope.tenantId) as { next_position: number }
+				).next_position;
+				const imageCount = (
+					database
+						.prepare('SELECT COUNT(*) AS count FROM item_images WHERE item_id = ? AND tenant_id = ?')
+						.get(item.id, scope.tenantId) as { count: number }
+				).count;
+				const isCover = imageCount === 0;
+				const imageId = randomUUID();
+				database
+					.prepare(
+						'INSERT INTO item_images (id, tenant_id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+					)
+					.run(imageId, scope.tenantId, item.id, validatedStorageKey, nextPosition, isCover ? sqliteTrue : 0, new Date().toISOString());
+				return { id: imageId, storageKey: validatedStorageKey, position: nextPosition, isCover };
+			});
+		},
+
+		setItemCover(itemId, imageId, scope) {
+			return runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const updated = database
+					.prepare('UPDATE item_images SET is_cover = ? WHERE id = ? AND item_id = ? AND tenant_id = ?')
+					.run(sqliteTrue, requireText(imageId, 'imageId'), itemId, scope.tenantId);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('image was not found');
+				}
+				database
+					.prepare('UPDATE item_images SET is_cover = 0 WHERE item_id = ? AND tenant_id = ? AND id != ?')
+					.run(itemId, scope.tenantId, imageId);
+				return mapImageRow(
+					database
+						.prepare('SELECT id, storage_key, position, is_cover FROM item_images WHERE id = ? AND tenant_id = ?')
+						.get(imageId, scope.tenantId) as ImageRow
+				);
+			});
+		},
+
+		listItemImages(itemId, scope) {
+			if (!itemIsOwnedBy(database, itemId, scope)) {
+				return [];
+			}
+			return (
+				database
+					.prepare('SELECT id, storage_key, position, is_cover FROM item_images WHERE item_id = ? AND tenant_id = ? ORDER BY position ASC, id ASC')
+					.all(itemId, scope.tenantId) as ImageRow[]
+			).map(mapImageRow);
+		},
+
+		deleteItemImage(itemId, imageId, scope) {
+			runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const deletedImage = database
+					.prepare('SELECT id, is_cover FROM item_images WHERE id = ? AND item_id = ? AND tenant_id = ?')
+					.get(requireText(imageId, 'imageId'), itemId, scope.tenantId) as { id: string; is_cover: number } | undefined;
+				if (!deletedImage) {
+					throw new Error('image was not found');
+				}
+				database.prepare('DELETE FROM item_images WHERE id = ? AND item_id = ? AND tenant_id = ?').run(deletedImage.id, itemId, scope.tenantId);
+				const remainingImages = database
+					.prepare('SELECT id, storage_key, position, is_cover FROM item_images WHERE item_id = ? AND tenant_id = ? ORDER BY position ASC, id ASC')
+					.all(itemId, scope.tenantId) as ImageRow[];
+				renormalizeImagePositions(remainingImages, database, scope.tenantId);
+				const wasCover = deletedImage.is_cover === sqliteTrue;
+				if (wasCover && remainingImages.length > 0) {
+					database
+						.prepare('UPDATE item_images SET is_cover = ? WHERE id = ? AND item_id = ? AND tenant_id = ?')
+						.run(sqliteTrue, remainingImages[0].id, itemId, scope.tenantId);
+				}
+			});
 		}
 	};
 }
@@ -706,6 +803,70 @@ function runImmediateTransaction<T>(database: Database.Database, operation: () =
 		database.exec('ROLLBACK');
 		throw error;
 	}
+}
+
+/**
+ * Require that an item exists and belongs to the authenticated owner and tenant.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} itemId - Identifier of the targeted item.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {{ id: string }} The owned item row.
+ * @throws {Error} If no item is visible to the authenticated owner.
+ */
+function requireOwnedItem(database: Database.Database, itemId: string, scope: SessionScope): { id: string } {
+	const row = database
+		.prepare('SELECT id FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+		.get(itemId, scope.userId, scope.tenantId) as { id: string } | undefined;
+	if (!row) {
+		throw new Error('item was not found');
+	}
+	return row;
+}
+
+/**
+ * Check tenant-scoped visibility of an item without throwing.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} itemId - The target item identifier.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {boolean} Whether the item belongs to the authenticated owner and tenant.
+ */
+function itemIsOwnedBy(database: Database.Database, itemId: string, scope: SessionScope): boolean {
+	return (
+		database
+			.prepare('SELECT 1 FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+			.get(itemId, scope.userId, scope.tenantId) !== undefined
+	);
+}
+
+/**
+ * Map a persisted image row to its public shape.
+ *
+ * @param {ImageRow} row - Raw image row from SQLite.
+ * @returns {ItemImage} The tenant-agnostic image value.
+ */
+function mapImageRow(row: ImageRow): ItemImage {
+	return {
+		id: row.id,
+		storageKey: row.storage_key,
+		position: row.position,
+		isCover: row.is_cover === sqliteTrue
+	};
+}
+
+/**
+ * Rewrite image position numbers so they stay gap-free after a deletion.
+ *
+ * @param {ImageRow[]} orderedImages - Remaining images sorted by current position.
+ * @param {Database.Database} database - The SQLite connection to update.
+ * @returns {void}
+ */
+function renormalizeImagePositions(orderedImages: ImageRow[], database: Database.Database, tenantId: string): void {
+	const renumberStatement = database.prepare('UPDATE item_images SET position = ? WHERE id = ? AND tenant_id = ?');
+	orderedImages.forEach((image, index) => {
+		renumberStatement.run(index, image.id, tenantId);
+	});
 }
 
 /**
