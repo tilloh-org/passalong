@@ -2,18 +2,28 @@ import { expect, test } from '@playwright/test';
 
 test.describe('Core collection', () => {
 	test('rejects cross-site registration and completes the authenticated collection flow', async ({ page }) => {
-		await page.goto('/');
-		await expect(page.getByRole('heading', { name: 'Ersten Zugang erstellen' })).toBeVisible();
-
+		// arrange
 		const registrations = [
 			{ username: 'avery', displayName: 'Avery', password: 'correct-horse-battery-staple' },
 			{ username: 'blake', displayName: 'Blake', password: 'another-correct-battery-horse' }
 		];
+
+		// act
+		await page.goto('/');
+
+		// assume
+		await expect(page.getByRole('heading', { name: 'Ersten Zugang erstellen' })).toBeVisible();
+
+		// act
 		const rejectedRegistration = await page.request.post('/?/register', {
 			form: registrations[0],
 			headers: { Origin: 'https://attacker.example' }
 		});
+
+		// assume
 		expect(rejectedRegistration.status()).toBe(403);
+
+		// act
 		await page.evaluate(async (accounts) => {
 			return Promise.all(
 				accounts.map(async (account) => {
@@ -29,8 +39,12 @@ test.describe('Core collection', () => {
 		}, registrations);
 		await page.context().clearCookies();
 		await page.goto('/');
+
+		// assume
 		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
 		const loginForm = page.locator('form[action="?/login"]');
+
+		// act
 		await loginForm.getByLabel('Benutzername').fill(registrations[0].username);
 		await loginForm.getByLabel('Passwort').fill(registrations[0].password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
@@ -44,46 +58,71 @@ test.describe('Core collection', () => {
 			await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 			await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 		}
+
+		// assume
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 
+		// act
 		await page.getByRole('button', { name: 'Abmelden' }).click();
 		await loginForm.getByLabel('Benutzername').fill(losingAccount.username);
 		await loginForm.getByLabel('Passwort').fill(losingAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+
+		// assume
 		await expect(page.getByText('Benutzername oder Passwort ist nicht korrekt.')).toBeVisible();
 		failedLoginCount += 1;
+
+		// act
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 
+		// assume
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
+
+		// act
 		await page.getByLabel('Name der Sammlung').fill('Wohnzimmer-Ausmisten');
 		await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
+
+		// assume
 		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
 
+		// act
 		await page.getByLabel('Artikelname').fill('Leselampe');
 		await page.getByLabel('Preis in Cent').fill('1200');
 		await page.getByLabel('Kategorie').selectOption('home');
 		await page.getByLabel('Zustand').selectOption('good');
 		await page.getByLabel('Interne Notizen').fill('Vor dem Inserieren die Glühbirne austauschen.');
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
+
+		// assume
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 
+		// act
 		const protectedUrl = page.url();
 		await page.getByRole('button', { name: 'Abmelden' }).click();
+
+		// assume
 		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
 		await expect(page.getByText('Vor dem Inserieren die Glühbirne austauschen.')).not.toBeVisible();
 
+		// act
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+
+		// assume
 		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
 
+		// act
 		await page.context().clearCookies();
 		await page.goto(protectedUrl);
+
+		// assume
 		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
 		await expect(page.getByText('Vor dem Inserieren die Glühbirne austauschen.')).not.toBeVisible();
 
+		// act
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
@@ -92,38 +131,53 @@ test.describe('Core collection', () => {
 		await instanceAdministrationForm.getByLabel('Benutzername des Kontos').fill(winningAccount.username);
 		await instanceAdministrationForm.getByRole('button', { name: 'Zurücksetzungscode erzeugen' }).click();
 		const resetSecret = await page.getByTestId('issued-password-reset-secret').textContent();
+
+		// assume
 		expect(resetSecret).toMatch(/^[A-Za-z0-9_-]+$/);
 
+		// act
 		await page.locator('details.password-help > summary').click();
 		const resetForm = page.locator('form[action="?/resetPassword"]');
 		await resetForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await resetForm.getByLabel('Zurücksetzungscode').fill(resetSecret!);
 		await resetForm.getByLabel('Neues Passwort').fill('recovered-correct-battery-horse');
 		await resetForm.getByRole('button', { name: 'Passwort zurücksetzen' }).click();
+
+		// assume
 		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
 
+		// act
 		await page.context().clearCookies();
 		await page.goto('/');
 		const resetIssueAttempt = await page.request.post('/?/createPasswordReset', {
 			form: { username: winningAccount.username },
 			headers: { Origin: 'http://localhost:4173' }
 		});
-		expect(resetIssueAttempt.status()).toBe(200);
-		expect((await resetIssueAttempt.json()).status).toBe(401);
-
+		const resetIssueAttemptStatus = resetIssueAttempt.status();
+		const resetIssueActionStatus = (await resetIssueAttempt.json()).status;
+		const failedLoginAttempts = [];
 		for (let attempt = 0; attempt < 5 - failedLoginCount; attempt += 1) {
 			const response = await page.request.post('/?/login', {
 				form: { username: 'x', password: 'not-a-password' },
 				headers: { Origin: 'http://localhost:4173' }
 			});
-			expect(response.status()).toBe(200);
-			expect((await response.json()).status).toBe(401);
+			failedLoginAttempts.push({ actionStatus: (await response.json()).status, responseStatus: response.status() });
 		}
 		const blockedResponse = await page.request.post('/?/login', {
 			form: { username: 'x', password: 'not-a-password' },
 			headers: { Origin: 'http://localhost:4173' }
 		});
-		expect(blockedResponse.status()).toBe(200);
-		expect((await blockedResponse.json()).status).toBe(429);
+		const blockedResponseStatus = blockedResponse.status();
+		const blockedActionStatus = (await blockedResponse.json()).status;
+
+		// assume
+		expect(resetIssueAttemptStatus).toBe(200);
+		expect(resetIssueActionStatus).toBe(401);
+		for (const failedLoginAttempt of failedLoginAttempts) {
+			expect(failedLoginAttempt.responseStatus).toBe(200);
+			expect(failedLoginAttempt.actionStatus).toBe(401);
+		}
+		expect(blockedResponseStatus).toBe(200);
+		expect(blockedActionStatus).toBe(429);
 	});
 });

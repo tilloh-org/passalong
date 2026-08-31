@@ -28,6 +28,9 @@ afterEach(() => {
 
 describe('bootstrap configuration', () => {
 	it('parses a structured account manifest without altering special characters', () => {
+		// arrange
+
+		// act
 		const configuration = parseBootstrapConfiguration(
 			JSON.stringify({
 				accounts: [
@@ -42,6 +45,7 @@ describe('bootstrap configuration', () => {
 			})
 		);
 
+		// assume
 		expect(configuration).toEqual({
 			accounts: [
 				{
@@ -56,8 +60,11 @@ describe('bootstrap configuration', () => {
 	});
 
 	it('rejects repeated usernames without exposing account passwords', () => {
+		// arrange
 		const password = 'bootstrap-secret-that-must-not-leak';
 		let thrown: unknown;
+
+		// act
 		try {
 			parseBootstrapConfiguration(
 				JSON.stringify({
@@ -83,12 +90,14 @@ describe('bootstrap configuration', () => {
 			thrown = error;
 		}
 
+		// assume
 		expect(thrown).toBeInstanceOf(Error);
 		expect((thrown as Error).message).toBe('PASSALONG_BOOTSTRAP must not repeat account usernames.');
 		expect((thrown as Error).message).not.toContain(password);
 	});
 
 	it('provisions usernames containing a supported special character without altering them', async () => {
+		// arrange
 		const configuration = parseBootstrapConfiguration(
 			JSON.stringify({
 				accounts: [
@@ -104,8 +113,10 @@ describe('bootstrap configuration', () => {
 		);
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
 
+		// act
 		await provisionBootstrapConfiguration(repository, configuration);
 
+		// assume
 		expect(repository.getBootstrapAccount('avery+home')).toMatchObject({
 			username: 'avery+home',
 			displayName: 'Avery Müller'
@@ -113,6 +124,7 @@ describe('bootstrap configuration', () => {
 	});
 
 	it('canonicalizes tenant and display names so whitespace-padded manifests stay idempotent', async () => {
+		// arrange
 		const configuration = parseBootstrapConfiguration(
 			JSON.stringify({
 				accounts: [
@@ -128,9 +140,11 @@ describe('bootstrap configuration', () => {
 		);
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
 
+		// act
 		await provisionBootstrapConfiguration(repository, configuration);
 		await provisionBootstrapConfiguration(repository, configuration);
 
+		// assume
 		expect(repository.getBootstrapAccount('avery')).toMatchObject({
 			tenantName: 'Avery household',
 			displayName: 'Avery'
@@ -138,6 +152,7 @@ describe('bootstrap configuration', () => {
 	});
 
 	it('provisions a valid manifest atomically with one instance administrator', async () => {
+		// arrange
 		const configuration = parseBootstrapConfiguration(
 			JSON.stringify({
 				accounts: [
@@ -160,16 +175,22 @@ describe('bootstrap configuration', () => {
 		);
 		const databasePath = createDatabasePath();
 
+		// act
 		await provisionBootstrapConfiguration(createCollectionRepository({ databasePath }), configuration);
 
 		const database = new Database(databasePath, { readonly: true });
+
+		// assume
 		expect(database.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
 		expect(database.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual({ count: 1 });
 		database.close();
 	});
 
 	it('initializes provisioning before the repository is exposed to requests', async () => {
+		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+
+		// act
 		await initializeRepository(
 			repository,
 			JSON.stringify({
@@ -185,10 +206,12 @@ describe('bootstrap configuration', () => {
 			})
 		);
 
+		// assume
 		expect(repository.hasAccounts()).toBe(true);
 	});
 
 	it('rolls back every bootstrap write when a later account insert fails', async () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const database = new Database(databasePath);
 		const repository = createCollectionRepository({ databasePath });
@@ -222,7 +245,11 @@ describe('bootstrap configuration', () => {
 			})
 		);
 
-		await expect(provisionBootstrapConfiguration(repository, configuration)).rejects.toThrow(
+		// act
+		const provisioning = provisionBootstrapConfiguration(repository, configuration);
+
+		// assume
+		await expect(provisioning).rejects.toThrow(
 			'test bootstrap insert failure'
 		);
 
@@ -234,6 +261,7 @@ describe('bootstrap configuration', () => {
 	});
 
 	it('rejects a later bootstrap manifest that would create a second instance administrator', async () => {
+		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
 		const initialConfiguration = parseBootstrapConfiguration(
 			JSON.stringify({
@@ -264,13 +292,18 @@ describe('bootstrap configuration', () => {
 			})
 		);
 
-		await expect(provisionBootstrapConfiguration(repository, secondAdministratorConfiguration)).rejects.toThrow(
+		// act
+		const secondProvisioning = provisionBootstrapConfiguration(repository, secondAdministratorConfiguration);
+
+		// assume
+		await expect(secondProvisioning).rejects.toThrow(
 			'bootstrap configuration cannot create another instance administrator'
 		);
 		expect(repository.getBootstrapAccount('blake')).toBeNull();
 	});
 
 	it('rejects conflicts before writing any accounts and never exposes manifest passwords', async () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const repository = createCollectionRepository({ databasePath });
 		const initialConfiguration = parseBootstrapConfiguration(
@@ -311,12 +344,15 @@ describe('bootstrap configuration', () => {
 		);
 
 		let thrown: unknown;
+
+		// act
 		try {
 			await provisionBootstrapConfiguration(repository, conflictingConfiguration);
 		} catch (error) {
 			thrown = error;
 		}
 
+		// assume
 		expect(thrown).toBeInstanceOf(Error);
 		expect((thrown as Error).message).toBe('Bootstrap configuration conflicts with an existing account.');
 		expect((thrown as Error).message).not.toContain(changedPassword);

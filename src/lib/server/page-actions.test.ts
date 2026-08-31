@@ -30,6 +30,7 @@ afterEach(() => {
 
 describe('instance-admin actions', () => {
 	it('rejects reset issuance from an authenticated account without the instance-admin role', async () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const repository = createCollectionRepository({ databasePath });
 		repository.createInitialAdmin({
@@ -53,6 +54,8 @@ describe('instance-admin actions', () => {
 		vi.resetModules();
 		const { actions } = await import('../../routes/+page.server');
 		const url = new URL('http://localhost/');
+
+		// act
 		const result = await actions.createPasswordReset({
 			cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
 			request: new Request(url, {
@@ -63,6 +66,7 @@ describe('instance-admin actions', () => {
 			url
 		} as never);
 
+		// assume
 		expect(result).toMatchObject({
 			status: 403,
 			data: { passwordResetIssueError: 'Du bist nicht für die Instanzverwaltung berechtigt.' }
@@ -70,6 +74,7 @@ describe('instance-admin actions', () => {
 	});
 
 	it('rejects cross-site reset issuance before creating a secret or revoking the target session', async () => {
+		// arrange
 		const databasePath = createDatabasePath();
 		const repository = createCollectionRepository({ databasePath });
 		const instanceAdministrator = repository.createInitialAdmin({
@@ -95,6 +100,8 @@ describe('instance-admin actions', () => {
 		vi.resetModules();
 		const { actions } = await import('../../routes/+page.server');
 		const url = new URL('http://localhost/');
+
+		// act
 		const result = await actions.createPasswordReset({
 			cookies: { get: (name: string) => (name === sessionCookieName ? rawAdministratorSessionToken : undefined) },
 			request: new Request(url, {
@@ -104,11 +111,13 @@ describe('instance-admin actions', () => {
 			}),
 			url
 		} as never);
+		const readonlyDatabase = new Database(databasePath, { readonly: true });
+		const passwordResetCount = readonlyDatabase.prepare('SELECT COUNT(*) AS count FROM password_resets').get();
+		readonlyDatabase.close();
 
+		// assume
 		expect(result).toMatchObject({ status: 403, data: { csrfError: 'Diese Anfrage konnte nicht sicher verarbeitet werden.' } });
 		expect(repository.getSession(hashSessionToken(rawMemberSessionToken))).toEqual(memberScope);
-		const readonlyDatabase = new Database(databasePath, { readonly: true });
-		expect(readonlyDatabase.prepare('SELECT COUNT(*) AS count FROM password_resets').get()).toEqual({ count: 0 });
-		readonlyDatabase.close();
+		expect(passwordResetCount).toEqual({ count: 0 });
 	});
 });
