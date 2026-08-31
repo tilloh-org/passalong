@@ -359,7 +359,7 @@ export const actions: Actions = {
 				getFormText(formData, 'itemId'),
 				{
 					channel: getFormText(formData, 'channel') as SaleChannel,
-					soldAt: getFormText(formData, 'soldAt'),
+					soldAt: getSaleTimestamp(getFormText(formData, 'soldAt')),
 					proceedsCents: getSaleProceedsCents(formData)
 				},
 				scope
@@ -439,6 +439,22 @@ function getSaleProceedsCents(formData: FormData): number {
 		throw new Error('proceedsCents must be a non-negative integer');
 	}
 	return proceedsCents;
+}
+
+
+/**
+ * Normalize a date-only form value to a canonical UTC ISO timestamp at midnight.
+ *
+ * @param {string} value - Date string from the form input (YYYY-MM-DD or full ISO).
+ * @returns {string} A canonical UTC ISO timestamp.
+ * @throws {Error} If the value is neither a date nor a canonical ISO timestamp.
+ */
+function getSaleTimestamp(value: string): string {
+	const trimmed = value.trim();
+	if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+		return `${trimmed}T00:00:00.000Z`;
+	}
+	return trimmed;
 }
 
 /**
