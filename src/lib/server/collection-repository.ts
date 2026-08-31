@@ -153,6 +153,7 @@ interface ImageRow {
 
 const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
 const authHardeningVersion = '2026083001_auth_hardening';
+const tenantScopedImageKeysVersion = '2026083101_item_scoped_image_keys';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -658,6 +659,12 @@ export function createCollectionRepository(
 			const validatedStorageKey = requireText(storageKey, 'storageKey');
 			return runImmediateTransaction(database, () => {
 				const item = requireOwnedItem(database, itemId, scope);
+				const existingImage = database
+					.prepare('SELECT id, storage_key, position, is_cover FROM item_images WHERE item_id = ? AND tenant_id = ? AND storage_key = ?')
+					.get(item.id, scope.tenantId, validatedStorageKey) as ImageRow | undefined;
+				if (existingImage) {
+					return mapImageRow(existingImage);
+				}
 				const nextPosition = (
 					database
 						.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM item_images WHERE item_id = ? AND tenant_id = ?')
@@ -898,8 +905,8 @@ function initializeSchema(database: Database.Database): void {
 			createIndexes(database);
 			const appliedAt = new Date().toISOString();
 			database
-				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?)')
-				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt);
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?)')
+				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, tenantScopedImageKeysVersion, appliedAt);
 		})();
 		return;
 	}
@@ -1004,11 +1011,12 @@ function createSchema(database: Database.Database): void {
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
 			item_id TEXT NOT NULL,
-			storage_key TEXT NOT NULL UNIQUE,
+			storage_key TEXT NOT NULL,
 			position INTEGER NOT NULL CHECK (position >= 0),
 			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (item_id, tenant_id, position),
+			UNIQUE (item_id, tenant_id, storage_key),
 			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
 		);
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -1082,6 +1090,94 @@ function migrateSchema(database: Database.Database): void {
 	}
 
 	migrateAuthHardeningSchema(database);
+	migrateTenantScopedImageKeys(database);
+}
+
+/**
+ * Scope item-image storage keys per item so one item cannot attach the same
+ * file twice, while different items and tenants may reference identical content.
+ *
+ * Existing databases with the global `UNIQUE(storage_key)` column constraint are
+ * rebuilt onto the tenant-scoped composite constraint while preserving every row.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateTenantScopedImageKeys(database: Database.Database): void {
+	if (hasMigrationVersion(database, tenantScopedImageKeysVersion)) {
+		return;
+	}
+
+	database.pragma('foreign_keys = OFF');
+	try {
+		database.transaction(() => {
+			const hasGlobalStorageKeyUnique = (database.prepare('PRAGMA index_list(item_images)').all() as {
+				name: string;
+				unique: number;
+				origin: string;
+			}[]).some(
+				(index) =>
+					index.unique === sqliteTrue &&
+					index.origin === 'u' &&
+					getIndexColumns(database, index.name).length === 1 &&
+					getIndexColumns(database, index.name)[0] === 'storage_key'
+			);
+			if (hasGlobalStorageKeyUnique) {
+				database.pragma('foreign_keys = OFF');
+				database.transaction(() => {
+					rebuildItemImagesForTenantScopedKeys(database);
+					assertCopiedRowCount(database, 'item_images', 'item_images_next');
+					database.exec('DROP TABLE item_images; ALTER TABLE item_images_next RENAME TO item_images;');
+				})();
+			}
+			assertForeignKeys(database);
+			createIndexes(database);
+			database
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+				.run(tenantScopedImageKeysVersion, new Date().toISOString());
+		})();
+	} finally {
+		database.pragma('foreign_keys = ON');
+	}
+}
+
+/**
+ * Copy every image row into the tenant-scoped-key replacement table.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function rebuildItemImagesForTenantScopedKeys(database: Database.Database): void {
+	database.exec(`
+		CREATE TABLE item_images_next (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			item_id TEXT NOT NULL,
+			storage_key TEXT NOT NULL,
+			position INTEGER NOT NULL CHECK (position >= 0),
+			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
+			created_at TEXT NOT NULL,
+			UNIQUE (item_id, tenant_id, position),
+			UNIQUE (item_id, tenant_id, storage_key),
+			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
+		);
+		INSERT INTO item_images_next (id, tenant_id, item_id, storage_key, position, is_cover, created_at)
+		SELECT id, tenant_id, item_id, storage_key, position, is_cover, created_at
+		FROM item_images;
+	`);
+}
+
+/**
+ * Read the indexed columns of a trusted SQLite index.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} indexName - Trusted index name from `PRAGMA index_list`.
+ * @returns {string[]} Ordered column names of the index.
+ */
+function getIndexColumns(database: Database.Database, indexName: string): string[] {
+	return (database.prepare(`PRAGMA index_info(${indexName})`).all() as { name: string }[]).map(
+		({ name }) => name
+	);
 }
 
 /**
@@ -1260,11 +1356,12 @@ function rebuildItemImages(database: Database.Database): void {
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
 			item_id TEXT NOT NULL,
-			storage_key TEXT NOT NULL UNIQUE,
+			storage_key TEXT NOT NULL,
 			position INTEGER NOT NULL CHECK (position >= 0),
 			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (item_id, tenant_id, position),
+			UNIQUE (item_id, tenant_id, storage_key),
 			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
 		);
 		INSERT INTO item_images_next (id, tenant_id, item_id, storage_key, position, is_cover, created_at)

@@ -314,7 +314,7 @@ export const actions: Actions = {
 			const storageKey = await saveUploadedImage(getMediaRoot(), upload.type, payload);
 			getCollectionRepository().addItemImage(itemId, storageKey, scope);
 		} catch (error) {
-			return fail(httpStatus.badRequest, { uploadImageError: getErrorMessage(error) });
+			return fail(httpStatus.badRequest, { uploadImageError: imageActionError(error) });
 		}
 
 		redirect(httpStatus.seeOther, '/');
@@ -337,7 +337,7 @@ export const actions: Actions = {
 				scope
 			);
 		} catch (error) {
-			return fail(httpStatus.badRequest, { removeImageError: getErrorMessage(error) });
+			return fail(httpStatus.badRequest, { removeImageError: imageActionError(error) });
 		}
 
 		redirect(httpStatus.seeOther, '/');
@@ -413,6 +413,31 @@ function setSessionCookie(cookies: Cookies, scope: SessionScope, url: URL): void
  */
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : 'Die Eingabe konnte nicht gespeichert werden.';
+}
+
+const imageErrorMessage = 'Das Bild konnte nicht verarbeitet werden. Bitte prüfe Format und Größe.';
+const imageRemoveErrorMessage = 'Das Bild konnte nicht entfernt werden.';
+const userFacingImageMessages = [
+	'upload is not a supported image type',
+	'upload is empty',
+	'image exceeds the allowed size',
+	'upload is not a supported image',
+	'image was not found',
+	'item was not found'
+] as const;
+
+/**
+ * Map image-action failures to fixed user-facing messages without leaking
+ * internal storage or SQLite details.
+ *
+ * @param {unknown} error - The thrown value.
+ * @returns {string} A safe, fixed user-facing message.
+ */
+function imageActionError(error: unknown): string {
+	if (error instanceof Error && (userFacingImageMessages as readonly string[]).includes(error.message)) {
+		return error.message;
+	}
+	return imageErrorMessage;
 }
 
 /**

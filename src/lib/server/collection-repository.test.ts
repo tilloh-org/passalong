@@ -711,7 +711,8 @@ describe('collection repository', () => {
 
 		// assume
 		expect(migratedDatabase.prepare('SELECT version FROM schema_migrations').all()).toEqual([
-			{ version: '2026082601_tenant_schema_foundation' }
+			{ version: '2026082601_tenant_schema_foundation' },
+			{ version: '2026083101_item_scoped_image_keys' }
 		]);
 		expect(
 			migratedDatabase
@@ -758,7 +759,8 @@ describe('collection repository', () => {
 
 		// assume
 		expect(reopenedDatabase.prepare('SELECT version FROM schema_migrations').all()).toEqual([
-			{ version: '2026082601_tenant_schema_foundation' }
+			{ version: '2026082601_tenant_schema_foundation' },
+			{ version: '2026083101_item_scoped_image_keys' }
 		]);
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM items').get()).toEqual({ count: 1 });
@@ -949,5 +951,52 @@ describe('collection repository', () => {
 			{ ...secondImage, position: 0, isCover: true },
 			{ ...thirdImage, position: 1, isCover: false }
 		]);
+	});
+
+	it('attaches the same storage key to different items and tenants without unique conflicts', () => {
+		// arrange
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const firstCollection = repository.createCollection({ name: 'First' }, owner);
+		const secondCollection = repository.createCollection({ name: 'Second' }, owner);
+		const firstItem = repository.createItem(
+			{ collectionId: firstCollection.id, title: 'First item', priceCents: 100, category: 'home', condition: 'good', internalNotes: '' },
+			owner
+		);
+		const secondItem = repository.createItem(
+			{ collectionId: secondCollection.id, title: 'Second item', priceCents: 200, category: 'books', condition: 'fair', internalNotes: '' },
+			owner
+		);
+		const database = new Database(databasePath);
+		database
+			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+			.run('other-tenant', 'Other household', '2026-01-01T00:00:00.000Z');
+		database
+			.prepare('INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+			.run('other-user', 'other-tenant', 'blake', 'Blake', 'scrypt$test-salt$test-key', '2026-01-01T00:00:00.000Z');
+		database.close();
+		const otherScope = { userId: 'other-user', tenantId: 'other-tenant' };
+		const otherCollection = repository.createCollection({ name: 'Other' }, otherScope);
+		const otherItem = repository.createItem(
+			{ collectionId: otherCollection.id, title: 'Other item', priceCents: 300, category: 'tools', condition: 'poor', internalNotes: '' },
+			otherScope
+		);
+		let duplicateContentError: unknown;
+
+		// act
+		const firstOwnerImage = repository.addItemImage(firstItem.id, 'same-content.png', owner);
+		const secondOwnerImage = repository.addItemImage(secondItem.id, 'same-content.png', owner);
+		const otherTenantImage = repository.addItemImage(otherItem.id, 'same-content.png', otherScope);
+
+		// assume
+		expect(duplicateContentError).toBeUndefined();
+		expect(firstOwnerImage).toMatchObject({ storageKey: 'same-content.png', position: 0, isCover: true });
+		expect(secondOwnerImage).toMatchObject({ storageKey: 'same-content.png', position: 0, isCover: true });
+		expect(otherTenantImage).toMatchObject({ storageKey: 'same-content.png', position: 0, isCover: true });
 	});
 });
