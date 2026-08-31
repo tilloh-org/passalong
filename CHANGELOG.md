@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/tilloh-org/passalong/compare/v0.1.0...v0.2.0) (2026-08-31)
+
+
+### Features
+
+* add atomic bootstrap provisioning ([5179134](https://github.com/tilloh-org/passalong/commit/5179134e8a711cf1f2ea465226a1a0f490df9c18))
+* authorize instance administration ([02ec4d7](https://github.com/tilloh-org/passalong/commit/02ec4d7565b7417adefd238d49b8105a9be12e3b))
+* establish tenant-safe schema foundation ([0437033](https://github.com/tilloh-org/passalong/commit/04370331a1f0ec57b8f67d0c48a91224dee6eeee))
+* harden account authentication ([777e635](https://github.com/tilloh-org/passalong/commit/777e635996e220b937237475419691b1138c6895))
+* harden account authentication ([c5f24b5](https://github.com/tilloh-org/passalong/commit/c5f24b59f782993b762c49c69490e957225c8cd1))
+
+
+### Bug Fixes
+
+* make schema migration rollback atomic ([c1f7584](https://github.com/tilloh-org/passalong/commit/c1f75848118796a062cbfb8e5d810c08659d598a))
+* preserve independent login rate limits ([2371a19](https://github.com/tilloh-org/passalong/commit/2371a19893474fb42cdc6d7faee5c734bdb3930a))
+
 ## [0.1.0](https://github.com/tilloh-org/passalong/compare/v0.0.1...v0.1.0) (2026-08-27)
 
 
