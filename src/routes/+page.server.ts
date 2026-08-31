@@ -522,24 +522,24 @@ function imageActionError(error: unknown): string {
 	return imageErrorMessage;
 }
 
-const userFacingSaleMessages = [
-	'item was not found',
-	'channel is not a supported sale channel',
-	'soldAt must be a canonical UTC ISO timestamp'
-] as const;
+const saleStatusErrorByInternalMessage: Record<string, string> = {
+	'item was not found': 'Der Artikel wurde nicht gefunden.',
+	'channel is not a supported sale channel': 'Bitte wähle einen gültigen Verkaufskanal.',
+	'soldAt must be a canonical UTC ISO timestamp': 'Bitte gib ein gültiges Verkaufsdatum an.'
+};
 const saleStatusGenericError =
 	'Die Verkaufsinformation konnte nicht gespeichert werden. Bitte prüfe die Angaben.';
 
 /**
- * Map sale-status action failures to fixed user-facing messages without leaking
+ * Map sale-status action failures to German user-facing messages without leaking
  * internal error details.
  *
  * @param {unknown} error - The thrown value.
  * @returns {string} A safe, fixed user-facing message.
  */
 function saleStatusError(error: unknown): string {
-	if (error instanceof Error && (userFacingSaleMessages as readonly string[]).includes(error.message)) {
-		return error.message === 'item was not found' ? 'Der Artikel wurde nicht gefunden.' : error.message;
+	if (error instanceof Error && error.message in saleStatusErrorByInternalMessage) {
+		return saleStatusErrorByInternalMessage[error.message];
 	}
 	if (error instanceof Error && error.message.includes('proceedsCents')) {
 		return 'Bitte gib einen gültigen Erlös in Cent als ganze Zahl ein.';
