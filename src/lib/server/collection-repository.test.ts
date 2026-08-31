@@ -1074,4 +1074,60 @@ describe('collection repository', () => {
 			})
 		]);
 	});
+
+	it('marks items sold with channel, date, proceeds and clears them on reopen', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const item = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			owner
+		);
+		const foreignScope = { userId: 'other-user', tenantId: 'other-tenant' };
+		let foreignSaleError: unknown;
+		let invalidChannelError: unknown;
+
+		// act
+		const soldItem = repository.markItemSold(
+			item.id,
+			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
+			owner
+		);
+		const listedItem = repository.listItemsForOwner(collection.id, owner)[0];
+		try {
+			repository.markItemSold(
+				item.id,
+				{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
+				foreignScope
+			);
+		} catch (error) {
+			foreignSaleError = error;
+		}
+		try {
+			repository.markItemSold(
+				item.id,
+				{ channel: 'not-a-channel' as never, soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
+				owner
+			);
+		} catch (error) {
+			invalidChannelError = error;
+		}
+		const reopenedItem = repository.unmarkItemSold(item.id, owner);
+
+		// assume
+		expect(soldItem).toMatchObject({
+			saleChannel: 'flea-market',
+			soldAt: '2026-08-31T10:30:00.000Z',
+			saleProceedsCents: 750
+		});
+		expect(listedItem).toMatchObject({ saleChannel: 'flea-market', saleProceedsCents: 750 });
+		expect(foreignSaleError).toMatchObject({ message: 'item was not found' });
+		expect(invalidChannelError).toMatchObject({ message: 'channel is not a supported sale channel' });
+		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
+	});
 });
