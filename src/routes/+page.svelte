@@ -243,7 +243,7 @@
 					{#each data.items as item}
 						<article data-testid="item-card">
 							{#if item.coverImageKey}
-								<img class="item-image photo" src={`/?image=${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />
+								<img class="item-image photo" src={`/media/${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />
 							{:else}
 								<div class="item-image" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
 							{/if}
