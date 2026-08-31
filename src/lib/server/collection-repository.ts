@@ -64,6 +64,13 @@ export interface CreateItemInput {
 	internalNotes: string;
 }
 
+export interface ItemImage {
+	id: string;
+	storageKey: string;
+	position: number;
+	isCover: boolean;
+}
+
 export interface SessionScope {
 	userId: string;
 	tenantId: string;
@@ -116,6 +123,11 @@ export interface CollectionRepository {
 	updatePassword(scope: SessionScope, passwordHash: string): void;
 	createItem(input: CreateItemInput, scope: SessionScope): Item;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
+	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
+	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
+	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
+	deleteItemImage(itemId: string, imageId: string, scope: SessionScope): void;
+	findImageMetadataForTenant(storageKey: string, scope: SessionScope): ItemImage | null;
 }
 
 interface CreateCollectionRepositoryOptions {
@@ -132,8 +144,16 @@ interface ItemRow {
 	internal_notes: string;
 }
 
+interface ImageRow {
+	id: string;
+	storage_key: string;
+	position: number;
+	is_cover: number;
+}
+
 const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
 const authHardeningVersion = '2026083001_auth_hardening';
+const tenantScopedImageKeysVersion = '2026083101_item_scoped_image_keys';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -633,6 +653,105 @@ export function createCollectionRepository(
 				)
 				.all(collectionId, scope.userId, scope.tenantId)
 				.map((row) => mapItemRow(row as ItemRow));
+			},
+
+		addItemImage(itemId, storageKey, scope) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			return runImmediateTransaction(database, () => {
+				const item = requireOwnedItem(database, itemId, scope);
+				const existingImage = database
+					.prepare('SELECT id, storage_key, position, is_cover FROM item_images WHERE item_id = ? AND tenant_id = ? AND storage_key = ?')
+					.get(item.id, scope.tenantId, validatedStorageKey) as ImageRow | undefined;
+				if (existingImage) {
+					return mapImageRow(existingImage);
+				}
+				const nextPosition = (
+					database
+						.prepare('SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM item_images WHERE item_id = ? AND tenant_id = ?')
+						.get(item.id, scope.tenantId) as { next_position: number }
+				).next_position;
+				const imageCount = (
+					database
+						.prepare('SELECT COUNT(*) AS count FROM item_images WHERE item_id = ? AND tenant_id = ?')
+						.get(item.id, scope.tenantId) as { count: number }
+				).count;
+				const isCover = imageCount === 0;
+				const imageId = randomUUID();
+				database
+					.prepare(
+						'INSERT INTO item_images (id, tenant_id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+					)
+					.run(imageId, scope.tenantId, item.id, validatedStorageKey, nextPosition, isCover ? sqliteTrue : 0, new Date().toISOString());
+				return { id: imageId, storageKey: validatedStorageKey, position: nextPosition, isCover };
+			});
+		},
+
+		setItemCover(itemId, imageId, scope) {
+			return runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const updated = database
+					.prepare('UPDATE item_images SET is_cover = ? WHERE id = ? AND item_id = ? AND tenant_id = ?')
+					.run(sqliteTrue, requireText(imageId, 'imageId'), itemId, scope.tenantId);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('image was not found');
+				}
+				database
+					.prepare('UPDATE item_images SET is_cover = 0 WHERE item_id = ? AND tenant_id = ? AND id != ?')
+					.run(itemId, scope.tenantId, imageId);
+				return mapImageRow(
+					database
+						.prepare('SELECT id, storage_key, position, is_cover FROM item_images WHERE id = ? AND tenant_id = ?')
+						.get(imageId, scope.tenantId) as ImageRow
+				);
+			});
+		},
+
+		listItemImages(itemId, scope) {
+			if (!itemIsOwnedBy(database, itemId, scope)) {
+				return [];
+			}
+			return (
+				database
+					.prepare('SELECT id, storage_key, position, is_cover FROM item_images WHERE item_id = ? AND tenant_id = ? ORDER BY position ASC, id ASC')
+					.all(itemId, scope.tenantId) as ImageRow[]
+			).map(mapImageRow);
+		},
+
+		deleteItemImage(itemId, imageId, scope) {
+			runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const deletedImage = database
+					.prepare('SELECT id, is_cover FROM item_images WHERE id = ? AND item_id = ? AND tenant_id = ?')
+					.get(requireText(imageId, 'imageId'), itemId, scope.tenantId) as { id: string; is_cover: number } | undefined;
+				if (!deletedImage) {
+					throw new Error('image was not found');
+				}
+				database.prepare('DELETE FROM item_images WHERE id = ? AND item_id = ? AND tenant_id = ?').run(deletedImage.id, itemId, scope.tenantId);
+				const remainingImages = database
+					.prepare('SELECT id, storage_key, position, is_cover FROM item_images WHERE item_id = ? AND tenant_id = ? ORDER BY position ASC, id ASC')
+					.all(itemId, scope.tenantId) as ImageRow[];
+				renormalizeImagePositions(remainingImages, database, scope.tenantId);
+				const wasCover = deletedImage.is_cover === sqliteTrue;
+				if (wasCover && remainingImages.length > 0) {
+					database
+						.prepare('UPDATE item_images SET is_cover = ? WHERE id = ? AND item_id = ? AND tenant_id = ?')
+						.run(sqliteTrue, remainingImages[0].id, itemId, scope.tenantId);
+				}
+			});
+		},
+
+		findImageMetadataForTenant(storageKey, scope) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare(
+					`SELECT item_images.id, item_images.storage_key, item_images.position, item_images.is_cover
+					 FROM item_images
+					 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
+					 WHERE item_images.storage_key = ? AND item_images.tenant_id = ? AND collections.owner_id = ?`
+				)
+				.get(validatedStorageKey, scope.tenantId, scope.userId) as ImageRow | undefined;
+			return row ? mapImageRow(row) : null;
 		}
 	};
 }
@@ -709,6 +828,70 @@ function runImmediateTransaction<T>(database: Database.Database, operation: () =
 }
 
 /**
+ * Require that an item exists and belongs to the authenticated owner and tenant.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} itemId - Identifier of the targeted item.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {{ id: string }} The owned item row.
+ * @throws {Error} If no item is visible to the authenticated owner.
+ */
+function requireOwnedItem(database: Database.Database, itemId: string, scope: SessionScope): { id: string } {
+	const row = database
+		.prepare('SELECT id FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+		.get(itemId, scope.userId, scope.tenantId) as { id: string } | undefined;
+	if (!row) {
+		throw new Error('item was not found');
+	}
+	return row;
+}
+
+/**
+ * Check tenant-scoped visibility of an item without throwing.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} itemId - The target item identifier.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {boolean} Whether the item belongs to the authenticated owner and tenant.
+ */
+function itemIsOwnedBy(database: Database.Database, itemId: string, scope: SessionScope): boolean {
+	return (
+		database
+			.prepare('SELECT 1 FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+			.get(itemId, scope.userId, scope.tenantId) !== undefined
+	);
+}
+
+/**
+ * Map a persisted image row to its public shape.
+ *
+ * @param {ImageRow} row - Raw image row from SQLite.
+ * @returns {ItemImage} The tenant-agnostic image value.
+ */
+function mapImageRow(row: ImageRow): ItemImage {
+	return {
+		id: row.id,
+		storageKey: row.storage_key,
+		position: row.position,
+		isCover: row.is_cover === sqliteTrue
+	};
+}
+
+/**
+ * Rewrite image position numbers so they stay gap-free after a deletion.
+ *
+ * @param {ImageRow[]} orderedImages - Remaining images sorted by current position.
+ * @param {Database.Database} database - The SQLite connection to update.
+ * @returns {void}
+ */
+function renormalizeImagePositions(orderedImages: ImageRow[], database: Database.Database, tenantId: string): void {
+	const renumberStatement = database.prepare('UPDATE item_images SET position = ? WHERE id = ? AND tenant_id = ?');
+	orderedImages.forEach((image, index) => {
+		renumberStatement.run(index, image.id, tenantId);
+	});
+}
+
+/**
  * Initialize an empty database or atomically migrate an existing one.
  *
  * @param {Database.Database} database - The SQLite connection to initialize.
@@ -722,8 +905,8 @@ function initializeSchema(database: Database.Database): void {
 			createIndexes(database);
 			const appliedAt = new Date().toISOString();
 			database
-				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?)')
-				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt);
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?)')
+				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, tenantScopedImageKeysVersion, appliedAt);
 		})();
 		return;
 	}
@@ -828,11 +1011,12 @@ function createSchema(database: Database.Database): void {
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
 			item_id TEXT NOT NULL,
-			storage_key TEXT NOT NULL UNIQUE,
+			storage_key TEXT NOT NULL,
 			position INTEGER NOT NULL CHECK (position >= 0),
 			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (item_id, tenant_id, position),
+			UNIQUE (item_id, tenant_id, storage_key),
 			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
 		);
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -906,6 +1090,94 @@ function migrateSchema(database: Database.Database): void {
 	}
 
 	migrateAuthHardeningSchema(database);
+	migrateTenantScopedImageKeys(database);
+}
+
+/**
+ * Scope item-image storage keys per item so one item cannot attach the same
+ * file twice, while different items and tenants may reference identical content.
+ *
+ * Existing databases with the global `UNIQUE(storage_key)` column constraint are
+ * rebuilt onto the tenant-scoped composite constraint while preserving every row.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateTenantScopedImageKeys(database: Database.Database): void {
+	if (hasMigrationVersion(database, tenantScopedImageKeysVersion)) {
+		return;
+	}
+
+	database.pragma('foreign_keys = OFF');
+	try {
+		database.transaction(() => {
+			const hasGlobalStorageKeyUnique = (database.prepare('PRAGMA index_list(item_images)').all() as {
+				name: string;
+				unique: number;
+				origin: string;
+			}[]).some(
+				(index) =>
+					index.unique === sqliteTrue &&
+					index.origin === 'u' &&
+					getIndexColumns(database, index.name).length === 1 &&
+					getIndexColumns(database, index.name)[0] === 'storage_key'
+			);
+			if (hasGlobalStorageKeyUnique) {
+				database.pragma('foreign_keys = OFF');
+				database.transaction(() => {
+					rebuildItemImagesForTenantScopedKeys(database);
+					assertCopiedRowCount(database, 'item_images', 'item_images_next');
+					database.exec('DROP TABLE item_images; ALTER TABLE item_images_next RENAME TO item_images;');
+				})();
+			}
+			assertForeignKeys(database);
+			createIndexes(database);
+			database
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+				.run(tenantScopedImageKeysVersion, new Date().toISOString());
+		})();
+	} finally {
+		database.pragma('foreign_keys = ON');
+	}
+}
+
+/**
+ * Copy every image row into the tenant-scoped-key replacement table.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function rebuildItemImagesForTenantScopedKeys(database: Database.Database): void {
+	database.exec(`
+		CREATE TABLE item_images_next (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			item_id TEXT NOT NULL,
+			storage_key TEXT NOT NULL,
+			position INTEGER NOT NULL CHECK (position >= 0),
+			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
+			created_at TEXT NOT NULL,
+			UNIQUE (item_id, tenant_id, position),
+			UNIQUE (item_id, tenant_id, storage_key),
+			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
+		);
+		INSERT INTO item_images_next (id, tenant_id, item_id, storage_key, position, is_cover, created_at)
+		SELECT id, tenant_id, item_id, storage_key, position, is_cover, created_at
+		FROM item_images;
+	`);
+}
+
+/**
+ * Read the indexed columns of a trusted SQLite index.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} indexName - Trusted index name from `PRAGMA index_list`.
+ * @returns {string[]} Ordered column names of the index.
+ */
+function getIndexColumns(database: Database.Database, indexName: string): string[] {
+	return (database.prepare(`PRAGMA index_info(${indexName})`).all() as { name: string }[]).map(
+		({ name }) => name
+	);
 }
 
 /**
@@ -1084,11 +1356,12 @@ function rebuildItemImages(database: Database.Database): void {
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
 			item_id TEXT NOT NULL,
-			storage_key TEXT NOT NULL UNIQUE,
+			storage_key TEXT NOT NULL,
 			position INTEGER NOT NULL CHECK (position >= 0),
 			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (item_id, tenant_id, position),
+			UNIQUE (item_id, tenant_id, storage_key),
 			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
 		);
 		INSERT INTO item_images_next (id, tenant_id, item_id, storage_key, position, is_cover, created_at)

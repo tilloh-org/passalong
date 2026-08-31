@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 
 test.describe('Core collection', () => {
@@ -97,6 +98,32 @@ test.describe('Core collection', () => {
 
 		// assume
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
+
+		// act
+		const testPngBytes = Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+			'base64'
+		);
+		const itemCard = page.getByTestId('item-card');
+		await itemCard.locator('details.image-management > summary').click();
+		await itemCard.getByTestId('item-image-input').setInputFiles({
+			name: 'leselampe.png',
+			mimeType: 'image/png',
+			buffer: testPngBytes
+		});
+		await itemCard.getByRole('button', { name: 'Foto speichern' }).click();
+
+		// assume
+		await expect(page.getByTestId('item-image-key')).toContainText('(Titelbild)');
+		await expect(itemCard.locator('img.item-image')).toBeVisible();
+
+		// act
+		await itemCard.locator('details.image-management > summary').click();
+		await itemCard.getByTestId('remove-item-image').click();
+
+		// assume
+		await expect(page.getByTestId('item-image-key')).not.toBeVisible();
+		await expect(itemCard.locator('.item-image')).toBeVisible();
 
 		// act
 		const protectedUrl = page.url();

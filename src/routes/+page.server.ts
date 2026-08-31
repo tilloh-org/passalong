@@ -2,12 +2,18 @@ import { fail, redirect, type Cookies } from '@sveltejs/kit';
 import {
 	itemCategories,
 	itemConditions,
+	type Item,
 	type ItemCategory,
 	type ItemCondition,
+	type ItemImage,
 	type SessionScope
 } from '$lib/server/collection-repository';
+import { readFileSync } from 'node:fs';
+import { isAbsolute, join, relative } from 'node:path';
 import { hasSameOrigin } from '$lib/server/csrf';
 import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
+import { getMediaRoot } from '$lib/server/media-root';
+import { saveUploadedImage } from '$lib/server/media-storage';
 import { hashPassword, needsPasswordRehash, validatePassword, verifyPassword } from '$lib/server/password';
 import { getCollectionRepository } from '$lib/server/repository';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
@@ -36,6 +42,16 @@ const passwordResetLifetimeMilliseconds = passwordResetLifetimeHours * minutesPe
 const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
+const pngFileExtension = '.png';
+const jpegFileExtension = '.jpg';
+const pngMimeType = 'image/png';
+const jpegMimeType = 'image/jpeg';
+const webpMimeType = 'image/webp';
+
+interface ItemWithImages extends Item {
+	images: ItemImage[];
+	coverImageKey: string | null;
+}
 
 /**
  * Load account-aware and tenant-scoped collection data.
@@ -51,11 +67,12 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	const requestedCollectionId = url.searchParams.get('collection');
 	const collectionId = requestedCollectionId ?? collections[firstCollectionIndex]?.id;
 	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
+	const items = collection && scope ? repository.listItemsForOwner(collection.id, scope).map(enrichItemWithImages(scope)) : [];
 
 	return {
 		collection,
 		collections,
-		items: collection && scope ? repository.listItemsForOwner(collection.id, scope) : [],
+		items,
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
 		isAuthenticated: Boolean(scope),
@@ -274,6 +291,56 @@ export const actions: Actions = {
 		}
 
 		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collectionId)}`);
+	},
+
+	uploadItemImage: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { uploadImageError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		const itemId = getFormText(formData, 'itemId');
+		const upload = formData.get('image');
+		if (!(upload instanceof File) || upload.size === 0) {
+			return fail(httpStatus.badRequest, { uploadImageError: 'Bitte wähle ein Bild aus.' });
+		}
+
+		try {
+			const payload = Buffer.from(await upload.arrayBuffer());
+			const storageKey = await saveUploadedImage(getMediaRoot(), upload.type, payload);
+			getCollectionRepository().addItemImage(itemId, storageKey, scope);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { uploadImageError: imageActionError(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
+	},
+
+	removeItemImage: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { removeImageError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		try {
+			getCollectionRepository().deleteItemImage(
+				getFormText(formData, 'itemId'),
+				getFormText(formData, 'imageId'),
+				scope
+			);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { removeImageError: imageActionError(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
 	}
 };
 
@@ -346,4 +413,43 @@ function setSessionCookie(cookies: Cookies, scope: SessionScope, url: URL): void
  */
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : 'Die Eingabe konnte nicht gespeichert werden.';
+}
+
+const imageErrorMessage = 'Das Bild konnte nicht verarbeitet werden. Bitte prüfe Format und Größe.';
+const imageRemoveErrorMessage = 'Das Bild konnte nicht entfernt werden.';
+const userFacingImageMessages = [
+	'upload is not a supported image type',
+	'upload is empty',
+	'image exceeds the allowed size',
+	'upload is not a supported image',
+	'image was not found',
+	'item was not found'
+] as const;
+
+/**
+ * Map image-action failures to fixed user-facing messages without leaking
+ * internal storage or SQLite details.
+ *
+ * @param {unknown} error - The thrown value.
+ * @returns {string} A safe, fixed user-facing message.
+ */
+function imageActionError(error: unknown): string {
+	if (error instanceof Error && (userFacingImageMessages as readonly string[]).includes(error.message)) {
+		return error.message;
+	}
+	return imageErrorMessage;
+}
+
+/**
+ * Enrich every item with its tenant-scoped image metadata.
+ *
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {(item: Item) => ItemWithImages} Item mapper including image metadata.
+ */
+function enrichItemWithImages(scope: SessionScope): (item: Item) => ItemWithImages {
+	return (item) => {
+		const images = getCollectionRepository().listItemImages(item.id, scope);
+		const coverImage = images.find((image) => image.isCover);
+		return { ...item, images, coverImageKey: coverImage?.storageKey ?? null };
+	};
 }
