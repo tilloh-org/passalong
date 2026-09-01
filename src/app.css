@@ -68,6 +68,7 @@
 		--color-warn: #e0a458;
 		--color-warn-soft: rgba(224, 164, 88, 0.16);
 		--focus-ring: rgba(127, 168, 189, 0.4);
+		--glass: rgba(15, 26, 34, 0.72);
 
 		--shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
 		--shadow-tile: 0 4px 14px rgba(0, 0, 0, 0.3);
