@@ -41,6 +41,7 @@ interface ActionFixture {
 	rawSessionToken: string;
 	scope: SessionScope;
 	loadActions: () => Promise<PageServerActions>;
+	loadPage: () => Promise<(input: unknown) => unknown>;
 }
 
 /**
@@ -70,7 +71,8 @@ function createActionFixtureWithOwner(): ActionFixture {
 		mediaRoot,
 		rawSessionToken,
 		scope,
-		loadActions: async () => (await import('../../routes/+page.server')).actions as unknown as PageServerActions
+		loadActions: async () => (await import('../../routes/+page.server')).actions as unknown as PageServerActions,
+		loadPage: async () => (await import('../../routes/+page.server')).load as unknown as (input: unknown) => unknown
 	};
 }
 
@@ -194,5 +196,37 @@ describe('instance-admin actions', () => {
 			saleProceedsCents: 750
 		});
 		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
+	});
+
+	it('exposes owner-scoped sale statistics through the page load for authenticated sessions', async () => {
+		// arrange
+		const { repository, loadPage, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
+		const item = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			scope
+		);
+		repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, scope);
+		const load = await loadPage();
+		const url = new URL('http://localhost/');
+
+		// act
+		const authenticatedData = (await load({
+			cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+			url
+		} as never)) as { saleStatistics?: { soldItemCount: number; totalProceedsCents: number } };
+		const anonymousData = (await load({
+			cookies: { get: () => undefined },
+			url
+		} as never)) as { saleStatistics?: unknown };
+
+		// assume
+		expect(authenticatedData.saleStatistics).toEqual({
+			soldItemCount: 1,
+			totalProceedsCents: 750,
+			proceedsByChannel: [{ channel: 'flea-market', soldItemCount: 1, totalProceedsCents: 750 }],
+			proceedsByMonth: [{ month: '2026-08', soldItemCount: 1, totalProceedsCents: 750 }]
+		});
+		expect(anonymousData.saleStatistics).toBeUndefined();
 	});
 });
