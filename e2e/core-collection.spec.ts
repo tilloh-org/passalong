@@ -166,7 +166,7 @@ test.describe('Core collection', () => {
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-		await page.locator('details.instance-administration > summary').click();
+		await page.locator('.instance-admin-link').click();
 		const instanceAdministrationForm = page.locator('form[action="?/createPasswordReset"]');
 		await instanceAdministrationForm.getByLabel('Benutzername des Kontos').fill(winningAccount.username);
 		await instanceAdministrationForm.getByRole('button', { name: 'Zurücksetzungscode erzeugen' }).click();
@@ -176,7 +176,7 @@ test.describe('Core collection', () => {
 		expect(resetSecret).toMatch(/^[A-Za-z0-9_-]+$/);
 
 		// act
-		await page.locator('details.password-help > summary').click();
+		await page.locator('.reset-toggle').click();
 		const resetForm = page.locator('form[action="?/resetPassword"]');
 		await resetForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await resetForm.getByLabel('Zurücksetzungscode').fill(resetSecret!);

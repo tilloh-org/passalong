@@ -7,6 +7,7 @@
 	let menuOpen = $state(false);
 	let instanceAdminOpen = $state(false);
 	let passwordPanelOpen = $state(false);
+	let resetPanelOpen = $state(false);
 	let theme = $state<'light' | 'dark'>('light');
 
 	$effect(() => {
@@ -108,7 +109,10 @@
 <main>
 	<header class="masthead">
 		<h1 class="brand-wrap">
-			<a class="brand" href="/"><span class="brand-dot" aria-hidden="true"></span>passalong</a>
+			<a class="brand" href="/">
+				<img class="header-logo" src="/passalong-icon.svg" alt="" />
+				passalong
+			</a>
 		</h1>
 		{#if data.isAuthenticated}
 			<div class="header-actions">
@@ -137,6 +141,14 @@
 				<button class="nav-backdrop open" aria-label="Menü schließen" type="button" onclick={() => setMenuOpen(false)}></button>
 			{/if}
 			<nav class:open={menuOpen}>
+				<a
+					class="nav-cta"
+					href="/#add-item-title"
+					onclick={() => setMenuOpen(false)}
+				>
+					+ Neu
+				</a>
+				<hr class="nav-divider" />
 				{#if data.isInstanceAdmin}
 					<a
 						class="instance-admin-link"
@@ -181,44 +193,49 @@
 		</section>
 	{/if}
 
-	{#if data.isAuthenticated}
-		<details class="password-help" bind:open={passwordPanelOpen}>
-			<summary>Passwort ändern</summary>
-			<form method="POST" action="?/changePassword">
-				<label>
-					<span>Aktuelles Passwort</span>
-					<input name="currentPassword" type="password" autocomplete="current-password" required />
-				</label>
-				<label>
-					<span>Neues Passwort</span>
-					<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
-				</label>
-				{#if form && 'changePasswordError' in form && form.changePasswordError}
-					<p class="form-error" role="alert">{form.changePasswordError}</p>
-				{/if}
-				<button type="submit">Passwort speichern</button>
-			</form>
-		</details>
-		{#if data.isInstanceAdmin}
-			<details class="password-help instance-administration" bind:open={instanceAdminOpen}>
-				<summary>Instanzverwaltung</summary>
-				<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
-				<form method="POST" action="?/createPasswordReset">
-					<label>
-						<span>Benutzername des Kontos</span>
-						<input name="username" autocomplete="username" required />
-					</label>
-					{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
-						<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
-					{/if}
-					<button type="submit">Zurücksetzungscode erzeugen</button>
-				</form>
-			</details>
-		{/if}
+	{#if data.isAuthenticated && (passwordPanelOpen || instanceAdminOpen)}
+		<section class="settings-panel" aria-label="Einstellungen">
+			{#if passwordPanelOpen}
+				<div class="password-help">
+					<h2>Passwort ändern</h2>
+					<form method="POST" action="?/changePassword">
+						<label>
+							<span>Aktuelles Passwort</span>
+							<input name="currentPassword" type="password" autocomplete="current-password" required />
+						</label>
+						<label>
+							<span>Neues Passwort</span>
+							<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
+						</label>
+						{#if form && 'changePasswordError' in form && form.changePasswordError}
+							<p class="form-error" role="alert">{form.changePasswordError}</p>
+						{/if}
+						<button type="submit">Passwort speichern</button>
+					</form>
+				</div>
+			{/if}
+			{#if data.isInstanceAdmin && instanceAdminOpen}
+				<div class="password-help instance-administration">
+					<h2>Instanzverwaltung</h2>
+					<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
+					<form method="POST" action="?/createPasswordReset">
+						<label>
+							<span>Benutzername des Kontos</span>
+							<input name="username" autocomplete="username" required />
+						</label>
+						{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
+							<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
+						{/if}
+						<button type="submit">Zurücksetzungscode erzeugen</button>
+					</form>
+				</div>
+			{/if}
+		</section>
 	{/if}
 
 	{#if !data.isAuthenticated}
 		<section class="onboarding" aria-labelledby="onboarding-title">
+			<img class="login-logo" src="/passalong-icon.svg" alt="passalong" />
 			{#if data.isInitialSetup}
 				<p class="eyebrow">Willkommen</p>
 				<h1 id="onboarding-title">Ersten Zugang erstellen</h1>
@@ -259,9 +276,11 @@
 					{/if}
 					<button type="submit">Anmelden</button>
 				</form>
-				<details class="password-help">
-					<summary>Passwort mit Zurücksetzungscode ändern</summary>
-					<form method="POST" action="?/resetPassword">
+				<button class="reset-toggle" type="button" onclick={() => (resetPanelOpen = !resetPanelOpen)}>
+					Passwort mit Zurücksetzungscode ändern
+				</button>
+				{#if resetPanelOpen}
+					<form class="password-help" method="POST" action="?/resetPassword">
 						<label>
 							<span>Benutzername</span>
 							<input name="username" autocomplete="username" required />
@@ -278,8 +297,8 @@
 							<p class="form-error" role="alert">{form.resetError}</p>
 						{/if}
 						<button type="submit">Passwort zurücksetzen</button>
-						</form>
-				</details>
+					</form>
+				{/if}
 			{/if}
 		</section>
 	{:else if !data.collection}
@@ -580,26 +599,12 @@
 		width: 1.1rem;
 	}
 
-	.brand-dot {
-		animation: passalong-pulse 2.4s ease-in-out infinite;
-		background: var(--color-amber);
-		border-radius: 50%;
-		box-shadow: 0 0 12px var(--color-amber);
+	.header-logo {
 		display: inline-block;
-		height: 10px;
-		width: 10px;
-	}
-
-	@keyframes passalong-pulse {
-		0%,
-		100% {
-			opacity: 1;
-			transform: scale(1);
-		}
-		50% {
-			opacity: 0.55;
-			transform: scale(0.82);
-		}
+		filter: drop-shadow(var(--shadow-logo));
+		flex-shrink: 0;
+		height: 22px;
+		width: 22px;
 	}
 
 	.header-actions {
@@ -705,6 +710,13 @@
 		transform: translateY(-1px);
 	}
 
+	nav a.nav-cta {
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		box-shadow: var(--shadow-cta);
+		color: #fff;
+		font-weight: 700;
+	}
+
 	nav a[aria-current='page'] {
 		background: var(--color-accent-strong);
 		box-shadow: var(--shadow-cta);
@@ -734,22 +746,28 @@
 		margin: 8px 0;
 	}
 
+	.settings-panel {
+		display: grid;
+		gap: 1rem;
+		margin: 0 auto 1.5rem;
+		max-width: 26rem;
+	}
+
 	.password-help {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-tile);
-		margin-top: 1.5rem;
-		padding: 0.9rem 1.1rem;
+		padding: 1.1rem 1.2rem;
 	}
 
-	.password-help summary {
-		cursor: pointer;
-		font-weight: 700;
+	.password-help h2 {
+		font-size: 1.05rem;
+		margin: 0 0 0.75rem;
 	}
 
 	.password-help form {
-		margin-top: 1rem;
+		margin-top: 0;
 	}
 
 
@@ -763,6 +781,36 @@
 		color: var(--color-accent);
 		font-weight: 700;
 		text-decoration: none;
+	}
+
+	.reset-toggle {
+		background: none;
+		border: 0;
+		border-radius: var(--radius-small);
+		box-shadow: none;
+		color: var(--color-accent);
+		font-size: 0.85rem;
+		font-weight: 600;
+		justify-self: center;
+		padding: 0.4rem 0.6rem;
+		text-decoration: none;
+	}
+
+	.reset-toggle:hover {
+		background: var(--color-accent-soft);
+		text-decoration: underline;
+	}
+
+	.reset-toggle + .password-help {
+		width: 100%;
+	}
+
+	.login-logo {
+		display: block;
+		filter: drop-shadow(var(--shadow-logo));
+		height: 96px;
+		margin: 0 auto 18px;
+		width: 96px;
 	}
 
 	.onboarding {

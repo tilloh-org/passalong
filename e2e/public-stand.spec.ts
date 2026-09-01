@@ -13,12 +13,17 @@ test.describe('Public stand page', () => {
 			await page.getByRole('button', { name: 'Zugang erstellen' }).click();
 		} else {
 			const loginForm = page.locator('form[action="?/login"]');
-			await loginForm.getByLabel('Benutzername').fill(sharedTestAccount.username);
-			await loginForm.getByLabel('Passwort').fill(sharedTestAccount.recoveredPassword);
-			await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-			if (await page.getByRole('alert').isVisible().catch(() => false)) {
-				await loginForm.getByLabel('Passwort').fill(sharedTestAccount.initialPassword);
+			for (const password of [sharedTestAccount.recoveredPassword, sharedTestAccount.initialPassword]) {
+				await loginForm.getByLabel('Benutzername').fill(sharedTestAccount.username);
+				await loginForm.getByLabel('Passwort').fill(password);
 				await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+				const stillLoggedOut = await page
+					.getByRole('heading', { name: 'Anmelden' })
+					.isVisible()
+					.catch(() => false);
+				if (!stillLoggedOut) {
+					break;
+				}
 			}
 		}
 		await expect(
