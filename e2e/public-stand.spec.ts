@@ -1,16 +1,36 @@
 import { expect, test } from '@playwright/test';
+import { sharedTestAccount } from './test-account';
 
 test.describe('Public stand page', () => {
-	test('shows unsold items to anonymous visitors without internal data and 404s unknown ids', async ({ page, request }) => {
+	test('shows unsold items to anonymous visitors without internal data and 404s unknown ids', async ({ page }) => {
 		// arrange
 		await page.goto('/');
-		await expect(page.getByRole('heading', { name: 'Ersten Zugang erstellen' })).toBeVisible();
-		await page.locator('form[action="?/register"]').getByLabel('Benutzername').fill('avery');
-		await page.locator('form[action="?/register"]').getByLabel('Dein Name').fill('Avery');
-		await page.locator('form[action="?/register"]').getByLabel('Passwort').fill('correct-horse-battery-staple');
-		await page.getByRole('button', { name: 'Zugang erstellen' }).click();
-		await page.getByLabel('Name der Sammlung').fill('Flohmarkt-Stand');
-		await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
+		const setupVisible = await page.getByRole('heading', { name: 'Ersten Zugang erstellen' }).isVisible();
+		if (setupVisible) {
+			await page.locator('form[action="?/register"]').getByLabel('Benutzername').fill(sharedTestAccount.username);
+			await page.locator('form[action="?/register"]').getByLabel('Dein Name').fill(sharedTestAccount.displayName);
+			await page.locator('form[action="?/register"]').getByLabel('Passwort').fill(sharedTestAccount.recoveredPassword);
+			await page.getByRole('button', { name: 'Zugang erstellen' }).click();
+		} else {
+			const loginForm = page.locator('form[action="?/login"]');
+			await loginForm.getByLabel('Benutzername').fill(sharedTestAccount.username);
+			await loginForm.getByLabel('Passwort').fill(sharedTestAccount.recoveredPassword);
+			await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+		}
+		await expect(
+			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' }))
+		).toBeVisible();
+		if (await page.getByLabel('Name der Sammlung').isVisible().catch(() => false)) {
+			await page.getByLabel('Name der Sammlung').fill('Flohmarkt-Stand');
+			await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
+		} else {
+			await page.request.post('/?/createCollection', {
+				form: { collectionName: 'Flohmarkt-Stand' },
+				headers: { Origin: 'http://localhost:4173' }
+			});
+			await page.goto('/');
+			await page.getByTestId('collection-switcher').getByRole('link', { name: 'Flohmarkt-Stand' }).click();
+		}
 
 		// act
 		for (const [title, price, notes] of [
@@ -45,5 +65,6 @@ test.describe('Public stand page', () => {
 
 		// assume
 		expect(unknownResponse.status()).toBe(404);
+		anonymousContext.close?.();
 	});
 });
