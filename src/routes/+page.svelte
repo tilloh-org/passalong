@@ -224,6 +224,14 @@
 			<p>{data.items.length} {data.items.length === 1 ? 'Artikel' : 'Artikel'}</p>
 		</section>
 
+		<nav class="collection-switcher" aria-label="Sammlungswechsel" data-testid="collection-switcher">
+			{#each data.collections as collection (collection.id)}
+				<a href={`/?collection=${encodeURIComponent(collection.id)}`} aria-current={collection.id === data.collection.id ? 'page' : undefined}>
+					{collection.name}
+				</a>
+			{/each}
+		</nav>
+
 		<div class="workspace">
 			<section class="item-form" aria-labelledby="add-item-title">
 				<div>
@@ -307,6 +315,9 @@
 						<p class="eyebrow">Dein Bestand</p>
 						<h2 id="items-title">Artikel</h2>
 					</div>
+					{#if data.collection}
+						<a class="stand-link" data-testid="stand-page-link" href={`/stand/${data.collection.id}`}>Standseite öffnen</a>
+					{/if}
 				</div>
 				{#if data.items.length}
 				<div class="item-grid">
@@ -753,6 +764,43 @@
 	.statistics-value {
 		color: var(--color-text-muted);
 		white-space: nowrap;
+	}
+
+	.stand-link {
+		align-self: center;
+		color: var(--color-accent, #2563eb);
+		font-size: 0.85rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.stand-link:hover {
+		text-decoration: underline;
+	}
+
+	.collection-switcher {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin: 0 auto 1.25rem;
+		max-width: 64rem;
+		padding: 0 1.25rem;
+	}
+
+	.collection-switcher a {
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		padding: 0.3rem 0.9rem;
+		text-decoration: none;
+	}
+
+	.collection-switcher a[aria-current='page'] {
+		background: var(--color-accent, #2563eb);
+		border-color: var(--color-accent, #2563eb);
+		color: #fff;
+		font-weight: 700;
 	}
 
 	@media (max-width: 48rem) {

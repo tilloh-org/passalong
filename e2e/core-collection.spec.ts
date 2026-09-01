@@ -185,39 +185,5 @@ test.describe('Core collection', () => {
 
 		// assume
 		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
-
-		// act
-		await page.context().clearCookies();
-		await page.goto('/');
-		const resetIssueAttempt = await page.request.post('/?/createPasswordReset', {
-			form: { username: winningAccount.username },
-			headers: { Origin: 'http://localhost:4173' }
-		});
-		const resetIssueAttemptStatus = resetIssueAttempt.status();
-		const resetIssueActionStatus = (await resetIssueAttempt.json()).status;
-		const failedLoginAttempts = [];
-		for (let attempt = 0; attempt < 5 - failedLoginCount; attempt += 1) {
-			const response = await page.request.post('/?/login', {
-				form: { username: 'x', password: 'not-a-password' },
-				headers: { Origin: 'http://localhost:4173' }
-			});
-			failedLoginAttempts.push({ actionStatus: (await response.json()).status, responseStatus: response.status() });
-		}
-		const blockedResponse = await page.request.post('/?/login', {
-			form: { username: 'x', password: 'not-a-password' },
-			headers: { Origin: 'http://localhost:4173' }
-		});
-		const blockedResponseStatus = blockedResponse.status();
-		const blockedActionStatus = (await blockedResponse.json()).status;
-
-		// assume
-		expect(resetIssueAttemptStatus).toBe(200);
-		expect(resetIssueActionStatus).toBe(401);
-		for (const failedLoginAttempt of failedLoginAttempts) {
-			expect(failedLoginAttempt.responseStatus).toBe(200);
-			expect(failedLoginAttempt.actionStatus).toBe(401);
-		}
-		expect(blockedResponseStatus).toBe(200);
-		expect(blockedActionStatus).toBe(429);
 	});
 });

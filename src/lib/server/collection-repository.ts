@@ -73,6 +73,19 @@ export interface SaleStatistics {
 	proceedsByMonth: SaleMonthProceeds[];
 }
 
+export interface PublicStandItem {
+	id: string;
+	title: string;
+	priceCents: number;
+	category: ItemCategory;
+	condition: ItemCondition;
+}
+
+export interface PublicStandView {
+	collectionName: string;
+	items: PublicStandItem[];
+}
+
 export interface CreateInitialAdminInput {
 	username: string;
 	displayName: string;
@@ -163,6 +176,7 @@ export interface CollectionRepository {
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
 	getSaleStatistics(scope: SessionScope): SaleStatistics;
+	getPublicStandView(collectionId: string): PublicStandView | null;
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
 	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
 	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
@@ -757,6 +771,29 @@ export function createCollectionRepository(
 				proceedsByChannel,
 				proceedsByMonth
 			};
+		},
+
+		getPublicStandView(collectionId) {
+			const collection = database
+				.prepare('SELECT name FROM collections WHERE id = ?')
+				.get(collectionId) as { name: string } | undefined;
+			if (!collection) {
+				return null;
+			}
+			const items = (
+				database
+					.prepare(
+						'SELECT id, title, price_cents, category, condition FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
+					)
+					.all(collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition }[]
+			).map((row) => ({
+				id: row.id,
+				title: row.title,
+				priceCents: row.price_cents,
+				category: row.category,
+				condition: row.condition
+			}));
+			return { collectionName: collection.name, items };
 		},
 
 		listItemsForOwner(collectionId, scope) {
