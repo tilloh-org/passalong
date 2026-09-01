@@ -78,7 +78,8 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 		conditionOptions: itemConditions,
 		isAuthenticated: Boolean(scope),
 		isInitialSetup: !repository.hasAccounts(),
-		isInstanceAdmin
+		isInstanceAdmin,
+		saleStatistics: scope ? repository.getSaleStatistics(scope) : undefined
 	};
 };
 

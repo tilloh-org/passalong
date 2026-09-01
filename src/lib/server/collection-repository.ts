@@ -54,6 +54,25 @@ export interface MarkItemSoldInput {
 	proceedsCents: number;
 }
 
+export interface SaleChannelProceeds {
+	channel: SaleChannel;
+	soldItemCount: number;
+	totalProceedsCents: number;
+}
+
+export interface SaleMonthProceeds {
+	month: string;
+	soldItemCount: number;
+	totalProceedsCents: number;
+}
+
+export interface SaleStatistics {
+	soldItemCount: number;
+	totalProceedsCents: number;
+	proceedsByChannel: SaleChannelProceeds[];
+	proceedsByMonth: SaleMonthProceeds[];
+}
+
 export interface CreateInitialAdminInput {
 	username: string;
 	displayName: string;
@@ -143,6 +162,7 @@ export interface CollectionRepository {
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
+	getSaleStatistics(scope: SessionScope): SaleStatistics;
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
 	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
 	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
@@ -705,6 +725,38 @@ export function createCollectionRepository(
 						.get(itemId, scope.tenantId) as ItemRow
 				);
 			});
+		},
+
+		getSaleStatistics(scope) {
+			const saleMonthExpression = "substr(sold_at, 1, 7)";
+			const soldItemFilter = 'WHERE tenant_id = ? AND owner_id = ? AND sold_at IS NOT NULL';
+			const totals = database
+				.prepare(
+					`SELECT COUNT(*) AS sold_item_count, COALESCE(SUM(sale_proceeds_cents), 0) AS total_proceeds_cents FROM items ${soldItemFilter}`
+				)
+				.get(scope.tenantId, scope.userId) as { sold_item_count: number; total_proceeds_cents: number };
+			const proceedsByChannel = (
+				database
+					.prepare(
+						`SELECT sale_channel AS channel, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
+						 FROM items ${soldItemFilter} GROUP BY sale_channel ORDER BY total_proceeds_cents DESC, channel ASC`
+					)
+					.all(scope.tenantId, scope.userId) as { channel: SaleChannel; sold_item_count: number; total_proceeds_cents: number }[]
+			).map((row) => ({ channel: row.channel, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+			const proceedsByMonth = (
+				database
+					.prepare(
+						`SELECT ${saleMonthExpression} AS month, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
+						 FROM items ${soldItemFilter} GROUP BY ${saleMonthExpression} ORDER BY month ASC`
+					)
+					.all(scope.tenantId, scope.userId) as { month: string; sold_item_count: number; total_proceeds_cents: number }[]
+			).map((row) => ({ month: row.month, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+			return {
+				soldItemCount: totals.sold_item_count,
+				totalProceedsCents: totals.total_proceeds_cents,
+				proceedsByChannel,
+				proceedsByMonth
+			};
 		},
 
 		listItemsForOwner(collectionId, scope) {

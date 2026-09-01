@@ -32,6 +32,36 @@
 		'private-sale': 'Privatverkauf',
 		other: 'Sonstiges'
 	};
+
+	const germanMonthNames = [
+		'Januar',
+		'Februar',
+		'März',
+		'April',
+		'Mai',
+		'Juni',
+		'Juli',
+		'August',
+		'September',
+		'Oktober',
+		'November',
+		'Dezember'
+	];
+
+	/**
+	 * Format a YYYY-MM month key as a German month label.
+	 *
+	 * @param {string} month - Month key in the form YYYY-MM.
+	 * @returns {string} Human-readable German month label.
+	 */
+	function formatSaleMonth(month: string): string {
+		const [year, monthNumber] = month.split('-');
+		const monthIndex = Number(monthNumber) - 1;
+		if (!year || monthIndex < 0 || monthIndex >= germanMonthNames.length) {
+			return month;
+		}
+		return `${germanMonthNames[monthIndex]} ${year}`;
+	}
 </script>
 
 <svelte:head>
@@ -239,6 +269,38 @@
 				</form>
 			</section>
 
+			{#if data.saleStatistics && data.saleStatistics.soldItemCount > 0}
+				<section class="sale-statistics" aria-labelledby="sale-statistics-title" data-testid="sale-statistics">
+					<p class="eyebrow">Verkaufsstatistik</p>
+					<h2 id="sale-statistics-title">
+						{data.saleStatistics.soldItemCount} Artikel verkauft · {formatPrice(data.saleStatistics.totalProceedsCents)} € Erlös
+					</h2>
+					<div class="statistics-grid">
+						<div class="statistics-group">
+							<h3>Nach Kanal</h3>
+							<ul data-testid="sale-statistics-channels">
+								{#each data.saleStatistics.proceedsByChannel as entry}
+									<li>
+										<span>{saleChannelLabels[entry.channel] ?? entry.channel}</span>
+										<span class="statistics-value">{entry.soldItemCount}× · {formatPrice(entry.totalProceedsCents)} €</span>
+									</li>
+								{/each}
+							</ul>
+						</div>
+						<div class="statistics-group">
+							<h3>Nach Monat</h3>
+							<ul data-testid="sale-statistics-months">
+								{#each data.saleStatistics.proceedsByMonth as entry}
+									<li>
+										<span>{formatSaleMonth(entry.month)}</span>
+										<span class="statistics-value">{entry.soldItemCount}× · {formatPrice(entry.totalProceedsCents)} €</span>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					</div>
+				</section>
+			{/if}
 			<section class="items" aria-labelledby="items-title">
 				<div class="items-heading">
 					<div>
@@ -644,6 +706,53 @@
 
 	.sale-management form {
 		margin-top: 0.75rem;
+	}
+
+	.sale-statistics {
+		background: var(--color-surface-muted, rgba(0, 0, 0, 0.03));
+		border: 1px solid var(--color-border);
+		border-radius: 1rem;
+		margin-bottom: 1.5rem;
+		padding: 1.25rem;
+	}
+
+	.sale-statistics h2 {
+		font-size: 1.15rem;
+		margin: 0.25rem 0 1rem;
+	}
+
+	.statistics-grid {
+		display: grid;
+		gap: 1.5rem;
+		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+	}
+
+	.statistics-group h3 {
+		font-size: 0.8rem;
+		margin: 0 0 0.5rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+	}
+
+	.statistics-group ul {
+		display: grid;
+		gap: 0.4rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+
+	.statistics-group li {
+		display: flex;
+		justify-content: space-between;
+		gap: 0.75rem;
+		font-size: 0.9rem;
+	}
+
+	.statistics-value {
+		color: var(--color-text-muted);
+		white-space: nowrap;
 	}
 
 	@media (max-width: 48rem) {

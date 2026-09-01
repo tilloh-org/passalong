@@ -133,6 +133,10 @@ test.describe('Core collection', () => {
 
 		// assume
 		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
+		await expect(page.getByTestId('sale-statistics')).toContainText('1 Artikel verkauft');
+		await expect(page.getByTestId('sale-statistics')).toContainText('9,50 € Erlös');
+		await expect(page.getByTestId('sale-statistics-channels')).toContainText('Flohmarkt');
+		await expect(page.getByTestId('sale-statistics-months')).toContainText('August 2026');
 
 		// act
 		const protectedUrl = page.url();
