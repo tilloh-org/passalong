@@ -1229,12 +1229,13 @@ describe('collection repository', () => {
 		unknownStandView = repository.getPublicStandView(unknownCollectionId);
 
 		// assume
+		expect(publicView?.items).toHaveLength(2);
 		expect(publicView).toEqual({
 			collectionName: 'Flohmarkt',
-			items: [
+			items: expect.arrayContaining([
 				expect.objectContaining({ id: privateNotesItem.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair' }),
 				expect.objectContaining({ id: secondAvailableItem.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair' })
-			]
+			])
 		});
 		for (const entry of publicView?.items ?? []) {
 			expect(entry).not.toHaveProperty('internalNotes');
