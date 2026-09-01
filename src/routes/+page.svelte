@@ -4,6 +4,10 @@
 
 	let { data, form } = $props();
 
+	let menuOpen = $state(false);
+	let instanceAdminOpen = $state(false);
+	let passwordPanelOpen = $state(false);
+
 	const categoryLabels: Record<string, string> = {
 		clothing: 'Kleidung',
 		books: 'Bücher',
@@ -71,12 +75,52 @@
 
 <main>
 	<header class="masthead">
-		<a class="brand" href="/">passalong</a>
-		<p>Eine Sammlung. Viele Wege, Dinge weiterzugeben.</p>
+		<a class="brand" href="/"><span class="brand-dot" aria-hidden="true"></span>passalong</a>
 		{#if data.isAuthenticated}
-			<form class="session-control" method="POST" action="?/logout">
-				<button type="submit">Abmelden</button>
-			</form>
+			<div class="header-actions">
+				<button
+					class="burger"
+					aria-label={menuOpen ? 'Menü schließen' : 'Menü öffnen'}
+					aria-expanded={menuOpen}
+					type="button"
+					onclick={() => (menuOpen = !menuOpen)}
+				>
+					<span></span><span></span><span></span>
+				</button>
+			</div>
+			{#if menuOpen}
+				<button class="nav-backdrop open" aria-label="Menü schließen" type="button" onclick={() => (menuOpen = false)}></button>
+			{/if}
+			<nav class:open={menuOpen}>
+				{#if data.isInstanceAdmin}
+					<a
+						class="instance-admin-link"
+						href="/"
+						onclick={(event) => {
+							event.preventDefault();
+							instanceAdminOpen = !instanceAdminOpen;
+							menuOpen = false;
+						}}
+					>
+						Instanzverwaltung
+					</a>
+				{/if}
+				<a
+					class="password-panel-link"
+					href="/"
+					onclick={(event) => {
+						event.preventDefault();
+						passwordPanelOpen = !passwordPanelOpen;
+						menuOpen = false;
+					}}
+				>
+					Passwort ändern
+				</a>
+				<hr class="nav-divider" />
+				<form class="nav-logout" method="POST" action="?/logout">
+					<button type="submit" onclick={() => (menuOpen = false)}>Abmelden</button>
+				</form>
+			</nav>
 		{/if}
 	</header>
 
@@ -92,7 +136,7 @@
 	{/if}
 
 	{#if data.isAuthenticated}
-		<details class="password-help authenticated-password-help">
+		<details class="password-help" bind:open={passwordPanelOpen}>
 			<summary>Passwort ändern</summary>
 			<form method="POST" action="?/changePassword">
 				<label>
@@ -110,7 +154,7 @@
 			</form>
 		</details>
 		{#if data.isInstanceAdmin}
-			<details class="password-help instance-administration">
+			<details class="password-help instance-administration" bind:open={instanceAdminOpen}>
 				<summary>Instanzverwaltung</summary>
 				<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
 				<form method="POST" action="?/createPasswordReset">
@@ -432,16 +476,16 @@
 		position: sticky;
 		top: 0;
 		z-index: 65;
-		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
-		margin: 0 -1.5rem 2rem;
-		padding: 0.9rem 1.5rem;
 		background: var(--glass);
 		backdrop-filter: blur(14px) saturate(1.4);
 		-webkit-backdrop-filter: blur(14px) saturate(1.4);
 		border-bottom: 1px solid var(--color-border);
+		container-type: inline-size;
+		display: flex;
+		gap: 16px;
+		margin: 0 -1.5rem 2rem;
+		padding: 0.65rem 1.5rem;
 	}
 
 	.brand {
@@ -455,12 +499,11 @@
 		text-decoration: none;
 	}
 
-	.brand::before {
+	.brand-dot {
 		animation: passalong-pulse 2.4s ease-in-out infinite;
 		background: var(--color-amber);
 		border-radius: 50%;
 		box-shadow: 0 0 12px var(--color-amber);
-		content: '';
 		display: inline-block;
 		height: 10px;
 		width: 10px;
@@ -478,29 +521,137 @@
 		}
 	}
 
-	.masthead > p {
-		color: var(--color-text-muted);
-		font-size: 0.9rem;
-		margin: 0;
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-left: auto;
 	}
 
-	.session-control {
+	.burger {
+		background: none;
+		border: 0;
+		border-radius: 12px;
+		box-shadow: none;
+		cursor: pointer;
+		display: none;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 5px;
+		height: 40px;
+		padding: 0;
+		position: relative;
+		transition: background 0.25s ease;
+		width: 40px;
+		z-index: 86;
+	}
+
+	.burger:hover {
+		background: var(--color-accent-soft);
+		box-shadow: none;
+		transform: none;
+	}
+
+	.burger span {
+		background: var(--color-text);
+		border-radius: 2px;
+		display: block;
+		height: 2.5px;
+		transition:
+			transform 0.3s ease,
+			opacity 0.3s ease;
+		width: 22px;
+	}
+
+	.burger[aria-expanded='true'] span:nth-child(1) {
+		transform: translateY(7.5px) rotate(45deg);
+	}
+
+	.burger[aria-expanded='true'] span:nth-child(2) {
+		opacity: 0;
+	}
+
+	.burger[aria-expanded='true'] span:nth-child(3) {
+		transform: translateY(-7.5px) rotate(-45deg);
+	}
+
+	.nav-backdrop {
+		background: rgba(14, 42, 58, 0.4);
+		border: 0;
+		cursor: default;
+		display: none;
+		height: 100vh;
+		left: 0;
+		padding: 0;
+		position: fixed;
+		top: 0;
+		width: 100vw;
+		z-index: 84;
+	}
+
+	.nav-backdrop.open {
 		display: block;
 	}
 
-	.session-control button {
-		background: transparent;
-		border: 0;
-		border-radius: 999px;
-		color: var(--color-danger);
-		font-size: 0.85rem;
-		font-weight: 600;
-		padding: 0.5rem 0.9rem;
+	nav {
+		display: flex;
+		gap: 4px;
+		margin-left: auto;
 	}
 
-	.session-control button:hover {
+	nav a,
+	nav form button {
+		align-items: center;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		box-shadow: none;
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-flex;
+		font-size: 0.9rem;
+		font-weight: 600;
+		height: 40px;
+		justify-content: center;
+		padding: 0 14px;
+		text-decoration: none;
+		transition: all 0.25s ease;
+		white-space: nowrap;
+	}
+
+	nav a:hover {
+		background: var(--color-accent-soft);
+		transform: translateY(-1px);
+	}
+
+	nav a[aria-current='page'] {
+		background: var(--color-accent-strong);
+		box-shadow: var(--shadow-cta);
+		color: #fff;
+	}
+
+	nav form button {
+		color: var(--color-danger);
+	}
+
+	nav form button:hover {
 		background: var(--color-danger-soft);
-		filter: none;
+		transform: translateY(-1px);
+	}
+
+	.nav-logout {
+		display: block;
+		margin-left: 8px;
+		padding: 0;
+	}
+
+	.nav-divider {
+		background: var(--color-border);
+		border: 0;
+		display: none;
+		height: 1px;
+		margin: 8px 0;
 	}
 
 	.password-help {
@@ -521,10 +672,6 @@
 		margin-top: 1rem;
 	}
 
-	.authenticated-password-help {
-		margin: 0 0 1.5rem auto;
-		max-width: 37rem;
-	}
 
 	.collection-list {
 		display: grid;
@@ -953,20 +1100,59 @@
 		padding: 0.35rem 0.7rem;
 	}
 
+	/* Burger erscheint, sobald die Nav nicht mehr in den Header passt */
+	@container (max-width: 900px) {
+		.burger {
+			display: flex;
+		}
+
+		nav {
+			background: var(--color-surface);
+			border-left: 1px solid var(--color-border);
+			box-shadow: var(--shadow-card);
+			flex-direction: column;
+			height: 100vh;
+			overflow-y: auto;
+			padding: 76px 18px 20px;
+			position: fixed;
+			right: 0;
+			top: 0;
+			transform: translateX(105%);
+			transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
+			width: min(80vw, 300px);
+			z-index: 85;
+		}
+
+		nav.open {
+			transform: translateX(0);
+		}
+
+		nav a,
+		nav form button {
+			border-radius: var(--radius-control);
+			font-size: 1rem;
+			height: 44px;
+			justify-content: flex-start;
+			padding: 0 16px;
+			width: 100%;
+		}
+
+
+		.nav-divider {
+			display: block;
+			width: auto;
+		}
+
+		.nav-logout {
+			margin-left: 0;
+			margin-top: 24px;
+		}
+	}
+
 	@media (max-width: 48rem) {
-		.masthead,
 		.collection-header {
 			align-items: flex-start;
 			flex-direction: column;
-		}
-
-		.masthead {
-			align-items: center;
-			flex-direction: row;
-		}
-
-		.masthead > p {
-			display: none;
 		}
 
 		.workspace {
