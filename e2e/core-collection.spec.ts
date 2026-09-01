@@ -126,6 +126,15 @@ test.describe('Core collection', () => {
 		await expect(itemCard.locator('.item-image')).toBeVisible();
 
 		// act
+		await itemCard.locator('details.sale-management > summary').click();
+		await itemCard.getByTestId('item-sold-date').fill('2026-08-31');
+		await itemCard.getByTestId('item-proceeds').fill('950');
+		await itemCard.getByTestId('mark-item-sold').click();
+
+		// assume
+		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
+
+		// act
 		const protectedUrl = page.url();
 		await page.getByRole('button', { name: 'Abmelden' }).click();
 
