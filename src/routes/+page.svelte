@@ -7,6 +7,32 @@
 	let menuOpen = $state(false);
 	let instanceAdminOpen = $state(false);
 	let passwordPanelOpen = $state(false);
+	let theme = $state<'light' | 'dark'>('light');
+
+	$effect(() => {
+		const saved = localStorage.getItem('passalong-theme');
+		const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+		theme = saved === 'dark' || saved === 'light' ? saved : prefersDark ? 'dark' : 'light';
+	});
+
+	/**
+	 * Toggle the persisted light/dark theme on the document element.
+	 */
+	function toggleTheme(): void {
+		theme = theme === 'dark' ? 'light' : 'dark';
+		document.documentElement.setAttribute('data-theme', theme);
+		localStorage.setItem('passalong-theme', theme);
+	}
+
+	/**
+	 * Open or close the burger navigation and lock body scrolling while open.
+	 *
+	 * @param {boolean} open - Whether the drawer should be open.
+	 */
+	function setMenuOpen(open: boolean): void {
+		menuOpen = open;
+		document.body.style.overflow = open ? 'hidden' : '';
+	}
 
 	const categoryLabels: Record<string, string> = {
 		clothing: 'Kleidung',
@@ -73,23 +99,42 @@
 	<meta name="description" content="Verwalte deine Sammlung von Dingen, die weiterziehen dürfen." />
 </svelte:head>
 
+<svelte:window onkeydown={(event) => {
+	if (event.key === 'Escape') {
+		menuOpen = false;
+	}
+}} />
+
 <main>
 	<header class="masthead">
-		<a class="brand" href="/"><span class="brand-dot" aria-hidden="true"></span>passalong</a>
+		<h1 class="brand-wrap">
+			<a class="brand" href="/"><span class="brand-dot" aria-hidden="true"></span>passalong</a>
+		</h1>
 		{#if data.isAuthenticated}
 			<div class="header-actions">
+				<button
+					class="icon-btn theme-toggle"
+					aria-label="Dark Mode umschalten"
+					title="Hell/Dunkel"
+					type="button"
+					onclick={toggleTheme}
+				>
+					<svg class="icon" aria-hidden="true" focusable="false">
+						<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
+					</svg>
+				</button>
 				<button
 					class="burger"
 					aria-label={menuOpen ? 'Menü schließen' : 'Menü öffnen'}
 					aria-expanded={menuOpen}
 					type="button"
-					onclick={() => (menuOpen = !menuOpen)}
+					onclick={() => setMenuOpen(!menuOpen)}
 				>
 					<span></span><span></span><span></span>
 				</button>
 			</div>
 			{#if menuOpen}
-				<button class="nav-backdrop open" aria-label="Menü schließen" type="button" onclick={() => (menuOpen = false)}></button>
+				<button class="nav-backdrop open" aria-label="Menü schließen" type="button" onclick={() => setMenuOpen(false)}></button>
 			{/if}
 			<nav class:open={menuOpen}>
 				{#if data.isInstanceAdmin}
@@ -99,7 +144,7 @@
 						onclick={(event) => {
 							event.preventDefault();
 							instanceAdminOpen = !instanceAdminOpen;
-							menuOpen = false;
+							setMenuOpen(false);
 						}}
 					>
 						Instanzverwaltung
@@ -111,18 +156,19 @@
 					onclick={(event) => {
 						event.preventDefault();
 						passwordPanelOpen = !passwordPanelOpen;
-						menuOpen = false;
+						setMenuOpen(false);
 					}}
 				>
 					Passwort ändern
 				</a>
 				<hr class="nav-divider" />
 				<form class="nav-logout" method="POST" action="?/logout">
-					<button type="submit" onclick={() => (menuOpen = false)}>Abmelden</button>
+					<button type="submit" onclick={() => setMenuOpen(false)}>Abmelden</button>
 				</form>
 			</nav>
 		{/if}
 	</header>
+
 
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
@@ -488,6 +534,13 @@
 		padding: 0.65rem 1.5rem;
 	}
 
+	.brand-wrap {
+		font-size: 1.2rem;
+		font-weight: 800;
+		letter-spacing: 0.02em;
+		margin: 0;
+	}
+
 	.brand {
 		align-items: center;
 		color: var(--color-accent-strong);
@@ -495,8 +548,36 @@
 		font-size: 1.2rem;
 		font-weight: 800;
 		gap: 9px;
-		letter-spacing: -0.02em;
+		letter-spacing: 0.02em;
 		text-decoration: none;
+	}
+
+	.icon-btn {
+		align-items: center;
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		box-shadow: none;
+		color: var(--color-accent);
+		cursor: pointer;
+		display: flex;
+		font-size: 1.1rem;
+		height: 40px;
+		justify-content: center;
+		padding: 0;
+		transition: all 0.25s ease;
+		width: 40px;
+	}
+
+	.icon-btn:hover {
+		background: var(--color-accent-soft);
+		box-shadow: none;
+		transform: rotate(15deg);
+	}
+
+	.icon {
+		height: 1.1rem;
+		width: 1.1rem;
 	}
 
 	.brand-dot {
@@ -597,7 +678,6 @@
 	nav {
 		display: flex;
 		gap: 4px;
-		margin-left: auto;
 	}
 
 	nav a,

@@ -16,6 +16,10 @@ test.describe('Public stand page', () => {
 			await loginForm.getByLabel('Benutzername').fill(sharedTestAccount.username);
 			await loginForm.getByLabel('Passwort').fill(sharedTestAccount.recoveredPassword);
 			await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+			if (await page.getByRole('alert').isVisible().catch(() => false)) {
+				await loginForm.getByLabel('Passwort').fill(sharedTestAccount.initialPassword);
+				await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+			}
 		}
 		await expect(
 			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' }))

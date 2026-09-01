@@ -1,12 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<script>
+			(function () {
+				const saved = localStorage.getItem('passalong-theme');
+				const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+				document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">
+		<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+			<defs>
+				<symbol id="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454l0 .008" />
+				</symbol>
+				<symbol id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+					<circle cx="12" cy="12" r="4" />
+					<path d="M12 12v.01" />
+					<path d="M5 12h-1" />
+					<path d="M20 12h-1" />
+					<path d="M12 5v-1" />
+					<path d="M12 20v-1" />
+					<path d="M8.6 8.6l-.7 -.7" />
+					<path d="M16.6 7.4l.7 -.7" />
+					<path d="M16.6 16.6l.7 .7" />
+					<path d="M7.4 16.6l-.7 .7" />
+				</symbol>
+			</defs>
+		</svg>
 		<div style="display: contents">%sveltekit.body%</div>
 	</body>
 </html>
