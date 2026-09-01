@@ -1182,6 +1182,8 @@ describe('collection repository', () => {
 			proceedsByChannel: [],
 			proceedsByMonth: []
 		});
+
+		// assume
 		expect(reopenedItem.saleChannel).toBeNull();
 		expect(statisticsAfterReopen).toEqual({
 			soldItemCount: 2,
@@ -1195,5 +1197,51 @@ describe('collection repository', () => {
 				{ month: '2026-08', soldItemCount: 1, totalProceedsCents: 250 }
 			]
 		});
+	});
+
+	it('returns a reduced public stand view with only unsold items of the requested collection', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const availableItem = repository.createItem(
+			{ collectionId: standCollection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: 'Nur abends abgeben' },
+			owner
+		);
+		const secondAvailableItem = repository.createItem(
+			{ collectionId: standCollection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '' },
+			owner
+		);
+		const privateNotesItem = repository.createItem(
+			{ collectionId: standCollection.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair', internalNotes: 'Privates Detail' },
+			owner
+		);
+		repository.markItemSold(availableItem.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, owner);
+		const unknownCollectionId = '00000000-0000-0000-0000-000000000000';
+		let unknownStandView: ReturnType<typeof repository.getPublicStandView>;
+
+		// act
+		const publicView = repository.getPublicStandView(standCollection.id);
+		unknownStandView = repository.getPublicStandView(unknownCollectionId);
+
+		// assume
+		expect(publicView).toEqual({
+			collectionName: 'Flohmarkt',
+			items: [
+				expect.objectContaining({ id: privateNotesItem.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair' }),
+				expect.objectContaining({ id: secondAvailableItem.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair' })
+			]
+		});
+		for (const entry of publicView?.items ?? []) {
+			expect(entry).not.toHaveProperty('internalNotes');
+			expect(entry).not.toHaveProperty('saleChannel');
+			expect(entry).not.toHaveProperty('soldAt');
+			expect(entry).not.toHaveProperty('saleProceedsCents');
+		}
+		expect(unknownStandView).toBeNull();
 	});
 });
