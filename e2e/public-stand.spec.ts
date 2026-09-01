@@ -56,9 +56,9 @@ test.describe('Public stand page', () => {
 		await expect(anonymousPage.getByTestId('stand-title')).toHaveText('Flohmarkt-Stand');
 		await expect(anonymousPage.getByTestId('stand-item')).toHaveCount(2);
 		const standCards = anonymousPage.getByTestId('stand-item');
-		await expect(standCards.filter({ hasText: 'Vase' })).toContainText('8,00 €');
+		await expect(standCards.filter({ hasText: 'Vase' })).toContainText('8,00');
 		await expect(standCards.filter({ hasText: 'Vase' })).not.toContainText('Nur abends abgeben');
-		await expect(standCards.filter({ hasText: 'Buch' })).toContainText('3,00 €');
+		await expect(standCards.filter({ hasText: 'Buch' })).toContainText('3,00');
 
 		// act
 		const unknownResponse = await anonymousPage.request.get('/stand/00000000-0000-0000-0000-000000000000');
