@@ -86,7 +86,7 @@ test.describe('Core collection', () => {
 		await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Artikel', level: 1 })).toBeVisible();
 
 		// act
 		await page.getByLabel('Artikelname').fill('Leselampe');
@@ -152,7 +152,7 @@ test.describe('Core collection', () => {
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Artikel', level: 1 })).toBeVisible();
 
 		// act
 		await page.context().clearCookies();
@@ -184,6 +184,16 @@ test.describe('Core collection', () => {
 		await resetForm.getByRole('button', { name: 'Passwort zurücksetzen' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Artikel', level: 1 })).toBeVisible();
+
+		// act
+		await page.locator('.password-panel-link').click();
+		const changeForm = page.locator('form[action="?/changePassword"]');
+		await changeForm.getByLabel('Aktuelles Passwort').fill('recovered-correct-battery-horse');
+		await changeForm.getByLabel('Neues Passwort').fill('correct-horse-battery-staple');
+		await changeForm.getByRole('button', { name: 'Passwort speichern' }).click();
+
+		// assume
+		await expect(page.getByRole('heading', { name: 'Artikel', level: 1 })).toBeVisible();
 	});
 });

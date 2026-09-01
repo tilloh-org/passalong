@@ -9,6 +9,37 @@
 	let passwordPanelOpen = $state(false);
 	let resetPanelOpen = $state(false);
 	let theme = $state<'light' | 'dark'>('light');
+	let navOverflow = $state(false);
+	let headerElement: HTMLElement | undefined = $state();
+	let navElement: HTMLElement | undefined = $state();
+
+	$effect(() => {
+		if (!headerElement || !navElement) {
+			return;
+		}
+		const measure = () => {
+			if (!navElement || !headerElement) {
+				return;
+			}
+			// Hysteresis: switch to the drawer as soon as the header row overflows. Switch back to
+			// inline only when the whole row (brand + actions + nav) genuinely fits again — measured
+			// on the drawer-mode header, where brand and actions still occupy their inline widths.
+			const brand = headerElement.querySelector('.brand-wrap');
+			const actions = headerElement.querySelector('.header-actions');
+			const reservedWidth =
+				((brand?.scrollWidth ?? 0) + (actions?.scrollWidth ?? 0)) * 2 + 96;
+			if (navOverflow) {
+				navOverflow = headerElement.clientWidth - reservedWidth < navElement.scrollWidth;
+			} else {
+				navOverflow = headerElement.scrollWidth > headerElement.clientWidth + 1;
+			}
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(headerElement);
+		observer.observe(navElement);
+		return () => observer.disconnect();
+	});
 
 	$effect(() => {
 		const saved = localStorage.getItem('passalong-theme');
@@ -107,7 +138,7 @@
 }} />
 
 <main>
-	<header class="masthead">
+	<header class="masthead" class:nav-overflow={navOverflow} bind:this={headerElement}>
 		<h1 class="brand-wrap">
 			<a class="brand" href="/">
 				<img class="header-logo" src="/passalong-icon.svg" alt="" />
@@ -140,7 +171,7 @@
 			{#if menuOpen}
 				<button class="nav-backdrop open" aria-label="Menü schließen" type="button" onclick={() => setMenuOpen(false)}></button>
 			{/if}
-			<nav class:open={menuOpen}>
+			<nav class:open={menuOpen} bind:this={navElement}>
 				<a
 					class="nav-cta"
 					href="/#add-item-title"
@@ -327,19 +358,21 @@
 	{:else}
 		<section class="collection-header" aria-labelledby="collection-title">
 			<div>
-				<p class="eyebrow">Deine Sammlung</p>
-				<h1 id="collection-title">{data.collection.name}</h1>
+				<p class="eyebrow">Deine Artikel</p>
+				<h1 id="collection-title">Artikel</h1>
 			</div>
-			<p>{data.items.length} {data.items.length === 1 ? 'Artikel' : 'Artikel'}</p>
+			<p>({data.items.length})</p>
 		</section>
 
-		<nav class="collection-switcher" aria-label="Sammlungswechsel" data-testid="collection-switcher">
-			{#each data.collections as collection (collection.id)}
-				<a href={`/?collection=${encodeURIComponent(collection.id)}`} aria-current={collection.id === data.collection.id ? 'page' : undefined}>
-					{collection.name}
-				</a>
-			{/each}
-		</nav>
+		{#if data.collections.length > 1}
+			<nav class="collection-switcher" aria-label="Sammlungswechsel" data-testid="collection-switcher">
+				{#each data.collections as collection (collection.id)}
+					<a href={`/?collection=${encodeURIComponent(collection.id)}`} aria-current={collection.id === data.collection.id ? 'page' : undefined}>
+						{collection.name}
+					</a>
+				{/each}
+			</nav>
+		{/if}
 
 		<div class="workspace">
 			<section class="item-form" aria-labelledby="add-item-title">
@@ -1228,53 +1261,59 @@
 		padding: 0.35rem 0.7rem;
 	}
 
-	/* Burger erscheint, sobald die Nav nicht mehr in den Header passt */
-	@container (max-width: 900px) {
-		.burger {
-			display: flex;
-		}
+	/* Nav läuft auf einer Zeile; läuft sie über den verfügbaren Platz hinaus, übernimmt der Burger */
+	nav {
+		flex-shrink: 0;
+		flex-wrap: nowrap;
+	}
 
-		nav {
-			background: var(--color-surface);
-			border-left: 1px solid var(--color-border);
-			box-shadow: var(--shadow-card);
-			flex-direction: column;
-			height: 100vh;
-			overflow-y: auto;
-			padding: 76px 18px 20px;
-			position: fixed;
-			right: 0;
-			top: 0;
-			transform: translateX(105%);
-			transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
-			width: min(80vw, 300px);
-			z-index: 85;
-		}
+	.masthead.nav-overflow .burger {
+		display: flex;
+	}
 
-		nav.open {
-			transform: translateX(0);
-		}
+	.masthead.nav-overflow nav {
+		background: var(--color-surface);
+		border-left: 1px solid var(--color-border);
+		box-shadow: var(--shadow-card);
+		flex-direction: column;
+		height: 100vh;
+		overflow-y: auto;
+		padding: 76px 18px 20px;
+		position: fixed;
+		right: 0;
+		top: 0;
+		transform: translateX(105%);
+		transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
+		width: min(80vw, 300px);
+		z-index: 85;
+	}
 
-		nav a,
-		nav form button {
-			border-radius: var(--radius-control);
-			font-size: 1rem;
-			height: 44px;
-			justify-content: flex-start;
-			padding: 0 16px;
-			width: 100%;
-		}
+	.masthead.nav-overflow nav.open {
+		transform: translateX(0);
+	}
 
+	.masthead.nav-overflow nav a,
+	.masthead.nav-overflow nav form button {
+		border-radius: var(--radius-control);
+		font-size: 1rem;
+		height: 44px;
+		justify-content: flex-start;
+		padding: 0 16px;
+		width: 100%;
+	}
 
-		.nav-divider {
-			display: block;
-			width: auto;
-		}
+	.masthead.nav-overflow .nav-backdrop {
+		display: block;
+	}
 
-		.nav-logout {
-			margin-left: 0;
-			margin-top: 24px;
-		}
+	.masthead.nav-overflow .nav-divider {
+		display: block;
+		width: auto;
+	}
+
+	.masthead.nav-overflow .nav-logout {
+		margin-left: 0;
+		margin-top: 24px;
 	}
 
 	@media (max-width: 48rem) {

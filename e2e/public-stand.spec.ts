@@ -13,7 +13,7 @@ test.describe('Public stand page', () => {
 			await page.getByRole('button', { name: 'Zugang erstellen' }).click();
 		} else {
 			const loginForm = page.locator('form[action="?/login"]');
-			for (const password of [sharedTestAccount.recoveredPassword, sharedTestAccount.initialPassword]) {
+			for (const password of [sharedTestAccount.initialPassword, sharedTestAccount.recoveredPassword]) {
 				await loginForm.getByLabel('Benutzername').fill(sharedTestAccount.username);
 				await loginForm.getByLabel('Passwort').fill(password);
 				await loginForm.getByRole('button', { name: 'Anmelden' }).click();
@@ -27,7 +27,7 @@ test.describe('Public stand page', () => {
 			}
 		}
 		await expect(
-			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' }))
+			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Artikel', level: 1 }))
 		).toBeVisible();
 		if (await page.getByLabel('Name der Sammlung').isVisible().catch(() => false)) {
 			await page.getByLabel('Name der Sammlung').fill('Flohmarkt-Stand');
