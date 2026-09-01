@@ -307,6 +307,9 @@
 						<p class="eyebrow">Dein Bestand</p>
 						<h2 id="items-title">Artikel</h2>
 					</div>
+					{#if data.collection}
+						<a class="stand-link" data-testid="stand-page-link" href={`/stand/${data.collection.id}`}>Standseite öffnen</a>
+					{/if}
 				</div>
 				{#if data.items.length}
 				<div class="item-grid">
@@ -753,6 +756,18 @@
 	.statistics-value {
 		color: var(--color-text-muted);
 		white-space: nowrap;
+	}
+
+	.stand-link {
+		align-self: center;
+		color: var(--color-accent, #2563eb);
+		font-size: 0.85rem;
+		font-weight: 700;
+		text-decoration: none;
+	}
+
+	.stand-link:hover {
+		text-decoration: underline;
 	}
 
 	@media (max-width: 48rem) {
