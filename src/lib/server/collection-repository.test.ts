@@ -1130,4 +1130,70 @@ describe('collection repository', () => {
 		expect(invalidChannelError).toMatchObject({ message: 'channel is not a supported sale channel' });
 		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
 	});
+
+	it('aggregates sale statistics per channel and month for the owning tenant only', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const firstItem = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			owner
+		);
+		const secondItem = repository.createItem(
+			{ collectionId: collection.id, title: 'Lampe', priceCents: 1500, category: 'decor', condition: 'fair', internalNotes: '' },
+			owner
+		);
+		const thirdItem = repository.createItem(
+			{ collectionId: collection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '' },
+			owner
+		);
+		repository.markItemSold(firstItem.id, { channel: 'flea-market', soldAt: '2026-07-12T09:00:00.000Z', proceedsCents: 700 }, owner);
+		repository.markItemSold(secondItem.id, { channel: 'flea-market', soldAt: '2026-08-02T09:00:00.000Z', proceedsCents: 1400 }, owner);
+		repository.markItemSold(thirdItem.id, { channel: 'online-marketplace', soldAt: '2026-08-20T09:00:00.000Z', proceedsCents: 250 }, owner);
+		const foreignScope = { userId: 'other-user', tenantId: 'other-tenant' };
+
+		// act
+		const statistics = repository.getSaleStatistics(owner);
+		const foreignStatistics = repository.getSaleStatistics(foreignScope);
+		const reopenedItem = repository.unmarkItemSold(secondItem.id, owner);
+		const statisticsAfterReopen = repository.getSaleStatistics(owner);
+
+		// assume
+		expect(statistics).toEqual({
+			soldItemCount: 3,
+			totalProceedsCents: 2350,
+			proceedsByChannel: [
+				{ channel: 'flea-market', soldItemCount: 2, totalProceedsCents: 2100 },
+				{ channel: 'online-marketplace', soldItemCount: 1, totalProceedsCents: 250 }
+			],
+			proceedsByMonth: [
+				{ month: '2026-07', soldItemCount: 1, totalProceedsCents: 700 },
+				{ month: '2026-08', soldItemCount: 2, totalProceedsCents: 1650 }
+			]
+		});
+		expect(foreignStatistics).toEqual({
+			soldItemCount: 0,
+			totalProceedsCents: 0,
+			proceedsByChannel: [],
+			proceedsByMonth: []
+		});
+		expect(reopenedItem.saleChannel).toBeNull();
+		expect(statisticsAfterReopen).toEqual({
+			soldItemCount: 2,
+			totalProceedsCents: 950,
+			proceedsByChannel: [
+				{ channel: 'flea-market', soldItemCount: 1, totalProceedsCents: 700 },
+				{ channel: 'online-marketplace', soldItemCount: 1, totalProceedsCents: 250 }
+			],
+			proceedsByMonth: [
+				{ month: '2026-07', soldItemCount: 1, totalProceedsCents: 700 },
+				{ month: '2026-08', soldItemCount: 1, totalProceedsCents: 250 }
+			]
+		});
+	});
 });
