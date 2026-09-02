@@ -212,7 +212,6 @@
 		{/if}
 	</header>
 
-
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
 	{/if}
@@ -464,93 +463,31 @@
 				{#if data.items.length}
 				<div class="item-grid">
 					{#each data.items as item}
-						<article data-testid="item-card">
-							{#if item.coverImageKey}
-								<img class="item-image photo" src={`/media/${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />
-							{:else}
-								<div class="item-image" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
-							{/if}
+<article data-testid="item-card">
+							<div class="tile-media">
+								{#if item.coverImageKey}
+									<img class="item-image photo" src={`/media/${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />
+								{:else}
+									<div class="item-image" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
+								{/if}
+								<span class="kat">{categoryLabels[item.category]}</span>
+							</div>
 							<div class="item-copy">
 								<h2>{item.title}</h2>
 								<p class="price">{formatPrice(item.priceCents)} €</p>
-								<p class="metadata">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</p>
+							</div>
+							<div class="tile-bottom">
 								{#if item.soldAt}
-									<p class="sold-badge" data-testid="item-sold-badge">Verkauft · {saleChannelLabels[item.saleChannel ?? 'other']}{item.saleProceedsCents !== null ? ` · Erlös ${formatPrice(item.saleProceedsCents)} €` : ''}</p>
-								{/if}
-								{#if item.internalNotes}
-									<p class="notes">{item.internalNotes}</p>
-								{/if}
-								<details class="image-management">
-									<summary>Fotos verwalten</summary>
-									<form method="POST" action="?/uploadItemImage" enctype="multipart/form-data">
+									<span class="badge sold" data-testid="item-sold-badge">Verkauft{item.saleProceedsCents !== null ? ` · ${formatPrice(item.saleProceedsCents)} €` : ''}</span>
+								{:else}
+									<span class="badge open">Offen</span>
+									<form method="POST" action="?/quickSellItem">
 										<input name="itemId" type="hidden" value={item.id} />
-										<label>
-											<span>Foto hinzufügen</span>
-											<input
-												name="image"
-												type="file"
-												accept="image/png,image/jpeg,image/webp"
-												data-testid="item-image-input"
-												required
-											/>
-										</label>
-										{#if form?.uploadImageError}
-											<p class="form-error" role="alert">{form.uploadImageError}</p>
-										{/if}
-										<button type="submit">Foto speichern</button>
+										<button class="pay" type="submit" data-testid="quick-sell-item">
+											€ Verkaufen
+										</button>
 									</form>
-									{#each item.images ?? [] as image}
-										<div class="image-row">
-											<span class="image-name" data-testid="item-image-key">{image.storageKey}{image.isCover ? ' (Titelbild)' : ''}</span>
-											<form method="POST" action="?/removeItemImage" class="inline-form">
-												<input name="itemId" type="hidden" value={item.id} />
-												<input name="imageId" type="hidden" value={image.id} />
-												<button type="submit" data-testid="remove-item-image">Entfernen</button>
-											</form>
-										</div>
-									{/each}
-								</details>
-								<details class="sale-management" data-testid="item-sale-section">
-									<summary>Verkauf erfassen</summary>
-									{#if item.soldAt}
-										<p class="sold-summary">
-											Verkauft am {new Date(item.soldAt).toLocaleDateString('de-DE')} über {saleChannelLabels[item.saleChannel ?? 'other']}
-											{#if item.saleProceedsCents !== null}
-												· Erlös {formatPrice(item.saleProceedsCents)} €
-											{/if}
-										</p>
-										<form method="POST" action="?/unmarkItemSold">
-											<input name="itemId" type="hidden" value={item.id} />
-											<button type="submit" data-testid="unmark-item-sold">Verkauf zurücknehmen</button>
-										</form>
-									{:else}
-										<form method="POST" action="?/markItemSold">
-											<input name="itemId" type="hidden" value={item.id} />
-											<div class="form-grid">
-												<label>
-													<span>Kanal</span>
-													<select name="channel" aria-label="Verkaufskanal">
-														{#each Object.entries(saleChannelLabels) as [channel, label]}
-															<option value={channel}>{label}</option>
-														{/each}
-													</select>
-												</label>
-												<label>
-													<span>Verkauft am</span>
-													<input name="soldAt" type="date" required data-testid="item-sold-date" />
-												</label>
-												<label>
-													<span>Erlös in Cent</span>
-													<input name="proceedsCents" type="number" min="0" step="1" required data-testid="item-proceeds" />
-												</label>
-											</div>
-											{#if form?.saleStatusError}
-												<p class="form-error" role="alert">{form.saleStatusError}</p>
-											{/if}
-											<button type="submit" data-testid="mark-item-sold">Als verkauft erfassen</button>
-										</form>
-									{/if}
-								</details>
+								{/if}
 							</div>
 						</article>
 					{/each}
@@ -803,7 +740,6 @@
 		margin-top: 0;
 	}
 
-
 	.collection-list {
 		display: grid;
 		gap: 0.5rem;
@@ -1044,6 +980,10 @@
 		transform: translateY(-3px);
 	}
 
+	.tile-media {
+		position: relative;
+	}
+
 	.item-image {
 		align-items: center;
 		aspect-ratio: 1;
@@ -1059,6 +999,23 @@
 	.item-image.photo {
 		height: auto;
 		object-fit: cover;
+	}
+
+	.kat {
+		background: var(--glass);
+		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
+		border-radius: 999px;
+		box-shadow: var(--shadow-tile);
+		color: var(--color-accent);
+		font-size: 0.66rem;
+		font-weight: 800;
+		letter-spacing: 0.03em;
+		padding: 3px 9px;
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: 2;
 	}
 
 	.item-copy {
@@ -1081,54 +1038,51 @@
 		margin: 0.3rem 0 0;
 	}
 
-	.metadata,
-	.notes {
-		color: var(--color-text-muted);
-		font-size: 0.8rem;
-		line-height: 1.45;
-		margin: 0.5rem 0 0;
-	}
-
-	.notes {
-		border-top: 1px solid var(--color-border);
+	.tile-bottom {
+		align-items: center;
+		display: flex;
+		gap: 8px;
+		justify-content: space-between;
 		margin-top: auto;
-		padding-top: 0.5rem;
+		padding: 0 0.9rem 0.9rem;
 	}
 
-	.sold-badge {
-		align-self: flex-start;
-		background: var(--color-ok-soft);
-		border: 1px solid var(--color-ok-border);
+	.badge {
 		border-radius: 999px;
-		color: var(--color-ok);
-		font-size: 0.72rem;
+		font-size: 0.68rem;
 		font-weight: 800;
 		letter-spacing: 0.03em;
-		margin: 0.5rem 0 0;
-		padding: 3px 10px;
+		padding: 4px 10px;
 	}
 
-	.sold-summary {
-		color: var(--color-text-muted);
-		font-size: 0.85rem;
-		margin: 0.75rem 0;
+	.badge.open {
+		background: var(--color-accent-strong);
+		color: #fff;
 	}
 
-	.sale-management {
-		border-top: 1px solid var(--color-border);
-		margin-top: 0.75rem;
-		padding: 0.55rem 0.2rem 0;
+	.badge.sold {
+		background: var(--color-ok-soft);
+		border: 1px solid var(--color-ok-border);
+		color: var(--color-ok);
 	}
 
-	.sale-management summary {
-		color: var(--color-text-muted);
-		cursor: pointer;
-		font-size: 0.8rem;
+	.pay {
+		background: var(--color-ok-soft);
+		border: 1px solid var(--color-ok-border);
+		border-radius: var(--radius-small);
+		box-shadow: none;
+		color: var(--color-ok);
+		font-size: 0.78rem;
 		font-weight: 700;
+		padding: 8px 12px;
+		transition: all 0.25s ease;
 	}
 
-	.sale-management form {
-		margin-top: 0.75rem;
+	.pay:hover {
+		background: var(--color-ok);
+		box-shadow: none;
+		color: #fff;
+		transform: none;
 	}
 
 	.sale-statistics {
@@ -1221,44 +1175,6 @@
 		border-color: var(--color-accent-strong);
 		box-shadow: var(--shadow-cta);
 		color: #fff;
-	}
-
-	.image-management {
-		margin-top: 0.75rem;
-	}
-
-	.image-management summary {
-		color: var(--color-text-muted);
-		cursor: pointer;
-		font-size: 0.8rem;
-		font-weight: 700;
-	}
-
-	.image-row {
-		align-items: center;
-		display: flex;
-		gap: 0.5rem;
-		justify-content: space-between;
-		margin-top: 0.4rem;
-	}
-
-	.image-name {
-		color: var(--color-text-muted);
-		font-size: 0.72rem;
-		word-break: break-all;
-	}
-
-	.inline-form {
-		display: block;
-	}
-
-	.inline-form button {
-		background: transparent;
-		border: 1px solid var(--color-danger);
-		box-shadow: none;
-		color: var(--color-danger);
-		font-size: 0.75rem;
-		padding: 0.35rem 0.7rem;
 	}
 
 	/* Nav läuft auf einer Zeile; läuft sie über den verfügbaren Platz hinaus, übernimmt der Burger */

@@ -229,4 +229,52 @@ describe('instance-admin actions', () => {
 		});
 		expect(anonymousData.saleStatistics).toBeUndefined();
 	});
+	it('registers a quick sale with price proceeds through the card action and rejects anonymous callers', async () => {
+		// arrange
+		const { repository, loadActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
+		const item = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			scope
+		);
+		const actions = await loadActions();
+		const url = new URL('http://localhost/');
+
+		// act
+		let redirectOutcome: unknown;
+		let anonymousOutcome: unknown;
+		try {
+			await actions.quickSellItem({
+				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+				request: new Request(url, {
+					body: new URLSearchParams({ itemId: item.id }),
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
+					method: 'POST'
+				}),
+				url
+			} as never);
+		} catch (error) {
+			redirectOutcome = error;
+		}
+		try {
+			anonymousOutcome = await actions.quickSellItem({
+				cookies: { get: () => undefined },
+				request: new Request(url, {
+					body: new URLSearchParams({ itemId: item.id }),
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
+					method: 'POST'
+				}),
+				url
+			} as never);
+		} catch (error) {
+			anonymousOutcome = error;
+		}
+		const itemAfterSale = repository.listItemsForOwner(collection.id, scope)[0];
+
+		// assume
+		expect(redirectOutcome).toMatchObject({ status: 303, location: '/' });
+		expect(anonymousOutcome).toMatchObject({ status: 401, data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
+		expect(itemAfterSale).toMatchObject({ saleChannel: 'flea-market', saleProceedsCents: 800 });
+		expect(itemAfterSale.soldAt).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/));
+	});
 });

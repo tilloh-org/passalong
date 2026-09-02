@@ -158,6 +158,7 @@ export interface CollectionRepository {
 	getUserForLogin(username: string): LoginAccount | null;
 	createCollection(input: CreateCollectionInput, scope: SessionScope): Collection;
 	getCollectionForOwner(collectionId: string, scope: SessionScope): Collection | null;
+	getItemForOwner(itemId: string, scope: SessionScope): Item | null;
 	listCollectionsForOwner(scope: SessionScope): Collection[];
 	createSessionForUser(scope: SessionScope, tokenHash: string): void;
 	getSession(tokenHash: string): SessionScope | null;
@@ -467,6 +468,15 @@ export function createCollectionRepository(
 				| { id: string; name: string; owner_name: string }
 				| undefined;
 			return row ? { id: row.id, name: row.name, ownerName: row.owner_name } : null;
+		},
+
+		getItemForOwner(itemId, scope) {
+			const row = database
+				.prepare(
+					'SELECT * FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.get(itemId, scope.userId, scope.tenantId) as ItemRow | undefined;
+			return row ? mapItemRow(row) : null;
 		},
 
 		listCollectionsForOwner(scope) {
