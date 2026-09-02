@@ -201,8 +201,7 @@ describe('instance-admin actions', () => {
 		const saleParameters = {
 			itemId: item.id,
 			channel: 'flea-market',
-			soldAt: '2026-08-31T10:30:00.000Z',
-			proceedsCents: '750'
+			proceedsEuros: '7,50'
 		};
 		const saleForm = new URLSearchParams(saleParameters);
 
@@ -218,7 +217,7 @@ describe('instance-admin actions', () => {
 					method: 'POST'
 				}),
 				url
-			} as never);
+		} as never);
 		} catch (error) {
 			redirectOutcome = error;
 		}
@@ -243,7 +242,7 @@ describe('instance-admin actions', () => {
 		expect(anonymousOutcome).toMatchObject({ status: 401, data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
 		expect(itemAfterSale).toMatchObject({
 			saleChannel: 'flea-market',
-			soldAt: '2026-08-31T10:30:00.000Z',
+			soldAt: expect.any(String),
 			saleProceedsCents: 750
 		});
 		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });

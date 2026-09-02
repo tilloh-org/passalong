@@ -29,7 +29,6 @@ const passwordResetLifetimeHours = 1;
 const sessionLifetimeDays = 30;
 const firstCollectionIndex = 0;
 const maximumPriceCents = 10_000_000;
-const wholeNumberPattern = /^\d+$/;
 const httpStatus = {
 	seeOther: 303,
 	badRequest: 400,
@@ -338,58 +337,43 @@ function getFormText(formData: FormData, name: string): string {
 	return typeof value === 'string' ? value : '';
 }
 
+const euroAmountPattern = /^\d{1,7}([.,]\d{1,2})?$/;
+
 /**
- * Parse the required non-negative integer price submitted by the item form.
+ * Parse a German- or dot-formatted euro amount into euro cents.
+ *
+ * @param {string} value - Raw user input such as "12", "12,50" or "12.5".
+ * @returns {number | null} Euro cents, or null when the input is not a valid amount.
+ */
+function parseEuroAmount(value: string): number | null {
+	if (!euroAmountPattern.test(value)) {
+		return null;
+	}
+	const normalized = value.replace(',', '.');
+	const euros = Number(normalized);
+	if (!Number.isFinite(euros)) {
+		return null;
+	}
+	const cents = Math.round(euros * 100);
+	if (!Number.isSafeInteger(cents) || cents > maximumPriceCents) {
+		return null;
+	}
+	return cents;
+}
+
+/**
+ * Parse the submitted euro price into euro cents.
  *
  * @param {FormData} formData - Submitted form values.
  * @returns {number} The price in euro cents.
  * @throws {Error} When the submitted price is missing or invalid.
  */
 function getPriceCents(formData: FormData): number {
-	const value = getFormText(formData, 'priceCents').trim();
-	if (!wholeNumberPattern.test(value)) {
-		throw new Error('Bitte gib einen Preis in Cent als ganze Zahl ein.');
+	const euroValue = parseEuroAmount(getFormText(formData, 'priceEuros').trim());
+	if (euroValue === null) {
+		throw new Error('Bitte gib einen gültigen Preis in Euro ein, z. B. 12,50.');
 	}
-	const priceCents = Number(value);
-	if (!Number.isSafeInteger(priceCents) || priceCents > maximumPriceCents) {
-		throw new Error('Der Preis liegt außerhalb des erlaubten Bereichs.');
-	}
-	return priceCents;
-}
-
-/**
- * Parse the submitted sale proceeds submitted as a non-negative integer.
- *
- * @param {FormData} formData - Submitted form values.
- * @returns {number} The sale proceeds in euro cents.
- * @throws {Error} When the submitted proceeds are missing or invalid.
- */
-function getSaleProceedsCents(formData: FormData): number {
-	const value = getFormText(formData, 'proceedsCents').trim();
-	if (!wholeNumberPattern.test(value)) {
-		throw new Error('proceedsCents must be a non-negative integer');
-	}
-	const proceedsCents = Number(value);
-	if (!Number.isSafeInteger(proceedsCents) || proceedsCents > maximumPriceCents) {
-		throw new Error('proceedsCents must be a non-negative integer');
-	}
-	return proceedsCents;
-}
-
-
-/**
- * Normalize a date-only form value to a canonical UTC ISO timestamp at midnight.
- *
- * @param {string} value - Date string from the form input (YYYY-MM-DD or full ISO).
- * @returns {string} A canonical UTC ISO timestamp.
- * @throws {Error} If the value is neither a date nor a canonical ISO timestamp.
- */
-function getSaleTimestamp(value: string): string {
-	const trimmed = value.trim();
-	if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-		return `${trimmed}T00:00:00.000Z`;
-	}
-	return trimmed;
+	return euroValue;
 }
 
 /**

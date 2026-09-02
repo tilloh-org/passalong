@@ -90,7 +90,7 @@ test.describe('Core collection', () => {
 
 		// act
 		await page.getByLabel('Artikelname').fill('Leselampe');
-		await page.getByLabel('Preis in Cent').fill('1200');
+		await page.getByLabel('Preis (€)').fill('12,00');
 		await page.getByLabel('Kategorie').selectOption('home');
 		await page.getByLabel('Zustand').selectOption('good');
 		await page.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Warme Leselampe mit flexiblem Arm.');
@@ -155,9 +155,8 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('item-image-key').first()).toContainText('Bild 1');
 		await expect(page.getByTestId('item-image-key').nth(1)).toContainText('Titelbild');
 
-		// act — register a sale with the full form on the detail page
-		await page.getByTestId('item-sold-date').fill('2026-08-31');
-		await page.getByTestId('item-proceeds').fill('950');
+		// act — register a sale with the full form on the detail page (euro input, date auto-set)
+		await page.getByTestId('item-proceeds').fill('9,50');
 		await page.getByTestId('mark-item-sold').click();
 
 		// assume

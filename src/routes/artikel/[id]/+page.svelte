@@ -190,12 +190,16 @@
 								</select>
 							</label>
 							<label>
-								<span>Verkauft am</span>
-								<input name="soldAt" type="date" required data-testid="item-sold-date" />
-							</label>
-							<label>
-								<span>Erlös in Cent</span>
-								<input name="proceedsCents" type="number" min="0" step="1" required data-testid="item-proceeds" />
+								<span>Erlös (€)</span>
+								<input
+									name="proceedsEuros"
+									type="text"
+									inputmode="decimal"
+									min="0"
+									value={formatPrice(data.item.priceCents)}
+									required
+									data-testid="item-proceeds"
+								/>
 							</label>
 						</div>
 						{#if form?.saleStatusError}

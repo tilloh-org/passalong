@@ -52,11 +52,11 @@ test.describe('Public stand page', () => {
 
 		// act
 		for (const [title, price, notes, description] of [
-			['Vase', '800', 'Nur abends abgeben', 'Handgefertigte Keramikvase in Blau.'],
-			['Buch', '300', '', '']
+			['Vase', '8,00', 'Nur abends abgeben', 'Handgefertigte Keramikvase in Blau.'],
+			['Buch', '3,00', '', '']
 		] as const) {
 			await page.getByLabel('Artikelname').fill(title);
-			await page.getByLabel('Preis in Cent').fill(price);
+			await page.getByLabel('Preis (€)').fill(price);
 			await page.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill(description);
 			await page.getByLabel('Interne Notizen (nur für dich sichtbar)').fill(notes);
 			await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();

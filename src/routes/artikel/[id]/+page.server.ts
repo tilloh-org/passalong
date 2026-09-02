@@ -25,7 +25,6 @@ const httpStatus = {
 	notFound: 404
 } as const;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
-const wholeNumberPattern = /^\d+$/;
 const maximumPriceCents = 10_000_000;
 const qrCodeImageSizePixels = 240;
 const maximumImagesPerUpload = 10;
@@ -96,37 +95,45 @@ function saleStatusError(error: unknown): string {
 	return saleStatusGenericError;
 }
 
+const euroAmountPattern = /^\d{1,7}([.,]\d{1,2})?$/;
+
 /**
- * Parse the submitted sale proceeds as a non-negative integer.
+ * Parse a German- or dot-formatted euro amount into euro cents.
  *
- * @param {FormData} formData - Submitted form values.
- * @returns {number} The sale proceeds in euro cents.
- * @throws {Error} When the submitted proceeds are missing or invalid.
+ * @param {string} value - Raw user input such as "12", "12,50" or "12.5".
+ * @returns {number | null} Euro cents, or null when the input is not a valid amount.
  */
-function getSaleProceedsCents(formData: FormData): number {
-	const value = getFormText(formData, 'proceedsCents');
-	if (!wholeNumberPattern.test(value)) {
-		throw new Error('proceedsCents must be a non-negative integer');
+function parseEuroAmount(value: string): number | null {
+	if (!euroAmountPattern.test(value)) {
+		return null;
 	}
-	const proceedsCents = Number(value);
-	if (!Number.isSafeInteger(proceedsCents) || proceedsCents > maximumPriceCents) {
-		throw new Error('proceedsCents must be a non-negative integer');
+	const normalized = value.replace(',', '.');
+	const euros = Number(normalized);
+	if (!Number.isFinite(euros)) {
+		return null;
 	}
-	return proceedsCents;
+	const cents = Math.round(euros * 100);
+	if (!Number.isSafeInteger(cents) || cents > maximumPriceCents) {
+		return null;
+	}
+	return cents;
 }
 
 /**
- * Normalize a date-only form value to a canonical UTC ISO timestamp at midnight.
+ * Parse a submitted euro amount into euro cents.
  *
- * @param {string} value - Date string from the form input (YYYY-MM-DD or full ISO).
- * @returns {string} A canonical UTC ISO timestamp.
+ * Accepts German comma decimals and a plain dot, e.g. "12", "12,50", "12.5".
+ *
+ * @param {FormData} formData - Submitted form values.
+ * @returns {number} The euro amount in cents.
+ * @throws {Error} When the submitted amount is missing or invalid.
  */
-function getSaleTimestamp(value: string): string {
-	const trimmed = value.trim();
-	if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-		return `${trimmed}T00:00:00.000Z`;
+function getSaleProceedsCents(formData: FormData): number {
+	const euroValue = parseEuroAmount(getFormText(formData, 'proceedsEuros'));
+	if (euroValue === null) {
+		throw new Error('proceedsCents must be a non-negative integer');
 	}
-	return trimmed;
+	return euroValue;
 }
 
 /**
@@ -228,7 +235,7 @@ export const actions: Actions = {
 				itemId,
 				{
 					channel: getFormText(formData, 'channel') as SaleChannel,
-					soldAt: getSaleTimestamp(getFormText(formData, 'soldAt')),
+					soldAt: new Date().toISOString(),
 					proceedsCents: getSaleProceedsCents(formData)
 				},
 				scope

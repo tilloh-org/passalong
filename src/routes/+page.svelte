@@ -388,8 +388,8 @@
 					</label>
 					<div class="form-grid">
 						<label>
-							<span>Preis in Cent</span>
-							<input name="priceCents" type="number" min="0" step="1" required />
+								<span>Preis (€)</span>
+								<input name="priceEuros" type="text" inputmode="decimal" placeholder="z. B. 12,50" required />
 						</label>
 						<label>
 							<span>Kategorie</span>
