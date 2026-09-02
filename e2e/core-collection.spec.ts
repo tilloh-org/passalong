@@ -85,7 +85,7 @@ test.describe('Core collection', () => {
 		await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Artikel', level: 1 })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// act
 		await page.getByLabel('Artikelname').fill('Leselampe');
@@ -131,7 +131,7 @@ test.describe('Core collection', () => {
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Artikel', level: 1 })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// act
 		await page.context().clearCookies();
@@ -163,7 +163,7 @@ test.describe('Core collection', () => {
 		await resetForm.getByRole('button', { name: 'Passwort zurücksetzen' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Artikel', level: 1 })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// act
 		await page.locator('.password-panel-link').click();
@@ -173,6 +173,9 @@ test.describe('Core collection', () => {
 		await changeForm.getByRole('button', { name: 'Passwort speichern' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Artikel', level: 1 })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+
+		// act
+		await page.context().storageState({ path: 'e2e/.auth-owner.json' });
 	});
 });

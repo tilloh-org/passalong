@@ -358,7 +358,7 @@
 		<section class="collection-header" aria-labelledby="collection-title">
 			<div>
 				<p class="eyebrow">Deine Artikel</p>
-				<h1 id="collection-title">Artikel</h1>
+				<h1 id="collection-title">Portfolio</h1>
 			</div>
 			<p>({data.items.length})</p>
 		</section>

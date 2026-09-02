@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { sharedTestAccount } from './test-account';
 
@@ -12,9 +13,17 @@ test.describe('Public stand page', () => {
 			await page.locator('form[action="?/register"]').getByLabel('Passwort').fill(sharedTestAccount.recoveredPassword);
 			await page.getByRole('button', { name: 'Zugang erstellen' }).click();
 		} else {
+			const stateFile = 'e2e/.auth-owner.json';
+			if (existsSync(stateFile)) {
+				const saved = JSON.parse(readFileSync(stateFile, 'utf8')) as { cookies?: { name: string; value: string; domain: string; path: string }[] };
+				const cookies = (saved.cookies ?? []).filter((cookie) => cookie.name === 'passalong_session');
+				if (cookies.length) {
+					await page.context().addCookies(cookies);
+				}
+			}
 			const loginForm = page.locator('form[action="?/login"]');
+			await loginForm.getByLabel('Benutzername').fill(sharedTestAccount.username);
 			for (const password of [sharedTestAccount.initialPassword, sharedTestAccount.recoveredPassword]) {
-				await loginForm.getByLabel('Benutzername').fill(sharedTestAccount.username);
 				await loginForm.getByLabel('Passwort').fill(password);
 				await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 				const stillLoggedOut = await page
@@ -27,7 +36,7 @@ test.describe('Public stand page', () => {
 			}
 		}
 		await expect(
-			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Artikel', level: 1 }))
+			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
 		).toBeVisible();
 		if (await page.getByLabel('Name der Sammlung').isVisible().catch(() => false)) {
 			await page.getByLabel('Name der Sammlung').fill('Flohmarkt-Stand');
