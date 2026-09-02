@@ -13,6 +13,7 @@ import { getCollectionRepository } from '$lib/server/repository';
 import { hasSameOrigin } from '$lib/server/csrf';
 import { hashSessionToken } from '$lib/server/session-token';
 import { Buffer } from 'node:buffer';
+import QRCode from 'qrcode';
 import type { Actions, PageServerLoad } from './$types';
 
 const sessionCookieName = 'passalong_session';
@@ -26,6 +27,7 @@ const httpStatus = {
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const wholeNumberPattern = /^\d+$/;
 const maximumPriceCents = 10_000_000;
+const qrCodeImageSizePixels = 240;
 const userFacingImageMessages = [
 	'Das Bild entspricht nicht einem unterstützten Format.',
 	'Das Bild ist zu groß.'
@@ -134,7 +136,7 @@ function getSaleTimestamp(value: string): string {
  * @throws {import('@sveltejs/kit').Redirect} To the login page for anonymous visitors.
  * @throws {import('@sveltejs/kit').HttpError} 404 when the item does not exist for the owner.
  */
-export const load: PageServerLoad = ({ cookies, params }) => {
+export const load: PageServerLoad = async ({ cookies, params, url }) => {
 	const scope = getSessionScope(cookies.get(sessionCookieName));
 	if (!scope) {
 		redirect(httpStatus.seeOther, '/');
@@ -144,12 +146,15 @@ export const load: PageServerLoad = ({ cookies, params }) => {
 	if (!item) {
 		throw error(httpStatus.notFound, 'Artikel nicht gefunden');
 	}
+	const itemUrl = new URL(`/artikel/${encodeURIComponent(item.id)}`, url.origin).toString();
+	const qrCodeDataUrl = await QRCode.toDataURL(itemUrl, { width: qrCodeImageSizePixels, margin: 1 });
 	return {
 		item,
 		images: repository.listItemImages(item.id, scope),
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
-		saleChannelOptions: saleChannels
+		saleChannelOptions: saleChannels,
+		qrCodeDataUrl
 	};
 };
 

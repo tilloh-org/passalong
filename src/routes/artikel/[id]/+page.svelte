@@ -35,6 +35,7 @@
 	const saleChannelOptions = Object.entries(saleChannelLabels).map(([value, label]) => ({ value, label }));
 
 	const coverImageKey = $derived(data.images.find((image) => image.isCover)?.storageKey ?? null);
+	const qrCodeDataUrl = $derived(data.qrCodeDataUrl);
 </script>
 
 <svelte:head>
@@ -65,28 +66,48 @@
 			<p class="eyebrow">{categoryLabels[data.item.category]} · {conditionLabels[data.item.condition]}</p>
 			<h1 id="item-title">{data.item.title}</h1>
 			<p class="price">{formatPrice(data.item.priceCents)} €</p>
+			<div class="flag-pills" data-testid="item-flag-pills">
+				<span class="flag-pill category">{categoryLabels[data.item.category]}</span>
+				{#if data.item.isComplete}
+					<span class="flag-pill complete">✓ Vollständig</span>
+				{/if}
+				{#if data.item.isFunctional}
+					<span class="flag-pill functional">✓ Funktionsfähig</span>
+				{/if}
+			</div>
 			{#if data.item.soldAt}
 				<p class="sold-badge" data-testid="item-sold-badge">
 					Verkauft · {saleChannelLabels[data.item.saleChannel ?? 'other']}{data.item.saleProceedsCents !== null ? ` · Erlös ${formatPrice(data.item.saleProceedsCents)} €` : ''}
 				</p>
 			{/if}
+			{#if data.item.externalDescription}
+				<div class="description external" data-testid="item-external-description">
+					<strong>Beschreibung:</strong>
+					<p>{data.item.externalDescription}</p>
+				</div>
+			{/if}
 			{#if data.item.internalNotes}
-				<p class="notes">{data.item.internalNotes}</p>
+				<div class="description internal" data-testid="item-internal-notes">
+					<strong>Anmerkungen (intern):</strong>
+					<p>{data.item.internalNotes}</p>
+				</div>
 			{/if}
 
 			<section class="panel" aria-labelledby="photos-title">
 				<h2 id="photos-title">Fotos</h2>
 				<form method="POST" action="?/uploadItemImage" enctype="multipart/form-data">
 					<input name="itemId" type="hidden" value={data.item.id} />
-					<label>
-						<span>Foto hinzufügen</span>
-						<input
-							name="image"
-							type="file"
-							accept="image/png,image/jpeg,image/webp"
-							data-testid="item-image-input"
-							required
-						/>
+					<input
+						name="image"
+						id="item-image-file"
+						type="file"
+						accept="image/png,image/jpeg,image/webp"
+						data-testid="item-image-input"
+						class="visually-hidden-input"
+						required
+					/>
+					<label class="file-button" for="item-image-file">
+						🖼 Foto auswählen
 					</label>
 					{#if form?.uploadImageError}
 						<p class="form-error" role="alert">{form.uploadImageError}</p>
@@ -171,6 +192,21 @@
 					</form>
 				{/if}
 			</section>
+		</div>
+	</section>
+
+	<section class="qr-panel" aria-labelledby="qr-title" data-testid="item-qr-panel">
+		<h2 id="qr-title">QR-Code <span class="qr-hint">— ausdrucken und an den Gegenstand heften</span></h2>
+		<div class="qr-body">
+			<img
+				class="qr-image"
+				src={qrCodeDataUrl}
+				alt="QR-Code mit dem Link zum Artikel"
+				data-testid="item-qr-image"
+			/>
+			<a class="qr-download" href={qrCodeDataUrl} download="qr-{data.item.id}.png" data-testid="item-qr-download">
+				⬇ Als Bild herunterladen
+			</a>
 		</div>
 	</section>
 </main>
@@ -264,13 +300,137 @@
 		padding: 4px 10px;
 	}
 
-	.notes {
-		border-top: 1px solid var(--color-border);
+	.flag-pills {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0.6rem 0 0;
+	}
+
+	.flag-pill {
+		border-radius: 999px;
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		padding: 4px 10px;
+	}
+
+	.flag-pill.category {
+		background: var(--color-surface-strong);
+		border: 1px solid var(--color-border);
 		color: var(--color-text-muted);
+	}
+
+	.flag-pill.complete {
+		background: var(--color-ok-soft);
+		border: 1px solid var(--color-ok-border);
+		color: var(--color-ok);
+	}
+
+	.flag-pill.functional {
+		background: var(--color-info-soft, rgba(56, 132, 255, 0.12));
+		border: 1px solid var(--color-info-border, rgba(56, 132, 255, 0.5));
+		color: var(--color-info, #3884ff);
+	}
+
+	.description {
+		border-top: 1px solid var(--color-border);
 		font-size: 0.9rem;
 		line-height: 1.5;
 		margin: 0.9rem 0 0;
 		padding-top: 0.6rem;
+	}
+
+	.description p {
+		margin: 0.25rem 0 0;
+		white-space: pre-line;
+	}
+
+	.description.internal {
+		background: var(--color-warn-soft, rgba(240, 179, 0, 0.1));
+		border: 1px solid var(--color-warn-border, rgba(240, 179, 0, 0.45));
+		border-radius: var(--radius-small);
+		color: var(--color-warn, #f0b300);
+		padding: 0.6rem 0.75rem;
+	}
+
+	.description.internal p {
+		color: var(--color-text-muted);
+	}
+
+	.visually-hidden-input {
+		height: 1px;
+		opacity: 0;
+		position: absolute;
+		width: 1px;
+	}
+
+	.file-button {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-block;
+		font-size: 0.9rem;
+		font-weight: 700;
+		justify-self: start;
+		padding: 0.7rem 1.1rem;
+		transition:
+			background 0.2s ease,
+			filter 0.2s ease;
+	}
+
+	.file-button:hover {
+		background: var(--color-accent-soft);
+	}
+
+	.qr-panel {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		margin-top: 1.5rem;
+		padding: 1.5rem;
+	}
+
+	.qr-panel h2 {
+		font-size: 1.05rem;
+		margin: 0 0 1rem;
+	}
+
+	.qr-hint {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		font-weight: 400;
+	}
+
+	.qr-body {
+		align-items: center;
+		display: grid;
+		gap: 1rem;
+		justify-items: center;
+	}
+
+	.qr-image {
+		background: white;
+		border-radius: var(--radius-small);
+		padding: 0.5rem;
+	}
+
+	.qr-download {
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		border-radius: 999px;
+		box-shadow: var(--shadow-btn);
+		color: white;
+		font-size: 0.9rem;
+		font-weight: 700;
+		padding: 0.6rem 1.2rem;
+		text-decoration: none;
+	}
+
+	.qr-download:hover {
+		filter: brightness(1.08);
 	}
 
 	.panel {

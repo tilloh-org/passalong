@@ -409,9 +409,23 @@
 						</label>
 					</div>
 					<label>
-						<span>Interne Notizen</span>
+						<span>Externe Beschreibung (für Käufer sichtbar)</span>
+						<textarea name="externalDescription" rows="3" data-testid="item-external-description-input"></textarea>
+					</label>
+					<label>
+						<span>Interne Notizen (nur für dich sichtbar)</span>
 						<textarea name="internalNotes" rows="3"></textarea>
 					</label>
+					<div class="flag-checkboxes">
+						<label class="checkbox">
+							<input name="isComplete" type="checkbox" value="1" data-testid="item-complete-checkbox" />
+							<span>Vollständig</span>
+						</label>
+						<label class="checkbox">
+							<input name="isFunctional" type="checkbox" value="1" data-testid="item-functional-checkbox" />
+							<span>Funktionsfähig</span>
+						</label>
+					</div>
 					{#if form?.addItemError}
 						<p class="form-error" role="alert">{form.addItemError}</p>
 					{/if}
@@ -858,6 +872,26 @@
 	label {
 		display: grid;
 		gap: 0.3rem;
+	}
+
+	.flag-checkboxes {
+		display: flex;
+		gap: 1rem;
+	}
+
+	label.checkbox {
+		align-items: center;
+		display: flex;
+		flex-direction: row;
+		gap: 0.45rem;
+	}
+
+	label.checkbox span {
+		color: var(--color-text);
+		font-size: 0.9rem;
+		font-weight: 600;
+		letter-spacing: 0;
+		text-transform: none;
 	}
 
 	label span {

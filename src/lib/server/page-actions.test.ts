@@ -109,7 +109,10 @@ describe('instance-admin actions', () => {
 		const { repository, databasePath, loadDetailActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Garage' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Bicycle', priceCents: 5000, category: 'hobby', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Bicycle', priceCents: 5000, category: 'hobby', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			scope
 		);
 		const actions = await loadDetailActions();
@@ -144,7 +147,10 @@ describe('instance-admin actions', () => {
 		const { repository, loadDetailActions, scope, rawSessionToken } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			scope
 		);
 		const actions = await loadDetailActions();
@@ -205,7 +211,10 @@ describe('instance-admin actions', () => {
 		const { repository, loadPage, scope, rawSessionToken } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			scope
 		);
 		repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, scope);
@@ -236,7 +245,10 @@ describe('instance-admin actions', () => {
 		const { repository, loadActions, scope, rawSessionToken } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			scope
 		);
 		const actions = await loadActions();

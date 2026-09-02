@@ -51,13 +51,14 @@ test.describe('Public stand page', () => {
 		}
 
 		// act
-		for (const [title, price, notes] of [
-			['Vase', '800', 'Nur abends abgeben'],
-			['Buch', '300', '']
+		for (const [title, price, notes, description] of [
+			['Vase', '800', 'Nur abends abgeben', 'Handgefertigte Keramikvase in Blau.'],
+			['Buch', '300', '', '']
 		] as const) {
 			await page.getByLabel('Artikelname').fill(title);
 			await page.getByLabel('Preis in Cent').fill(price);
-			await page.getByLabel('Interne Notizen').fill(notes);
+			await page.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill(description);
+			await page.getByLabel('Interne Notizen (nur für dich sichtbar)').fill(notes);
 			await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
 		}
 		await page.waitForSelector('[data-testid=item-card]');
@@ -76,7 +77,9 @@ test.describe('Public stand page', () => {
 		const standCards = anonymousPage.getByTestId('stand-item');
 		await expect(standCards.filter({ hasText: 'Vase' })).toContainText('8,00');
 		await expect(standCards.filter({ hasText: 'Vase' })).not.toContainText('Nur abends abgeben');
+		await expect(standCards.filter({ hasText: 'Vase' })).toContainText('Handgefertigte Keramikvase');
 		await expect(standCards.filter({ hasText: 'Buch' })).toContainText('3,00');
+		await expect(standCards.filter({ hasText: 'Buch' }).getByTestId('stand-item-description')).toHaveCount(0);
 
 		// act
 		const unknownResponse = await anonymousPage.request.get('/stand/00000000-0000-0000-0000-000000000000');

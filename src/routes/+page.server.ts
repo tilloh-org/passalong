@@ -284,7 +284,10 @@ export const actions: Actions = {
 					priceCents: getPriceCents(formData),
 					category: getFormText(formData, 'category') as ItemCategory,
 					condition: getFormText(formData, 'condition') as ItemCondition,
-					internalNotes: getFormText(formData, 'internalNotes')
+					internalNotes: getFormText(formData, 'internalNotes'),
+					externalDescription: getFormText(formData, 'externalDescription'),
+					isComplete: formData.get('isComplete') === '1',
+					isFunctional: formData.get('isFunctional') === '1'
 				},
 				scope
 			);

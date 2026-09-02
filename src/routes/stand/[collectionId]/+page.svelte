@@ -48,6 +48,9 @@
 						<div class="name">{item.title}</div>
 						<div class="preis">{formatPrice(item.priceCents)}</div>
 						<div class="meta">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</div>
+						{#if item.externalDescription}
+							<p class="beschreibung" data-testid="stand-item-description">{item.externalDescription}</p>
+						{/if}
 					</div>
 				</a>
 			{/each}
@@ -177,6 +180,13 @@
 		color: var(--color-text-muted);
 		font-size: 0.78rem;
 		margin-top: 2px;
+	}
+	.beschreibung {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.45;
+		margin: 0.3rem 0 0;
+		white-space: pre-line;
 	}
 
 	.empty {

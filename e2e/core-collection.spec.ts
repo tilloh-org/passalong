@@ -93,7 +93,10 @@ test.describe('Core collection', () => {
 		await page.getByLabel('Preis in Cent').fill('1200');
 		await page.getByLabel('Kategorie').selectOption('home');
 		await page.getByLabel('Zustand').selectOption('good');
-		await page.getByLabel('Interne Notizen').fill('Vor dem Inserieren die Glühbirne austauschen.');
+		await page.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Warme Leselampe mit flexiblem Arm.');
+		await page.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Vor dem Inserieren die Glühbirne austauschen.');
+		await page.getByTestId('item-complete-checkbox').check();
+		await page.getByTestId('item-functional-checkbox').check();
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
 
 		// assume
@@ -113,6 +116,16 @@ test.describe('Core collection', () => {
 		await expect(page).toHaveURL(/\/artikel\//);
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+		await expect(page.getByTestId('item-flag-pills')).toContainText('Haushalt');
+		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Vollständig');
+		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Funktionsfähig');
+		await expect(page.getByTestId('item-external-description')).toContainText('Warme Leselampe');
+		await expect(page.getByTestId('item-internal-notes')).toContainText('Glühbirne');
+		await expect(page.getByTestId('item-qr-panel')).toBeVisible();
+		const qrDownload = page.getByTestId('item-qr-download');
+		await expect(qrDownload).toHaveAttribute('download', /qr-.+\.png/);
+		await expect(qrDownload).toHaveAttribute('href', /^data:image\/png;base64,/);
+		await expect(page.getByTestId('item-qr-image')).toBeVisible();
 
 		// act — upload a photo on the detail page
 		const testPngBytes = Buffer.from(
