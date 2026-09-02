@@ -1,32 +1,82 @@
 :root {
-	--color-bg: #f7f8fc;
-	--color-text: #182033;
-	--color-text-muted: #5b6579;
-	--color-text-faint: #8b94a6;
-	--color-border: #dce1eb;
-	--color-accent: #4566e8;
-	--color-accent-soft: #e5ebff;
+	/* Nordsee-Palette — matches the Marktbude design language */
+	--deep: #0e2a3a;
+	--deep-2: #12384d;
+	--mid: #1d4e63;
+	--ice: #7fa8bd;
+	--fog: #eef2f4;
+	--sand: #e8e2d5;
+	--amber: #e0a458;
+	--ink: #16303f;
+	--muted: #6b8796;
+	--line: rgba(14, 42, 58, 0.1);
+	--glass: rgba(255, 255, 255, 0.72);
+
+	--color-bg: #f4f7f9;
+	--color-text: #16303f;
+	--color-text-muted: #6b8796;
+	--color-text-faint: #8ba3b0;
+	--color-border: rgba(14, 42, 58, 0.12);
+	--color-accent: #1d4e63;
+	--color-accent-strong: #0e2a3a;
+	--color-accent-soft: rgba(29, 78, 99, 0.1);
 	--color-surface: #ffffff;
-	--color-surface-strong: #edf0f8;
+	--color-surface-strong: #eef2f4;
 	--color-input: #ffffff;
-	--shadow-card: 0 1.25rem 3.5rem rgba(30, 49, 94, 0.1);
+	--color-danger: #b71c1c;
+	--color-danger-soft: rgba(183, 28, 28, 0.1);
+	--color-ok: #2e7d32;
+	--color-ok-soft: rgba(46, 125, 50, 0.08);
+	--color-ok-border: rgba(46, 125, 50, 0.25);
+	--color-warn: #8a5a1e;
+	--color-warn-soft: rgba(224, 164, 88, 0.14);
+	--color-amber: #e0a458;
+	--color-ice: #7fa8bd;
+	--focus-ring: rgba(127, 168, 189, 0.35);
+
+	--radius-card: 16px;
+	--radius-control: 12px;
+	--radius-small: 10px;
+
+	--shadow-card: 0 10px 30px rgba(14, 42, 58, 0.1);
+	--shadow-tile: 0 4px 14px rgba(14, 42, 58, 0.08);
+	--shadow-tile-hover: 0 16px 40px rgba(14, 42, 58, 0.16);
+	--shadow-btn: 0 6px 18px rgba(14, 42, 58, 0.22);
+	--shadow-btn-hover: 0 10px 26px rgba(14, 42, 58, 0.3);
+	--shadow-cta: 0 4px 14px rgba(14, 42, 58, 0.3);
+	--shadow-logo: 0 8px 20px rgba(14, 42, 58, 0.3);
 }
 
-@media (prefers-color-scheme: dark) {
-	:root {
-		--color-bg: #11131a;
-		--color-text: #f1f4fb;
-		--color-text-muted: #aeb7c8;
-		--color-text-faint: #747f93;
-		--color-border: #2a3040;
-		--color-accent: #4160d6;
-		--color-accent-soft: #202b5a;
-		--color-surface: #191d28;
-		--color-surface-strong: #252b3a;
-		--color-input: #141823;
-		--shadow-card: 0 1.25rem 3.5rem rgba(0, 0, 0, 0.25);
+[data-theme="dark"] {
+		--color-bg: #0f1a22;
+		--color-text: #e8f0f4;
+		--color-text-muted: #9db4c0;
+		--color-text-faint: #7492a1;
+		--color-border: rgba(255, 255, 255, 0.12);
+		--color-accent: #2a6a86;
+		--color-accent-strong: #7fa8bd;
+		--color-accent-soft: rgba(42, 106, 134, 0.18);
+		--color-surface: #16242e;
+		--color-surface-strong: #1a2a33;
+		--color-input: #1a2a33;
+		--color-danger: #ef5350;
+		--color-danger-soft: rgba(239, 83, 80, 0.14);
+		--color-ok: #66bb6a;
+		--color-ok-soft: rgba(102, 187, 106, 0.14);
+		--color-ok-border: rgba(102, 187, 106, 0.3);
+		--color-warn: #e0a458;
+		--color-warn-soft: rgba(224, 164, 88, 0.16);
+		--focus-ring: rgba(127, 168, 189, 0.4);
+		--glass: rgba(15, 26, 34, 0.72);
+
+		--shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
+		--shadow-tile: 0 4px 14px rgba(0, 0, 0, 0.3);
+		--shadow-tile-hover: 0 16px 40px rgba(0, 0, 0, 0.45);
+		--shadow-btn: 0 6px 18px rgba(0, 0, 0, 0.35);
+		--shadow-btn-hover: 0 10px 26px rgba(0, 0, 0, 0.45);
+		--shadow-cta: 0 4px 14px rgba(0, 0, 0, 0.4);
+		--shadow-logo: 0 8px 20px rgba(0, 0, 0, 0.5);
 	}
-}
 
 * {
 	box-sizing: border-box;
@@ -38,7 +88,11 @@ html {
 
 body {
 	margin: 0;
-	background: var(--color-bg);
+	background:
+		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.28), transparent 60%),
+		radial-gradient(900px 500px at -10% 20%, rgba(232, 226, 213, 0.55), transparent 55%),
+		linear-gradient(180deg, var(--color-bg) 0%, #eef2f4 100%);
+	background-attachment: fixed;
 	color: var(--color-text);
 	font-family:
 		system-ui,
@@ -48,6 +102,34 @@ body {
 		'Helvetica Neue',
 		sans-serif;
 	line-height: 1.6;
+	transition:
+		background 0.4s ease,
+		color 0.4s ease;
+}
+
+[data-theme="dark"] body {
+	background:
+		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.12), transparent 60%),
+		radial-gradient(900px 500px at -10% 20%, rgba(224, 164, 88, 0.08), transparent 55%),
+		linear-gradient(180deg, #0f1a22 0%, #16242e 100%);
+}
+
+/* dezente Wellen-Linie oben */
+body::before {
+	content: '';
+	position: fixed;
+	inset: 0 0 auto;
+	height: 6px;
+	z-index: 70;
+	background: linear-gradient(90deg, var(--deep), var(--mid), var(--ice), var(--amber), var(--ice), var(--mid), var(--deep));
+	background-size: 200% 100%;
+	animation: passalong-wave 14s linear infinite;
+}
+
+@keyframes passalong-wave {
+	to {
+		background-position: 200% 0;
+	}
 }
 
 a {
@@ -58,4 +140,5 @@ h1,
 h2,
 h3 {
 	line-height: 1.25;
+	letter-spacing: -0.01em;
 }

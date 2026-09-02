@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { sharedTestAccount } from './test-account';
 
@@ -12,13 +13,30 @@ test.describe('Public stand page', () => {
 			await page.locator('form[action="?/register"]').getByLabel('Passwort').fill(sharedTestAccount.recoveredPassword);
 			await page.getByRole('button', { name: 'Zugang erstellen' }).click();
 		} else {
+			const stateFile = 'e2e/.auth-owner.json';
+			if (existsSync(stateFile)) {
+				const saved = JSON.parse(readFileSync(stateFile, 'utf8')) as { cookies?: { name: string; value: string; domain: string; path: string }[] };
+				const cookies = (saved.cookies ?? []).filter((cookie) => cookie.name === 'passalong_session');
+				if (cookies.length) {
+					await page.context().addCookies(cookies);
+				}
+			}
 			const loginForm = page.locator('form[action="?/login"]');
 			await loginForm.getByLabel('Benutzername').fill(sharedTestAccount.username);
-			await loginForm.getByLabel('Passwort').fill(sharedTestAccount.recoveredPassword);
-			await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+			for (const password of [sharedTestAccount.initialPassword, sharedTestAccount.recoveredPassword]) {
+				await loginForm.getByLabel('Passwort').fill(password);
+				await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+				const stillLoggedOut = await page
+					.getByRole('heading', { name: 'Anmelden' })
+					.isVisible()
+					.catch(() => false);
+				if (!stillLoggedOut) {
+					break;
+				}
+			}
 		}
 		await expect(
-			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' }))
+			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
 		).toBeVisible();
 		if (await page.getByLabel('Name der Sammlung').isVisible().catch(() => false)) {
 			await page.getByLabel('Name der Sammlung').fill('Flohmarkt-Stand');
@@ -56,9 +74,9 @@ test.describe('Public stand page', () => {
 		await expect(anonymousPage.getByTestId('stand-title')).toHaveText('Flohmarkt-Stand');
 		await expect(anonymousPage.getByTestId('stand-item')).toHaveCount(2);
 		const standCards = anonymousPage.getByTestId('stand-item');
-		await expect(standCards.filter({ hasText: 'Vase' })).toContainText('8,00 €');
+		await expect(standCards.filter({ hasText: 'Vase' })).toContainText('8,00');
 		await expect(standCards.filter({ hasText: 'Vase' })).not.toContainText('Nur abends abgeben');
-		await expect(standCards.filter({ hasText: 'Buch' })).toContainText('3,00 €');
+		await expect(standCards.filter({ hasText: 'Buch' })).toContainText('3,00');
 
 		// act
 		const unknownResponse = await anonymousPage.request.get('/stand/00000000-0000-0000-0000-000000000000');

@@ -4,6 +4,68 @@
 
 	let { data, form } = $props();
 
+	let menuOpen = $state(false);
+	let instanceAdminOpen = $state(false);
+	let passwordPanelOpen = $state(false);
+	let resetPanelOpen = $state(false);
+	let theme = $state<'light' | 'dark'>('light');
+	let navOverflow = $state(false);
+	let headerElement: HTMLElement | undefined = $state();
+	let navElement: HTMLElement | undefined = $state();
+
+	$effect(() => {
+		if (!headerElement || !navElement) {
+			return;
+		}
+		const measure = () => {
+			if (!navElement || !headerElement) {
+				return;
+			}
+			// Hysteresis: switch to the drawer as soon as the header row overflows. Switch back to
+			// inline only when the whole row (brand + actions + nav) genuinely fits again — measured
+			// on the drawer-mode header, where brand and actions still occupy their inline widths.
+			const brand = headerElement.querySelector('.brand-wrap');
+			const actions = headerElement.querySelector('.header-actions');
+			const reservedWidth =
+				((brand?.scrollWidth ?? 0) + (actions?.scrollWidth ?? 0)) * 2 + 96;
+			if (navOverflow) {
+				navOverflow = headerElement.clientWidth - reservedWidth < navElement.scrollWidth;
+			} else {
+				navOverflow = headerElement.scrollWidth > headerElement.clientWidth + 1;
+			}
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(headerElement);
+		observer.observe(navElement);
+		return () => observer.disconnect();
+	});
+
+	$effect(() => {
+		const saved = localStorage.getItem('passalong-theme');
+		const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+		theme = saved === 'dark' || saved === 'light' ? saved : prefersDark ? 'dark' : 'light';
+	});
+
+	/**
+	 * Toggle the persisted light/dark theme on the document element.
+	 */
+	function toggleTheme(): void {
+		theme = theme === 'dark' ? 'light' : 'dark';
+		document.documentElement.setAttribute('data-theme', theme);
+		localStorage.setItem('passalong-theme', theme);
+	}
+
+	/**
+	 * Open or close the burger navigation and lock body scrolling while open.
+	 *
+	 * @param {boolean} open - Whether the drawer should be open.
+	 */
+	function setMenuOpen(open: boolean): void {
+		menuOpen = open;
+		document.body.style.overflow = open ? 'hidden' : '';
+	}
+
 	const categoryLabels: Record<string, string> = {
 		clothing: 'Kleidung',
 		books: 'Bücher',
@@ -69,14 +131,84 @@
 	<meta name="description" content="Verwalte deine Sammlung von Dingen, die weiterziehen dürfen." />
 </svelte:head>
 
+<svelte:window onkeydown={(event) => {
+	if (event.key === 'Escape') {
+		menuOpen = false;
+	}
+}} />
+
 <main>
-	<header class="masthead">
-		<a class="brand" href="/">passalong</a>
-		<p>Eine Sammlung. Viele Wege, Dinge weiterzugeben.</p>
+	<header class="masthead" class:nav-overflow={navOverflow} bind:this={headerElement}>
+		<h1 class="brand-wrap">
+			<a class="brand" href="/">
+				<img class="header-logo" src="/passalong-icon.svg" alt="" />
+				passalong
+			</a>
+		</h1>
 		{#if data.isAuthenticated}
-			<form class="session-control" method="POST" action="?/logout">
-				<button type="submit">Abmelden</button>
-			</form>
+			<div class="header-actions">
+				<button
+					class="icon-btn theme-toggle"
+					aria-label="Dark Mode umschalten"
+					title="Hell/Dunkel"
+					type="button"
+					onclick={toggleTheme}
+				>
+					<svg class="icon" aria-hidden="true" focusable="false">
+						<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
+					</svg>
+				</button>
+				<button
+					class="burger"
+					aria-label={menuOpen ? 'Menü schließen' : 'Menü öffnen'}
+					aria-expanded={menuOpen}
+					type="button"
+					onclick={() => setMenuOpen(!menuOpen)}
+				>
+					<span></span><span></span><span></span>
+				</button>
+			</div>
+			{#if menuOpen}
+				<button class="nav-backdrop open" aria-label="Menü schließen" type="button" onclick={() => setMenuOpen(false)}></button>
+			{/if}
+			<nav class:open={menuOpen} bind:this={navElement}>
+				<a
+					class="nav-cta"
+					href="/#add-item-title"
+					onclick={() => setMenuOpen(false)}
+				>
+					+ Neu
+				</a>
+				<hr class="nav-divider" />
+				{#if data.isInstanceAdmin}
+					<a
+						class="instance-admin-link"
+						href="/"
+						onclick={(event) => {
+							event.preventDefault();
+							instanceAdminOpen = !instanceAdminOpen;
+							setMenuOpen(false);
+						}}
+					>
+						Instanzverwaltung
+					</a>
+				{/if}
+				<a
+					class="password-panel-link"
+					href="/"
+					onclick={(event) => {
+						event.preventDefault();
+						passwordPanelOpen = !passwordPanelOpen;
+						setMenuOpen(false);
+					}}
+				>
+					Passwort ändern
+				</a>
+				<hr class="nav-divider" />
+				<form class="nav-logout" method="POST" action="?/logout">
+					<button type="submit" onclick={() => setMenuOpen(false)}>Abmelden</button>
+				</form>
+			</nav>
 		{/if}
 	</header>
 
@@ -91,44 +223,49 @@
 		</section>
 	{/if}
 
-	{#if data.isAuthenticated}
-		<details class="password-help authenticated-password-help">
-			<summary>Passwort ändern</summary>
-			<form method="POST" action="?/changePassword">
-				<label>
-					<span>Aktuelles Passwort</span>
-					<input name="currentPassword" type="password" autocomplete="current-password" required />
-				</label>
-				<label>
-					<span>Neues Passwort</span>
-					<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
-				</label>
-				{#if form && 'changePasswordError' in form && form.changePasswordError}
-					<p class="form-error" role="alert">{form.changePasswordError}</p>
-				{/if}
-				<button type="submit">Passwort speichern</button>
-			</form>
-		</details>
-		{#if data.isInstanceAdmin}
-			<details class="password-help instance-administration">
-				<summary>Instanzverwaltung</summary>
-				<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
-				<form method="POST" action="?/createPasswordReset">
-					<label>
-						<span>Benutzername des Kontos</span>
-						<input name="username" autocomplete="username" required />
-					</label>
-					{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
-						<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
-					{/if}
-					<button type="submit">Zurücksetzungscode erzeugen</button>
-				</form>
-			</details>
-		{/if}
+	{#if data.isAuthenticated && (passwordPanelOpen || instanceAdminOpen)}
+		<section class="settings-panel" aria-label="Einstellungen">
+			{#if passwordPanelOpen}
+				<div class="password-help">
+					<h2>Passwort ändern</h2>
+					<form method="POST" action="?/changePassword">
+						<label>
+							<span>Aktuelles Passwort</span>
+							<input name="currentPassword" type="password" autocomplete="current-password" required />
+						</label>
+						<label>
+							<span>Neues Passwort</span>
+							<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
+						</label>
+						{#if form && 'changePasswordError' in form && form.changePasswordError}
+							<p class="form-error" role="alert">{form.changePasswordError}</p>
+						{/if}
+						<button type="submit">Passwort speichern</button>
+					</form>
+				</div>
+			{/if}
+			{#if data.isInstanceAdmin && instanceAdminOpen}
+				<div class="password-help instance-administration">
+					<h2>Instanzverwaltung</h2>
+					<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
+					<form method="POST" action="?/createPasswordReset">
+						<label>
+							<span>Benutzername des Kontos</span>
+							<input name="username" autocomplete="username" required />
+						</label>
+						{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
+							<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
+						{/if}
+						<button type="submit">Zurücksetzungscode erzeugen</button>
+					</form>
+				</div>
+			{/if}
+		</section>
 	{/if}
 
 	{#if !data.isAuthenticated}
 		<section class="onboarding" aria-labelledby="onboarding-title">
+			<img class="login-logo" src="/passalong-icon.svg" alt="passalong" />
 			{#if data.isInitialSetup}
 				<p class="eyebrow">Willkommen</p>
 				<h1 id="onboarding-title">Ersten Zugang erstellen</h1>
@@ -169,9 +306,11 @@
 					{/if}
 					<button type="submit">Anmelden</button>
 				</form>
-				<details class="password-help">
-					<summary>Passwort mit Zurücksetzungscode ändern</summary>
-					<form method="POST" action="?/resetPassword">
+				<button class="reset-toggle" type="button" onclick={() => (resetPanelOpen = !resetPanelOpen)}>
+					Passwort mit Zurücksetzungscode ändern
+				</button>
+				{#if resetPanelOpen}
+					<form class="password-help" method="POST" action="?/resetPassword">
 						<label>
 							<span>Benutzername</span>
 							<input name="username" autocomplete="username" required />
@@ -188,8 +327,8 @@
 							<p class="form-error" role="alert">{form.resetError}</p>
 						{/if}
 						<button type="submit">Passwort zurücksetzen</button>
-						</form>
-				</details>
+					</form>
+				{/if}
 			{/if}
 		</section>
 	{:else if !data.collection}
@@ -218,19 +357,21 @@
 	{:else}
 		<section class="collection-header" aria-labelledby="collection-title">
 			<div>
-				<p class="eyebrow">Deine Sammlung</p>
-				<h1 id="collection-title">{data.collection.name}</h1>
+				<p class="eyebrow">Deine Artikel</p>
+				<h1 id="collection-title">Portfolio</h1>
 			</div>
-			<p>{data.items.length} {data.items.length === 1 ? 'Artikel' : 'Artikel'}</p>
+			<p>({data.items.length})</p>
 		</section>
 
-		<nav class="collection-switcher" aria-label="Sammlungswechsel" data-testid="collection-switcher">
-			{#each data.collections as collection (collection.id)}
-				<a href={`/?collection=${encodeURIComponent(collection.id)}`} aria-current={collection.id === data.collection.id ? 'page' : undefined}>
-					{collection.name}
-				</a>
-			{/each}
-		</nav>
+		{#if data.collections.length > 1}
+			<nav class="collection-switcher" aria-label="Sammlungswechsel" data-testid="collection-switcher">
+				{#each data.collections as collection (collection.id)}
+					<a href={`/?collection=${encodeURIComponent(collection.id)}`} aria-current={collection.id === data.collection.id ? 'page' : undefined}>
+						{collection.name}
+					</a>
+				{/each}
+			</nav>
+		{/if}
 
 		<div class="workspace">
 			<section class="item-form" aria-labelledby="add-item-title">
@@ -322,93 +463,31 @@
 				{#if data.items.length}
 				<div class="item-grid">
 					{#each data.items as item}
-						<article data-testid="item-card">
-							{#if item.coverImageKey}
-								<img class="item-image photo" src={`/media/${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />
-							{:else}
-								<div class="item-image" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
-							{/if}
+<article data-testid="item-card">
+							<div class="tile-media">
+								{#if item.coverImageKey}
+									<img class="item-image photo" src={`/media/${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />
+								{:else}
+									<div class="item-image" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
+								{/if}
+								<span class="kat">{categoryLabels[item.category]}</span>
+							</div>
 							<div class="item-copy">
 								<h2>{item.title}</h2>
 								<p class="price">{formatPrice(item.priceCents)} €</p>
-								<p class="metadata">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</p>
+							</div>
+							<div class="tile-bottom">
 								{#if item.soldAt}
-									<p class="sold-badge" data-testid="item-sold-badge">Verkauft · {saleChannelLabels[item.saleChannel ?? 'other']}{item.saleProceedsCents !== null ? ` · Erlös ${formatPrice(item.saleProceedsCents)} €` : ''}</p>
-								{/if}
-								{#if item.internalNotes}
-									<p class="notes">{item.internalNotes}</p>
-								{/if}
-								<details class="image-management">
-									<summary>Fotos verwalten</summary>
-									<form method="POST" action="?/uploadItemImage" enctype="multipart/form-data">
+									<span class="badge sold" data-testid="item-sold-badge">Verkauft{item.saleProceedsCents !== null ? ` · ${formatPrice(item.saleProceedsCents)} €` : ''}</span>
+								{:else}
+									<span class="badge open">Offen</span>
+									<form method="POST" action="?/quickSellItem">
 										<input name="itemId" type="hidden" value={item.id} />
-										<label>
-											<span>Foto hinzufügen</span>
-											<input
-												name="image"
-												type="file"
-												accept="image/png,image/jpeg,image/webp"
-												data-testid="item-image-input"
-												required
-											/>
-										</label>
-										{#if form?.uploadImageError}
-											<p class="form-error" role="alert">{form.uploadImageError}</p>
-										{/if}
-										<button type="submit">Foto speichern</button>
+										<button class="pay" type="submit" data-testid="quick-sell-item">
+											€ Verkaufen
+										</button>
 									</form>
-									{#each item.images ?? [] as image}
-										<div class="image-row">
-											<span class="image-name" data-testid="item-image-key">{image.storageKey}{image.isCover ? ' (Titelbild)' : ''}</span>
-											<form method="POST" action="?/removeItemImage" class="inline-form">
-												<input name="itemId" type="hidden" value={item.id} />
-												<input name="imageId" type="hidden" value={image.id} />
-												<button type="submit" data-testid="remove-item-image">Entfernen</button>
-											</form>
-										</div>
-									{/each}
-								</details>
-								<details class="sale-management" data-testid="item-sale-section">
-									<summary>Verkauf erfassen</summary>
-									{#if item.soldAt}
-										<p class="sold-summary">
-											Verkauft am {new Date(item.soldAt).toLocaleDateString('de-DE')} über {saleChannelLabels[item.saleChannel ?? 'other']}
-											{#if item.saleProceedsCents !== null}
-												· Erlös {formatPrice(item.saleProceedsCents)} €
-											{/if}
-										</p>
-										<form method="POST" action="?/unmarkItemSold">
-											<input name="itemId" type="hidden" value={item.id} />
-											<button type="submit" data-testid="unmark-item-sold">Verkauf zurücknehmen</button>
-										</form>
-									{:else}
-										<form method="POST" action="?/markItemSold">
-											<input name="itemId" type="hidden" value={item.id} />
-											<div class="form-grid">
-												<label>
-													<span>Kanal</span>
-													<select name="channel" aria-label="Verkaufskanal">
-														{#each Object.entries(saleChannelLabels) as [channel, label]}
-															<option value={channel}>{label}</option>
-														{/each}
-													</select>
-												</label>
-												<label>
-													<span>Verkauft am</span>
-													<input name="soldAt" type="date" required data-testid="item-sold-date" />
-												</label>
-												<label>
-													<span>Erlös in Cent</span>
-													<input name="proceedsCents" type="number" min="0" step="1" required data-testid="item-proceeds" />
-												</label>
-											</div>
-											{#if form?.saleStatusError}
-												<p class="form-error" role="alert">{form.saleStatusError}</p>
-											{/if}
-											<button type="submit" data-testid="mark-item-sold">Als verkauft erfassen</button>
-										</form>
-									{/if}
-								</details>
+								{/if}
 							</div>
 						</article>
 					{/each}
@@ -425,60 +504,240 @@
 	main {
 		max-width: 72rem;
 		margin: 0 auto;
-		padding: 1.5rem 1.25rem 4rem;
+		padding: 0 1.5rem 4rem;
 	}
 
 	.masthead {
+		position: sticky;
+		top: 0;
+		z-index: 65;
+		align-items: center;
+		background: var(--glass);
+		backdrop-filter: blur(14px) saturate(1.4);
+		-webkit-backdrop-filter: blur(14px) saturate(1.4);
+		border-bottom: 1px solid var(--color-border);
+		container-type: inline-size;
 		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.5rem 0 3.5rem;
+		gap: 16px;
+		margin: 0 -1.5rem 2rem;
+		padding: 0.65rem 1.5rem;
 	}
 
-	.brand {
-		color: var(--color-text);
+	.brand-wrap {
 		font-size: 1.2rem;
 		font-weight: 800;
-		letter-spacing: -0.04em;
-		text-decoration: none;
-	}
-
-	.masthead p,
-	.collection-header > p {
-		color: var(--color-text-muted);
-		font-size: 0.9rem;
+		letter-spacing: 0.02em;
 		margin: 0;
 	}
 
-	.session-control {
+	.brand {
+		align-items: center;
+		color: var(--color-accent-strong);
+		display: flex;
+		font-size: 1.2rem;
+		font-weight: 800;
+		gap: 9px;
+		letter-spacing: 0.02em;
+		text-decoration: none;
+	}
+
+	.icon-btn {
+		align-items: center;
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		box-shadow: none;
+		color: var(--color-accent);
+		cursor: pointer;
+		display: flex;
+		font-size: 1.1rem;
+		height: 40px;
+		justify-content: center;
+		padding: 0;
+		transition: all 0.25s ease;
+		width: 40px;
+	}
+
+	.icon-btn:hover {
+		background: var(--color-accent-soft);
+		box-shadow: none;
+		transform: rotate(15deg);
+	}
+
+	.icon {
+		height: 1.1rem;
+		width: 1.1rem;
+	}
+
+	.header-logo {
+		display: inline-block;
+		filter: drop-shadow(var(--shadow-logo));
+		flex-shrink: 0;
+		height: 22px;
+		width: 22px;
+	}
+
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-left: auto;
+	}
+
+	.burger {
+		background: none;
+		border: 0;
+		border-radius: 12px;
+		box-shadow: none;
+		cursor: pointer;
+		display: none;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 5px;
+		height: 40px;
+		padding: 0;
+		position: relative;
+		transition: background 0.25s ease;
+		width: 40px;
+		z-index: 86;
+	}
+
+	.burger:hover {
+		background: var(--color-accent-soft);
+		box-shadow: none;
+		transform: none;
+	}
+
+	.burger span {
+		background: var(--color-text);
+		border-radius: 2px;
+		display: block;
+		height: 2.5px;
+		transition:
+			transform 0.3s ease,
+			opacity 0.3s ease;
+		width: 22px;
+	}
+
+	.burger[aria-expanded='true'] span:nth-child(1) {
+		transform: translateY(7.5px) rotate(45deg);
+	}
+
+	.burger[aria-expanded='true'] span:nth-child(2) {
+		opacity: 0;
+	}
+
+	.burger[aria-expanded='true'] span:nth-child(3) {
+		transform: translateY(-7.5px) rotate(-45deg);
+	}
+
+	.nav-backdrop {
+		background: rgba(14, 42, 58, 0.4);
+		border: 0;
+		cursor: default;
+		display: none;
+		height: 100vh;
+		left: 0;
+		padding: 0;
+		position: fixed;
+		top: 0;
+		width: 100vw;
+		z-index: 84;
+	}
+
+	.nav-backdrop.open {
 		display: block;
 	}
 
-	.session-control button {
-		font-size: 0.85rem;
-		padding: 0.55rem 0.75rem;
+	nav {
+		display: flex;
+		gap: 4px;
 	}
 
-	.password-help {
+	nav a,
+	nav form button {
+		align-items: center;
+		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: 0.65rem;
-		margin-top: 1.5rem;
-		padding: 0.8rem;
+		border-radius: 999px;
+		box-shadow: none;
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-flex;
+		font-size: 0.9rem;
+		font-weight: 600;
+		height: 40px;
+		justify-content: center;
+		padding: 0 14px;
+		text-decoration: none;
+		transition: all 0.25s ease;
+		white-space: nowrap;
 	}
 
-	.password-help summary {
-		cursor: pointer;
+	nav a:hover {
+		background: var(--color-accent-soft);
+		transform: translateY(-1px);
+	}
+
+	nav a.nav-cta {
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		box-shadow: var(--shadow-cta);
+		color: #fff;
 		font-weight: 700;
 	}
 
-	.password-help form {
-		margin-top: 1rem;
+	nav a[aria-current='page'] {
+		background: var(--color-accent-strong);
+		box-shadow: var(--shadow-cta);
+		color: #fff;
 	}
 
-	.authenticated-password-help {
-		margin: 0 0 1.5rem auto;
-		max-width: 37rem;
+	nav form button {
+		color: var(--color-danger);
+	}
+
+	nav form button:hover {
+		background: var(--color-danger-soft);
+		transform: translateY(-1px);
+	}
+
+	.nav-logout {
+		display: block;
+		margin-left: 8px;
+		padding: 0;
+	}
+
+	.nav-divider {
+		background: var(--color-border);
+		border: 0;
+		display: none;
+		height: 1px;
+		margin: 8px 0;
+	}
+
+	.settings-panel {
+		display: grid;
+		gap: 1rem;
+		margin: 0 auto 1.5rem;
+		max-width: 26rem;
+	}
+
+	.password-help {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-tile);
+		padding: 1.1rem 1.2rem;
+	}
+
+	.password-help h2 {
+		font-size: 1.05rem;
+		margin: 0 0 0.75rem;
+	}
+
+	.password-help form {
+		margin-top: 0;
 	}
 
 	.collection-list {
@@ -493,46 +752,81 @@
 		text-decoration: none;
 	}
 
+	.reset-toggle {
+		background: none;
+		border: 0;
+		border-radius: var(--radius-small);
+		box-shadow: none;
+		color: var(--color-accent);
+		font-size: 0.85rem;
+		font-weight: 600;
+		justify-self: center;
+		padding: 0.4rem 0.6rem;
+		text-decoration: none;
+	}
+
+	.reset-toggle:hover {
+		background: var(--color-accent-soft);
+		text-decoration: underline;
+	}
+
+	.reset-toggle + .password-help {
+		width: 100%;
+	}
+
+	.login-logo {
+		display: block;
+		filter: drop-shadow(var(--shadow-logo));
+		height: 96px;
+		margin: 0 auto 18px;
+		width: 96px;
+	}
+
 	.onboarding {
-		background: linear-gradient(145deg, var(--color-accent-soft), transparent 60%), var(--color-surface);
+		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: 1.25rem;
+		border-radius: var(--radius-card);
 		box-shadow: var(--shadow-card);
-		margin: 2rem auto;
-		max-width: 37rem;
-		padding: clamp(1.5rem, 5vw, 3rem);
+		margin: 8vh auto 0;
+		max-width: 26rem;
+		padding: 1.75rem 1.6rem;
 	}
 
 	.eyebrow {
-		color: var(--color-accent);
-		font-size: 0.75rem;
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
 		font-weight: 700;
-		letter-spacing: 0.08em;
-		margin: 0 0 0.5rem;
+		letter-spacing: 0.06em;
+		margin: 0 0 0.4rem;
 		text-transform: uppercase;
 	}
 
 	h1,
 	h2 {
-		letter-spacing: -0.035em;
+		letter-spacing: -0.02em;
 	}
 
 	h1 {
-		font-size: clamp(2rem, 5vw, 3.25rem);
-		line-height: 1;
+		font-size: 1.6rem;
+		line-height: 1.1;
 		margin: 0;
 	}
 
 	h2 {
-		font-size: 1.25rem;
+		font-size: 1.15rem;
 		margin: 0;
 	}
 
 	.intro,
 	.empty {
 		color: var(--color-text-muted);
-		line-height: 1.6;
-		margin: 1rem 0 2rem;
+		line-height: 1.55;
+		margin: 0.75rem 0 1.4rem;
+	}
+
+	.empty {
+		padding: 3.5rem 1rem;
+		text-align: center;
 	}
 
 	form {
@@ -541,9 +835,9 @@
 	}
 
 	.form-error {
-		background: color-mix(in srgb, #b42318 14%, var(--color-surface));
-		border: 1px solid #b42318;
-		border-radius: 0.65rem;
+		background: var(--color-danger-soft);
+		border: 1px solid var(--color-danger);
+		border-radius: var(--radius-control);
 		color: var(--color-text);
 		margin: 0;
 		padding: 0.65rem 0.8rem;
@@ -551,12 +845,15 @@
 
 	label {
 		display: grid;
-		gap: 0.45rem;
+		gap: 0.3rem;
 	}
 
 	label span {
-		font-size: 0.85rem;
-		font-weight: 650;
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
 	}
 
 	input,
@@ -564,17 +861,20 @@
 	textarea {
 		background: var(--color-input);
 		border: 1px solid var(--color-border);
-		border-radius: 0.65rem;
+		border-radius: var(--radius-control);
 		color: var(--color-text);
 		font: inherit;
-		padding: 0.72rem 0.8rem;
+		padding: 0.68rem 0.85rem;
+		transition:
+			border-color 0.25s ease,
+			box-shadow 0.25s ease;
 	}
 
 	input:focus,
 	select:focus,
 	textarea:focus {
-		border-color: var(--color-accent);
-		box-shadow: 0 0 0 3px var(--color-accent-soft);
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
 		outline: none;
 	}
 
@@ -583,19 +883,27 @@
 	}
 
 	button {
-		background: var(--color-accent);
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
-		border-radius: 0.65rem;
+		border-radius: var(--radius-control);
+		box-shadow: var(--shadow-btn);
 		color: white;
 		cursor: pointer;
 		font: inherit;
+		font-size: 0.95rem;
 		font-weight: 700;
 		justify-self: start;
-		padding: 0.75rem 1rem;
+		padding: 0.7rem 1.25rem;
+		transition:
+			transform 0.2s ease,
+			box-shadow 0.2s ease,
+			filter 0.2s ease;
 	}
 
 	button:hover {
+		box-shadow: var(--shadow-btn-hover);
 		filter: brightness(1.08);
+		transform: translateY(-2px);
 	}
 
 	.collection-header,
@@ -611,9 +919,18 @@
 		padding-bottom: 1.5rem;
 	}
 
+	.collection-header h1 {
+		color: var(--color-accent-strong);
+	}
+
+	.collection-header > p {
+		color: var(--color-text-muted);
+		margin: 0;
+	}
+
 	.workspace {
 		display: grid;
-		gap: 2.5rem;
+		gap: 2rem;
 		grid-template-columns: minmax(16rem, 0.75fr) minmax(0, 1.75fr);
 		padding-top: 2rem;
 	}
@@ -622,10 +939,11 @@
 		align-self: start;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
 		display: grid;
-		gap: 1.5rem;
-		padding: 1.25rem;
+		gap: 1.25rem;
+		padding: 1.4rem;
 	}
 
 	.form-grid {
@@ -641,94 +959,143 @@
 	.item-grid {
 		display: grid;
 		gap: 1rem;
-		grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
 	}
 
 	article {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-tile);
+		display: flex;
+		flex-direction: column;
 		overflow: hidden;
+		transition:
+			transform 0.3s cubic-bezier(0.2, 0.7, 0.3, 1),
+			box-shadow 0.3s ease;
+	}
+
+	article:hover {
+		box-shadow: var(--shadow-tile-hover);
+		transform: translateY(-3px);
+	}
+
+	.tile-media {
+		position: relative;
 	}
 
 	.item-image {
 		align-items: center;
-		background: linear-gradient(135deg, var(--color-accent-soft), var(--color-surface-strong));
+		aspect-ratio: 1;
+		background: linear-gradient(135deg, var(--color-surface-strong), var(--fog));
 		color: var(--color-accent);
 		display: flex;
-		font-size: 2rem;
+		font-size: 2.4rem;
 		font-weight: 800;
-		height: 8rem;
 		justify-content: center;
+		width: 100%;
+	}
+
+	.item-image.photo {
+		height: auto;
+		object-fit: cover;
+	}
+
+	.kat {
+		background: var(--glass);
+		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
+		border-radius: 999px;
+		box-shadow: var(--shadow-tile);
+		color: var(--color-accent);
+		font-size: 0.66rem;
+		font-weight: 800;
+		letter-spacing: 0.03em;
+		padding: 3px 9px;
+		position: absolute;
+		top: 10px;
+		left: 10px;
+		z-index: 2;
 	}
 
 	.item-copy {
-		padding: 1rem;
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		padding: 0.85rem 0.9rem 0.9rem;
 	}
 
 	.item-copy h2 {
-		font-size: 1rem;
+		font-size: 0.92rem;
+		font-weight: 700;
+		line-height: 1.3;
 	}
 
 	.price {
-		font-size: 1.25rem;
-		font-weight: 750;
-		margin: 0.6rem 0 0;
+		color: var(--color-accent);
+		font-size: 1.02rem;
+		font-weight: 800;
+		margin: 0.3rem 0 0;
 	}
 
-	.metadata,
-	.notes {
-		color: var(--color-text-muted);
-		font-size: 0.85rem;
-		line-height: 1.45;
-		margin: 0.55rem 0 0;
+	.tile-bottom {
+		align-items: center;
+		display: flex;
+		gap: 8px;
+		justify-content: space-between;
+		margin-top: auto;
+		padding: 0 0.9rem 0.9rem;
 	}
 
-	.notes {
-		border-top: 1px solid var(--color-border);
-		padding-top: 0.55rem;
+	.badge {
+		border-radius: 999px;
+		font-size: 0.68rem;
+		font-weight: 800;
+		letter-spacing: 0.03em;
+		padding: 4px 10px;
 	}
 
-	.sold-badge {
-		color: var(--color-success, #2f9e6e);
-		font-size: 0.85rem;
+	.badge.open {
+		background: var(--color-accent-strong);
+		color: #fff;
+	}
+
+	.badge.sold {
+		background: var(--color-ok-soft);
+		border: 1px solid var(--color-ok-border);
+		color: var(--color-ok);
+	}
+
+	.pay {
+		background: var(--color-ok-soft);
+		border: 1px solid var(--color-ok-border);
+		border-radius: var(--radius-small);
+		box-shadow: none;
+		color: var(--color-ok);
+		font-size: 0.78rem;
 		font-weight: 700;
-		margin: 0.55rem 0 0;
+		padding: 8px 12px;
+		transition: all 0.25s ease;
 	}
 
-	.sold-summary {
-		color: var(--color-text-muted);
-		font-size: 0.85rem;
-		margin: 0.75rem 0;
-	}
-
-	.sale-management {
-		border-top: 1px solid var(--color-border);
-		margin-top: 0.75rem;
-		padding-top: 0.55rem;
-	}
-
-	.sale-management summary {
-		color: var(--color-text-muted);
-		cursor: pointer;
-		font-size: 0.85rem;
-		font-weight: 700;
-	}
-
-	.sale-management form {
-		margin-top: 0.75rem;
+	.pay:hover {
+		background: var(--color-ok);
+		box-shadow: none;
+		color: #fff;
+		transform: none;
 	}
 
 	.sale-statistics {
-		background: var(--color-surface-muted, rgba(0, 0, 0, 0.03));
+		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-tile);
 		margin-bottom: 1.5rem;
 		padding: 1.25rem;
 	}
 
 	.sale-statistics h2 {
-		font-size: 1.15rem;
+		font-size: 1.1rem;
 		margin: 0.25rem 0 1rem;
 	}
 
@@ -739,11 +1106,11 @@
 	}
 
 	.statistics-group h3 {
-		font-size: 0.8rem;
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		letter-spacing: 0.06em;
 		margin: 0 0 0.5rem;
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--color-text-muted);
 	}
 
 	.statistics-group ul {
@@ -768,7 +1135,7 @@
 
 	.stand-link {
 		align-self: center;
-		color: var(--color-accent, #2563eb);
+		color: var(--color-accent);
 		font-size: 0.85rem;
 		font-weight: 700;
 		text-decoration: none;
@@ -782,29 +1149,90 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.5rem;
-		margin: 0 auto 1.25rem;
-		max-width: 64rem;
-		padding: 0 1.25rem;
+		padding-bottom: 0.25rem;
 	}
 
 	.collection-switcher a {
+		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: 999px;
 		color: var(--color-text-muted);
-		font-size: 0.85rem;
-		padding: 0.3rem 0.9rem;
+		font-size: 0.82rem;
+		font-weight: 700;
+		padding: 0.35rem 0.95rem;
 		text-decoration: none;
+		transition:
+			background 0.2s ease,
+			color 0.2s ease;
+	}
+
+	.collection-switcher a:hover {
+		background: var(--color-accent-soft);
 	}
 
 	.collection-switcher a[aria-current='page'] {
-		background: var(--color-accent, #2563eb);
-		border-color: var(--color-accent, #2563eb);
+		background: var(--color-accent-strong);
+		border-color: var(--color-accent-strong);
+		box-shadow: var(--shadow-cta);
 		color: #fff;
-		font-weight: 700;
+	}
+
+	/* Nav läuft auf einer Zeile; läuft sie über den verfügbaren Platz hinaus, übernimmt der Burger */
+	nav {
+		flex-shrink: 0;
+		flex-wrap: nowrap;
+	}
+
+	.masthead.nav-overflow .burger {
+		display: flex;
+	}
+
+	.masthead.nav-overflow nav {
+		background: var(--color-surface);
+		border-left: 1px solid var(--color-border);
+		box-shadow: var(--shadow-card);
+		flex-direction: column;
+		height: 100vh;
+		overflow-y: auto;
+		padding: 76px 18px 20px;
+		position: fixed;
+		right: 0;
+		top: 0;
+		transform: translateX(105%);
+		transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
+		width: min(80vw, 300px);
+		z-index: 85;
+	}
+
+	.masthead.nav-overflow nav.open {
+		transform: translateX(0);
+	}
+
+	.masthead.nav-overflow nav a,
+	.masthead.nav-overflow nav form button {
+		border-radius: var(--radius-control);
+		font-size: 1rem;
+		height: 44px;
+		justify-content: flex-start;
+		padding: 0 16px;
+		width: 100%;
+	}
+
+	.masthead.nav-overflow .nav-backdrop {
+		display: block;
+	}
+
+	.masthead.nav-overflow .nav-divider {
+		display: block;
+		width: auto;
+	}
+
+	.masthead.nav-overflow .nav-logout {
+		margin-left: 0;
+		margin-top: 24px;
 	}
 
 	@media (max-width: 48rem) {
-		.masthead,
 		.collection-header {
 			align-items: flex-start;
 			flex-direction: column;

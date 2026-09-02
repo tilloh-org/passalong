@@ -31,97 +31,168 @@
 </svelte:head>
 
 <main class="stand">
-	<header class="stand-header">
-		<a class="brand" href="/">passalong</a>
-	</header>
-	<section class="stand-body">
-		<p class="eyebrow">Öffentlicher Stand</p>
+	<section class="hero">
+		<div class="hero-avatar" aria-hidden="true">
+			<span class="initial">{data.stand.collectionName.slice(0, 1).toUpperCase()}</span>
+		</div>
 		<h1 data-testid="stand-title">{data.stand.collectionName}</h1>
-		{#if data.stand.items.length}
-			<div class="stand-grid" data-testid="stand-items">
-				{#each data.stand.items as item (item.id)}
-					<article class="stand-item" data-testid="stand-item">
-						<div class="item-image" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
-						<div class="item-copy">
-							<h2>{item.title}</h2>
-							<p class="price">{formatPrice(item.priceCents)} €</p>
-							<p class="metadata">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</p>
-						</div>
-					</article>
-				{/each}
-			</div>
-		{:else}
-			<p class="empty">Aktuell sind keine Artikel verfügbar.</p>
-		{/if}
+		<p class="sub">Schau dir die Artikel an — direkt hier oder live am Stand</p>
 	</section>
+
+	{#if data.stand.items.length}
+		<div class="stand-grid" data-testid="stand-items">
+			{#each data.stand.items as item (item.id)}
+				<a class="tile" data-testid="stand-item" href={`/?collection=${encodeURIComponent(item.id)}`}>
+					<div class="img" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
+					<div class="body">
+						<div class="name">{item.title}</div>
+						<div class="preis">{formatPrice(item.priceCents)}</div>
+						<div class="meta">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</div>
+					</div>
+				</a>
+			{/each}
+		</div>
+	{:else}
+		<p class="empty">Aktuell sind keine Artikel verfügbar.</p>
+	{/if}
+
+	<footer class="footer">
+		<p>passalong · Selbstgemacht für den Flohmarkt</p>
+	</footer>
 </main>
 
 <style>
 	.stand {
 		margin: 0 auto;
 		max-width: 64rem;
-		padding: 1.5rem 1.25rem 3rem;
+		padding: 0 1.25rem 2rem;
 	}
 
-	.stand :global(h1),
-	.stand :global(h2) {
-		font-weight: 700;
+	.hero {
+		animation: hero-rise 0.5s ease;
+		padding: 2.5rem 1rem 1.25rem;
+		text-align: center;
 	}
 
-	.stand .eyebrow {
-		color: var(--color-accent, #2563eb);
-		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
+	@keyframes hero-rise {
+		from {
+			opacity: 0;
+			transform: translateY(8px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+
+	.hero-avatar {
+		align-items: center;
+		background: var(--color-surface);
+		border: 3px solid var(--color-border);
+		border-radius: 999px;
+		box-shadow: var(--shadow-card);
+		display: flex;
+		height: 84px;
+		justify-content: center;
+		margin: 0 auto 14px;
+		overflow: hidden;
+		width: 84px;
+	}
+
+	.hero-avatar .initial {
+		color: var(--color-accent);
+		font-size: 2rem;
+		font-weight: 800;
+	}
+
+	.hero h1 {
+		color: var(--color-accent-strong);
+		font-size: 1.8rem;
+		font-weight: 800;
+		letter-spacing: -0.02em;
 		margin: 0;
-		text-transform: uppercase;
+	}
+
+	.hero .sub {
+		color: var(--color-text-muted);
+		font-size: 0.95rem;
+		margin: 6px 0 0;
 	}
 
 	.stand-grid {
 		display: grid;
 		gap: 1rem;
-		grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
 	}
 
-	.stand-item {
-		background: var(--color-surface, #fff);
+	.tile {
+		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-tile);
+		color: inherit;
+		display: flex;
+		flex-direction: column;
 		overflow: hidden;
+		text-decoration: none;
+		transition:
+			transform 0.3s cubic-bezier(0.2, 0.7, 0.3, 1),
+			box-shadow 0.3s ease;
 	}
 
-	.stand-item .item-image {
+	.tile:hover {
+		box-shadow: var(--shadow-tile-hover);
+		transform: translateY(-3px);
+	}
+
+	.tile .img {
 		align-items: center;
-		background: var(--color-image-placeholder, #dcdcf5);
-		color: var(--color-accent, #2563eb);
+		aspect-ratio: 1;
+		background: linear-gradient(135deg, var(--color-surface-strong), var(--fog));
+		color: var(--color-accent);
 		display: flex;
-		font-size: 2.5rem;
-		font-weight: 700;
-		height: 8rem;
+		font-size: 2.4rem;
+		font-weight: 800;
 		justify-content: center;
 	}
 
-	.stand-item .item-copy {
-		padding: 1rem 1.25rem 1.25rem;
+	.tile .body {
+		padding: 0.85rem 0.9rem 0.9rem;
 	}
 
-	.stand-item h2 {
-		font-size: 1.05rem;
-		margin: 0;
-	}
-
-	.stand-item .price {
+	.tile .name {
+		font-size: 0.92rem;
 		font-weight: 700;
-		margin: 0.35rem 0 0;
+		line-height: 1.3;
 	}
 
-	.stand-item .metadata {
+	.tile .preis {
+		color: var(--color-accent);
+		font-size: 1.05rem;
+		font-weight: 800;
+		margin-top: 3px;
+	}
+
+	.tile .meta {
 		color: var(--color-text-muted);
-		font-size: 0.85rem;
-		margin: 0.4rem 0 0;
+		font-size: 0.78rem;
+		margin-top: 2px;
 	}
 
 	.empty {
 		color: var(--color-text-muted);
+		padding: 4rem 1rem;
+		text-align: center;
+	}
+
+	.footer {
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+		padding: 24px;
+		text-align: center;
+	}
+
+	.footer p {
+		margin: 0;
 	}
 </style>

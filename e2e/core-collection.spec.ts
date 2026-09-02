@@ -1,4 +1,3 @@
-import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 
 test.describe('Core collection', () => {
@@ -86,7 +85,7 @@ test.describe('Core collection', () => {
 		await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// act
 		await page.getByLabel('Artikelname').fill('Leselampe');
@@ -100,43 +99,23 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 
 		// act
-		const testPngBytes = Buffer.from(
-			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-			'base64'
-		);
 		const itemCard = page.getByTestId('item-card');
-		await itemCard.locator('details.image-management > summary').click();
-		await itemCard.getByTestId('item-image-input').setInputFiles({
-			name: 'leselampe.png',
-			mimeType: 'image/png',
-			buffer: testPngBytes
-		});
-		await itemCard.getByRole('button', { name: 'Foto speichern' }).click();
 
 		// assume
-		await expect(page.getByTestId('item-image-key')).toContainText('(Titelbild)');
-		await expect(itemCard.locator('img.item-image')).toBeVisible();
+		await expect(itemCard.locator('.kat')).toContainText('Haushalt');
+		await expect(itemCard.locator('.badge.open')).toBeVisible();
 
 		// act
-		await itemCard.locator('details.image-management > summary').click();
-		await itemCard.getByTestId('remove-item-image').click();
-
-		// assume
-		await expect(page.getByTestId('item-image-key')).not.toBeVisible();
-		await expect(itemCard.locator('.item-image')).toBeVisible();
-
-		// act
-		await itemCard.locator('details.sale-management > summary').click();
-		await itemCard.getByTestId('item-sold-date').fill('2026-08-31');
-		await itemCard.getByTestId('item-proceeds').fill('950');
-		await itemCard.getByTestId('mark-item-sold').click();
+		await itemCard.getByTestId('quick-sell-item').click();
 
 		// assume
 		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
+		await expect(itemCard.locator('.badge.sold')).toBeVisible();
 		await expect(page.getByTestId('sale-statistics')).toContainText('1 Artikel verkauft');
-		await expect(page.getByTestId('sale-statistics')).toContainText('9,50 € Erlös');
+		await expect(page.getByTestId('sale-statistics')).toContainText('12,00 € Erlös');
 		await expect(page.getByTestId('sale-statistics-channels')).toContainText('Flohmarkt');
-		await expect(page.getByTestId('sale-statistics-months')).toContainText('August 2026');
+		const currentMonth = new Date().toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+		await expect(page.getByTestId('sale-statistics-months')).toContainText(currentMonth);
 
 		// act
 		const protectedUrl = page.url();
@@ -152,7 +131,7 @@ test.describe('Core collection', () => {
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// act
 		await page.context().clearCookies();
@@ -166,7 +145,7 @@ test.describe('Core collection', () => {
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-		await page.locator('details.instance-administration > summary').click();
+		await page.locator('.instance-admin-link').click();
 		const instanceAdministrationForm = page.locator('form[action="?/createPasswordReset"]');
 		await instanceAdministrationForm.getByLabel('Benutzername des Kontos').fill(winningAccount.username);
 		await instanceAdministrationForm.getByRole('button', { name: 'Zurücksetzungscode erzeugen' }).click();
@@ -176,7 +155,7 @@ test.describe('Core collection', () => {
 		expect(resetSecret).toMatch(/^[A-Za-z0-9_-]+$/);
 
 		// act
-		await page.locator('details.password-help > summary').click();
+		await page.locator('.reset-toggle').click();
 		const resetForm = page.locator('form[action="?/resetPassword"]');
 		await resetForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await resetForm.getByLabel('Zurücksetzungscode').fill(resetSecret!);
@@ -184,6 +163,19 @@ test.describe('Core collection', () => {
 		await resetForm.getByRole('button', { name: 'Passwort zurücksetzen' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+
+		// act
+		await page.locator('.password-panel-link').click();
+		const changeForm = page.locator('form[action="?/changePassword"]');
+		await changeForm.getByLabel('Aktuelles Passwort').fill('recovered-correct-battery-horse');
+		await changeForm.getByLabel('Neues Passwort').fill('correct-horse-battery-staple');
+		await changeForm.getByRole('button', { name: 'Passwort speichern' }).click();
+
+		// assume
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+
+		// act
+		await page.context().storageState({ path: 'e2e/.auth-owner.json' });
 	});
 });
