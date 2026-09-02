@@ -142,6 +142,49 @@ describe('instance-admin actions', () => {
 		expect(databasePath).toBeTruthy();
 	});
 
+	it('stores several uploaded images at once with the first as cover', async () => {
+		// arrange
+		const { repository, loadDetailActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
+		const item = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
+			scope
+		);
+		const actions = await loadDetailActions();
+		const url = new URL('http://localhost/');
+		const formData = new FormData();
+		formData.set('itemId', item.id);
+		const sidePng = buildTestPng();
+		sidePng[sidePng.length - 1] = (sidePng[sidePng.length - 1] + 1) % 256;
+		formData.append('image', new File([new Uint8Array(buildTestPng())], 'front.png', { type: 'image/png' }));
+		formData.append('image', new File([new Uint8Array(sidePng)], 'side.png', { type: 'image/png' }));
+
+		// act
+		let redirectOutcome: unknown;
+		try {
+			await actions.uploadItemImage({
+				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+				request: new Request('http://localhost/', { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				url
+			} as never);
+		} catch (error) {
+			redirectOutcome = error;
+		}
+		const storedImages = repository.listItemImages(item.id, scope);
+
+		// assume
+		expect(redirectOutcome).toMatchObject({ status: 303, location: `/artikel/${encodeURIComponent(item.id)}` });
+		expect(storedImages).toHaveLength(2);
+		expect(storedImages.map((image) => image.position)).toEqual([0, 1]);
+		expect(storedImages.filter((image) => image.isCover)).toHaveLength(1);
+		for (const image of storedImages) {
+			expect(existsSync(join(mediaRoot, image.storageKey))).toBe(true);
+		}
+	});
+
 	it('marks an owned item sold through the form action and rejects anonymous callers', async () => {
 		// arrange
 		const { repository, loadDetailActions, scope, rawSessionToken } = createActionFixtureWithOwner();

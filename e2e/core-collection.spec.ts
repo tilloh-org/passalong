@@ -127,21 +127,33 @@ test.describe('Core collection', () => {
 		await expect(qrDownload).toHaveAttribute('href', /^data:image\/png;base64,/);
 		await expect(page.getByTestId('item-qr-image')).toBeVisible();
 
-		// act — upload a photo on the detail page
+		// act — upload two photos in one multi-select upload
 		const testPngBytes = Buffer.from(
 			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
 			'base64'
 		);
-		await page.getByTestId('item-image-input').setInputFiles({
-			name: 'leselampe.png',
-			mimeType: 'image/png',
-			buffer: testPngBytes
-		});
+		const secondPngBytes = Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/AAAMBAQAY3Y2wAAAAAElFTkSuQmCC',
+			'base64'
+		);
+		await page.getByTestId('item-image-input').setInputFiles([
+			{ name: 'leselampe.png', mimeType: 'image/png', buffer: testPngBytes },
+			{ name: 'leselampe-detail.png', mimeType: 'image/png', buffer: secondPngBytes }
+		]);
 		await page.getByRole('button', { name: 'Foto speichern' }).click();
 
-		// assume
-		await expect(page.getByTestId('item-image-key')).toContainText('(Titelbild)');
+		// assume — both stored; cover auto-assigned to the first upload
+		await page.getByTestId('images-dialog-trigger').click();
+		await expect(page.getByTestId('images-dialog')).toBeVisible();
+		await expect(page.getByTestId('item-image-key')).toHaveText(['Titelbild', 'Bild 2']);
 		await expect(page.locator('img.cover')).toBeVisible();
+
+		// act — pick the second image as cover inside the preview dialog
+		await page.getByTestId('set-item-cover').click();
+
+		// assume — the second image is now the cover
+		await expect(page.getByTestId('item-image-key').first()).toContainText('Bild 1');
+		await expect(page.getByTestId('item-image-key').nth(1)).toContainText('Titelbild');
 
 		// act — register a sale with the full form on the detail page
 		await page.getByTestId('item-sold-date').fill('2026-08-31');

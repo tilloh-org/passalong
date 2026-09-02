@@ -28,6 +28,7 @@ const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const wholeNumberPattern = /^\d+$/;
 const maximumPriceCents = 10_000_000;
 const qrCodeImageSizePixels = 240;
+const maximumImagesPerUpload = 10;
 const userFacingImageMessages = [
 	'Das Bild entspricht nicht einem unterstützten Format.',
 	'Das Bild ist zu groß.'
@@ -170,15 +171,20 @@ export const actions: Actions = {
 
 		const formData = await request.formData();
 		const itemId = getFormText(formData, 'itemId');
-		const upload = formData.get('image');
-		if (!(upload instanceof File) || upload.size === 0) {
-			return fail(httpStatus.badRequest, { uploadImageError: 'Bitte wähle ein Bild aus.' });
+		const uploads = formData.getAll('image').filter((entry): entry is File => entry instanceof File && entry.size > 0);
+		if (uploads.length === 0) {
+			return fail(httpStatus.badRequest, { uploadImageError: 'Bitte wähle mindestens ein Bild aus.' });
+		}
+		if (uploads.length > maximumImagesPerUpload) {
+			return fail(httpStatus.badRequest, { uploadImageError: `Bitte wähle höchstens ${maximumImagesPerUpload} Bilder gleichzeitig aus.` });
 		}
 
 		try {
-			const payload = Buffer.from(await upload.arrayBuffer());
-			const storageKey = await saveUploadedImage(getMediaRoot(), upload.type, payload);
-			getCollectionRepository().addItemImage(itemId, storageKey, scope);
+			for (const upload of uploads) {
+				const payload = Buffer.from(await upload.arrayBuffer());
+				const storageKey = await saveUploadedImage(getMediaRoot(), upload.type, payload);
+				getCollectionRepository().addItemImage(itemId, storageKey, scope);
+			}
 		} catch (error) {
 			return fail(httpStatus.badRequest, { uploadImageError: imageActionError(error) });
 		}

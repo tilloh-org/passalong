@@ -36,6 +36,8 @@
 
 	const coverImageKey = $derived(data.images.find((image) => image.isCover)?.storageKey ?? null);
 	const qrCodeDataUrl = $derived(data.qrCodeDataUrl);
+
+	let imagesDialog = $state<HTMLDialogElement | null>(null);
 </script>
 
 <svelte:head>
@@ -102,6 +104,7 @@
 						id="item-image-file"
 						type="file"
 						accept="image/png,image/jpeg,image/webp"
+						multiple
 						data-testid="item-image-input"
 						class="visually-hidden-input"
 						required
@@ -115,37 +118,47 @@
 					<button type="submit">Foto speichern</button>
 				</form>
 				{#if data.images.length}
-					<ul class="image-list">
-						{#each data.images as image (image.id)}
-							<li>
-								<img
-									class="thumb"
-									src={`/media/${encodeURIComponent(image.storageKey)}`}
-									alt="Foto von {data.item.title}"
-									loading="lazy"
-								/>
-								<div class="image-actions">
-									<span class="image-name" data-testid="item-image-key">
-										{image.storageKey}{image.isCover ? ' (Titelbild)' : ''}
-									</span>
-									<div class="image-buttons">
-										{#if !image.isCover}
-											<form method="POST" action="?/setItemCover">
+					<button type="button" class="secondary images-trigger" onclick={() => imagesDialog?.showModal()} data-testid="images-dialog-trigger">
+						🖼 Bilder ({data.images.length})
+					</button>
+					<dialog class="images-dialog" bind:this={imagesDialog} aria-label="Fotos verwalten" data-testid="images-dialog">
+						<div class="dialog-head">
+							<h3>Fotos verwalten</h3>
+							<button type="button" class="secondary" onclick={() => imagesDialog?.close()}>Schließen</button>
+						</div>
+						<p class="dialog-hint">Klicke auf „Als Titelbild", um das Vorschaubild des Artikels festzulegen.</p>
+						<ul class="image-list">
+							{#each data.images as image (image.id)}
+								<li class:image-selected={image.isCover}>
+									<img
+										class="thumb"
+										src={`/media/${encodeURIComponent(image.storageKey)}`}
+										alt="Foto von {data.item.title}"
+										loading="lazy"
+									/>
+									<div class="image-actions">
+										<span class="image-name" data-testid="item-image-key">
+											{image.isCover ? 'Titelbild' : `Bild ${image.position + 1}`}
+										</span>
+										<div class="image-buttons">
+											{#if !image.isCover}
+												<form method="POST" action="?/setItemCover">
+													<input name="itemId" type="hidden" value={data.item.id} />
+													<input name="imageId" type="hidden" value={image.id} />
+													<button type="submit" class="secondary" data-testid="set-item-cover">Als Titelbild</button>
+												</form>
+											{/if}
+											<form method="POST" action="?/removeItemImage">
 												<input name="itemId" type="hidden" value={data.item.id} />
 												<input name="imageId" type="hidden" value={image.id} />
-												<button type="submit" class="secondary">Als Titelbild</button>
+												<button type="submit" class="danger" data-testid="remove-item-image">Entfernen</button>
 											</form>
-										{/if}
-										<form method="POST" action="?/removeItemImage">
-											<input name="itemId" type="hidden" value={data.item.id} />
-											<input name="imageId" type="hidden" value={image.id} />
-											<button type="submit" class="danger" data-testid="remove-item-image">Entfernen</button>
-										</form>
+										</div>
 									</div>
-								</div>
-							</li>
-						{/each}
-					</ul>
+								</li>
+							{/each}
+						</ul>
+					</dialog>
 				{:else}
 					<p class="empty">Noch keine Fotos vorhanden.</p>
 				{/if}
@@ -449,11 +462,45 @@
 		gap: 0.85rem;
 	}
 
+	.images-trigger {
+		margin: 0.9rem 0 0;
+	}
+
+	.images-dialog {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		max-width: min(48rem, 92vw);
+		padding: 1.25rem;
+	}
+
+	.images-dialog::backdrop {
+		background: rgba(10, 20, 28, 0.6);
+	}
+
+	.dialog-head {
+		align-items: center;
+		display: flex;
+		gap: 1rem;
+		justify-content: space-between;
+	}
+
+	.dialog-head h3 {
+		font-size: 1.05rem;
+		margin: 0;
+	}
+
+	.dialog-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		margin: 0.35rem 0 0.9rem;
+	}
+
 	.image-list {
 		display: grid;
 		gap: 0.6rem;
 		list-style: none;
-		margin: 0.9rem 0 0;
+		margin: 0;
 		padding: 0;
 	}
 
@@ -464,6 +511,11 @@
 		display: flex;
 		gap: 0.75rem;
 		padding: 0.5rem;
+	}
+
+	.image-list li.image-selected {
+		border-color: var(--color-accent);
+		box-shadow: 0 0 0 2px var(--focus-ring);
 	}
 
 	.thumb {
