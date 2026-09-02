@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { formatPrice } from '$lib/utils/format';
 	import { minimumPasswordLength } from '$lib/password-policy';
 
@@ -462,8 +463,19 @@
 				</div>
 				{#if data.items.length}
 				<div class="item-grid">
-					{#each data.items as item}
-<article data-testid="item-card">
+					{#each data.items as item (item.id)}
+						<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
+						<article
+							data-testid="item-card"
+							class="tile-link"
+							tabindex="0"
+							onclick={() => goto(`/artikel/${encodeURIComponent(item.id)}`)}
+							onkeydown={(event) => {
+								if (event.key === 'Enter' || event.key === ' ') {
+									goto(`/artikel/${encodeURIComponent(item.id)}`);
+								}
+							}}
+						>
 							<div class="tile-media">
 								{#if item.coverImageKey}
 									<img class="item-image photo" src={`/media/${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />

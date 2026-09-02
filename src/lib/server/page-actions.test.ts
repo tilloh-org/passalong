@@ -41,6 +41,7 @@ interface ActionFixture {
 	rawSessionToken: string;
 	scope: SessionScope;
 	loadActions: () => Promise<PageServerActions>;
+	loadDetailActions: () => Promise<PageServerActions>;
 	loadPage: () => Promise<(input: unknown) => unknown>;
 }
 
@@ -72,6 +73,7 @@ function createActionFixtureWithOwner(): ActionFixture {
 		rawSessionToken,
 		scope,
 		loadActions: async () => (await import('../../routes/+page.server')).actions as unknown as PageServerActions,
+		loadDetailActions: async () => (await import('../../routes/artikel/[id]/+page.server')).actions as unknown as PageServerActions,
 		loadPage: async () => (await import('../../routes/+page.server')).load as unknown as (input: unknown) => unknown
 	};
 }
@@ -104,13 +106,13 @@ function actionInput(formData: FormData, rawSessionToken?: string): object {
 describe('instance-admin actions', () => {
 	it('rejects reset issuance from an authenticated account without the instance-admin role', async () => {
 		// arrange
-		const { repository, databasePath, loadActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const { repository, databasePath, loadDetailActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Garage' }, scope);
 		const item = repository.createItem(
 			{ collectionId: collection.id, title: 'Bicycle', priceCents: 5000, category: 'hobby', condition: 'good', internalNotes: '' },
 			scope
 		);
-		const actions = await loadActions();
+		const actions = await loadDetailActions();
 		const url = new URL('http://localhost/');
 		const formData = new FormData();
 		formData.set('itemId', item.id);
@@ -130,7 +132,7 @@ describe('instance-admin actions', () => {
 		const storedImages = repository.listItemImages(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: '/' });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: `/artikel/${encodeURIComponent(item.id)}` });
 		expect(storedImages).toHaveLength(1);
 		expect(storedImages[0]).toMatchObject({ isCover: true, position: 0 });
 		expect(existsSync(join(mediaRoot, storedImages[0].storageKey))).toBe(true);
@@ -139,13 +141,13 @@ describe('instance-admin actions', () => {
 
 	it('marks an owned item sold through the form action and rejects anonymous callers', async () => {
 		// arrange
-		const { repository, loadActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const { repository, loadDetailActions, scope, rawSessionToken } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
 			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
 			scope
 		);
-		const actions = await loadActions();
+		const actions = await loadDetailActions();
 		const url = new URL('http://localhost/');
 		const saleParameters = {
 			itemId: item.id,
@@ -188,7 +190,7 @@ describe('instance-admin actions', () => {
 		const reopenedItem = repository.unmarkItemSold(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: '/' });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: `/artikel/${encodeURIComponent(item.id)}` });
 		expect(anonymousOutcome).toMatchObject({ status: 401, data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
 		expect(itemAfterSale).toMatchObject({
 			saleChannel: 'flea-market',

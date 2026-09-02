@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 
 test.describe('Core collection', () => {
@@ -105,12 +106,52 @@ test.describe('Core collection', () => {
 		await expect(itemCard.locator('.kat')).toContainText('Haushalt');
 		await expect(itemCard.locator('.badge.open')).toBeVisible();
 
-		// act
-		await itemCard.getByTestId('quick-sell-item').click();
+		// act — open the detail page from the tile
+		await itemCard.click();
+
+		// assume
+		await expect(page).toHaveURL(/\/artikel\//);
+		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
+		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+
+		// act — upload a photo on the detail page
+		const testPngBytes = Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+			'base64'
+		);
+		await page.getByTestId('item-image-input').setInputFiles({
+			name: 'leselampe.png',
+			mimeType: 'image/png',
+			buffer: testPngBytes
+		});
+		await page.getByRole('button', { name: 'Foto speichern' }).click();
+
+		// assume
+		await expect(page.getByTestId('item-image-key')).toContainText('(Titelbild)');
+		await expect(page.locator('img.cover')).toBeVisible();
+
+		// act — register a sale with the full form on the detail page
+		await page.getByTestId('item-sold-date').fill('2026-08-31');
+		await page.getByTestId('item-proceeds').fill('950');
+		await page.getByTestId('mark-item-sold').click();
 
 		// assume
 		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
-		await expect(itemCard.locator('.badge.sold')).toBeVisible();
+		await expect(page.getByTestId('item-sold-badge')).toContainText('9,50 €');
+
+		// act — unmark the sale again (card shows sold after quick-sell was replaced by detail flow)
+		await page.getByTestId('unmark-item-sold').click();
+
+		// assume
+		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+
+		// act — go back to the portfolio and quick-sell from the card
+		await page.getByRole('link', { name: '← Zurück zum Portfolio' }).click();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+		await page.getByTestId('item-card').first().getByTestId('quick-sell-item').click();
+
+		// assume
+		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
 		await expect(page.getByTestId('sale-statistics')).toContainText('1 Artikel verkauft');
 		await expect(page.getByTestId('sale-statistics')).toContainText('12,00 € Erlös');
 		await expect(page.getByTestId('sale-statistics-channels')).toContainText('Flohmarkt');
