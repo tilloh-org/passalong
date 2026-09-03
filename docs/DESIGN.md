@@ -36,3 +36,9 @@ The visual language mirrors the old Marktbude UI (flohmarkt.tilloh.dev), analyze
 Item cards: category pill overlaid top-left on the image, status pill and quick-sale button in
 the tile footer. Detail page: action row (delete/images/edit/reserve) right-aligned below the
 sale panel.
+
+## Code language
+
+All code, comments, test titles, CSS class names, `data-testid` values, and identifiers are
+written in **English**. German appears only in user-facing UI copy (labels, messages) — the
+UI language for visitors is German by product decision.
