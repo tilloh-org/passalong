@@ -266,15 +266,18 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
-		// act
-		await page.locator('.password-panel-link').click();
+		// act — restore the original password via the profile page
+		await page.getByTestId('profile-avatar-link').click();
 		const changeForm = page.locator('form[action="?/changePassword"]');
 		await changeForm.getByLabel('Aktuelles Passwort').fill('recovered-correct-battery-horse');
 		await changeForm.getByLabel('Neues Passwort').fill('correct-horse-battery-staple');
-		await changeForm.getByRole('button', { name: 'Passwort speichern' }).click();
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('changePassword')),
+			changeForm.getByRole('button', { name: 'Passwort speichern' }).click()
+		]);
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+		await expect(page).toHaveURL(/\/profil/);
 
 		// act
 		await page.context().storageState({ path: 'e2e/.auth-owner.json' });
