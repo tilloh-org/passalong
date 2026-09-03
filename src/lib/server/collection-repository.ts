@@ -43,6 +43,10 @@ export interface Item {
 	category: ItemCategory;
 	condition: ItemCondition;
 	internalNotes: string;
+	externalDescription: string;
+	isComplete: boolean;
+	isFunctional: boolean;
+	reservedAt: string | null;
 	saleChannel: SaleChannel | null;
 	soldAt: string | null;
 	saleProceedsCents: number | null;
@@ -79,6 +83,7 @@ export interface PublicStandItem {
 	priceCents: number;
 	category: ItemCategory;
 	condition: ItemCondition;
+	externalDescription: string;
 }
 
 export interface PublicStandView {
@@ -112,6 +117,9 @@ export interface CreateItemInput {
 	category: ItemCategory;
 	condition: ItemCondition;
 	internalNotes: string;
+	externalDescription: string;
+	isComplete: boolean;
+	isFunctional: boolean;
 }
 
 export interface ItemImage {
@@ -182,7 +190,21 @@ export interface CollectionRepository {
 	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
 	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
 	deleteItemImage(itemId: string, imageId: string, scope: SessionScope): void;
+	deleteItem(itemId: string, scope: SessionScope): void;
+	updateItem(itemId: string, input: UpdateItemInput, scope: SessionScope): Item;
+	setItemReservation(itemId: string, reserved: boolean, scope: SessionScope): Item;
 	findImageMetadataForTenant(storageKey: string, scope: SessionScope): ItemImage | null;
+}
+
+export interface UpdateItemInput {
+	title: string;
+	priceCents: number;
+	category: ItemCategory;
+	condition: ItemCondition;
+	internalNotes: string;
+	externalDescription: string;
+	isComplete: boolean;
+	isFunctional: boolean;
 }
 
 interface CreateCollectionRepositoryOptions {
@@ -196,6 +218,10 @@ interface ItemRow {
 	category: ItemCategory;
 	condition: ItemCondition;
 	internal_notes: string;
+	external_description: string;
+	is_complete: number;
+	is_functional: number;
+	reserved_at: string | null;
 	sale_channel: SaleChannel | null;
 	sold_at: string | null;
 	sale_proceeds_cents: number | null;
@@ -212,6 +238,8 @@ const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
 const authHardeningVersion = '2026083001_auth_hardening';
 const itemScopedImageKeysVersion = '2026083101_item_scoped_image_keys';
 const saleStatusVersion = '2026083102_item_sale_status';
+const itemDetailFieldsVersion = '2026090101_item_detail_fields';
+const itemReservationVersion = '2026090201_item_reservation';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -672,6 +700,7 @@ export function createCollectionRepository(
 		createItem(input, scope) {
 			const title = requireText(input.title, 'title');
 			const internalNotes = input.internalNotes.trim();
+			const externalDescription = input.externalDescription.trim();
 			validateItemInput(input);
 			const item: Item = {
 				id: randomUUID(),
@@ -681,6 +710,10 @@ export function createCollectionRepository(
 				category: input.category,
 				condition: input.condition,
 				internalNotes,
+				externalDescription,
+				isComplete: input.isComplete,
+				isFunctional: input.isFunctional,
+				reservedAt: null,
 				saleChannel: null,
 				soldAt: null,
 				saleProceedsCents: null
@@ -689,8 +722,8 @@ export function createCollectionRepository(
 			const result = database
 				.prepare(
 					`INSERT INTO items (
-						id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, created_at
-					) SELECT ?, collections.tenant_id, collections.owner_id, collections.id, ?, ?, ?, ?, ?, ?
+						id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, external_description, is_complete, is_functional, created_at
+					) SELECT ?, collections.tenant_id, collections.owner_id, collections.id, ?, ?, ?, ?, ?, ?, ?, ?, ?
 					FROM collections
 					WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 				)
@@ -701,6 +734,9 @@ export function createCollectionRepository(
 					item.category,
 					item.condition,
 					item.internalNotes,
+					item.externalDescription,
+					item.isComplete ? 1 : 0,
+					item.isFunctional ? 1 : 0,
 					new Date().toISOString(),
 					item.collectionId,
 					scope.userId,
@@ -793,23 +829,24 @@ export function createCollectionRepository(
 			const items = (
 				database
 					.prepare(
-						'SELECT id, title, price_cents, category, condition FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
-					)
-					.all(collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition }[]
-			).map((row) => ({
-				id: row.id,
-				title: row.title,
-				priceCents: row.price_cents,
-				category: row.category,
-				condition: row.condition
-			}));
+						'SELECT id, title, price_cents, category, condition, external_description FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
+						)
+						.all(collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string }[]
+						).map((row) => ({
+						id: row.id,
+						title: row.title,
+						priceCents: row.price_cents,
+						category: row.category,
+						condition: row.condition,
+						externalDescription: row.external_description
+						}));
 			return { collectionName: collection.name, items };
 		},
 
 		listItemsForOwner(collectionId, scope) {
 			return database
 				.prepare(
-					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes, items.sale_channel, items.sold_at, items.sale_proceeds_cents
+					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes, items.external_description, items.is_complete, items.is_functional, items.sale_channel, items.sold_at, items.sale_proceeds_cents
 					 FROM items
 					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
@@ -902,6 +939,76 @@ export function createCollectionRepository(
 						.prepare('UPDATE item_images SET is_cover = ? WHERE id = ? AND item_id = ? AND tenant_id = ?')
 						.run(sqliteTrue, remainingImages[0].id, itemId, scope.tenantId);
 				}
+			});
+		},
+
+		deleteItem(itemId, scope) {
+			runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const result = database
+					.prepare('DELETE FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+					.run(itemId, scope.userId, scope.tenantId);
+				if (result.changes !== singleDatabaseRowChange) {
+					throw new Error('item was not found');
+				}
+			});
+		},
+
+		updateItem(itemId, input, scope) {
+			const title = requireText(input.title, 'title');
+			const internalNotes = input.internalNotes.trim();
+			const externalDescription = input.externalDescription.trim();
+			const priceCents = requireNonNegativeInteger(input.priceCents, 'priceCents');
+			if (!itemCategories.includes(input.category)) {
+				throw new Error('category is not supported');
+			}
+			if (!itemConditions.includes(input.condition)) {
+				throw new Error('condition is not supported');
+			}
+			return runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const result = database
+					.prepare(
+						`UPDATE items
+						 SET title = ?, price_cents = ?, category = ?, condition = ?, internal_notes = ?, external_description = ?, is_complete = ?, is_functional = ?
+						 WHERE id = ? AND owner_id = ? AND tenant_id = ?`
+					)
+					.run(
+						title,
+						priceCents,
+						input.category,
+						input.condition,
+						internalNotes,
+						externalDescription,
+						input.isComplete ? sqliteTrue : 0,
+						input.isFunctional ? sqliteTrue : 0,
+						itemId,
+						scope.userId,
+						scope.tenantId
+					);
+				if (result.changes !== singleDatabaseRowChange) {
+					throw new Error('item was not found');
+				}
+				const row = database
+					.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
+					.get(itemId, scope.tenantId) as ItemRow;
+				return mapItemRow(row);
+			});
+		},
+
+		setItemReservation(itemId, reserved, scope) {
+			return runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const result = database
+					.prepare('UPDATE items SET reserved_at = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+					.run(reserved ? new Date().toISOString() : null, itemId, scope.userId, scope.tenantId);
+				if (result.changes !== singleDatabaseRowChange) {
+					throw new Error('item was not found');
+				}
+				const row = database
+					.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
+					.get(itemId, scope.tenantId) as ItemRow;
+				return mapItemRow(row);
 			});
 		},
 
@@ -1070,8 +1177,8 @@ function initializeSchema(database: Database.Database): void {
 			createIndexes(database);
 			const appliedAt = new Date().toISOString();
 			database
-				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?)')
-				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, itemScopedImageKeysVersion, appliedAt, saleStatusVersion, appliedAt);
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)')
+				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, itemScopedImageKeysVersion, appliedAt, saleStatusVersion, appliedAt, itemDetailFieldsVersion, appliedAt);
 		})();
 		return;
 	}
@@ -1167,8 +1274,12 @@ function createSchema(database: Database.Database): void {
 			category TEXT NOT NULL CHECK (category IN (${categoryValues})),
 			condition TEXT NOT NULL CHECK (condition IN (${conditionValues})),
 			internal_notes TEXT NOT NULL DEFAULT '',
+			external_description TEXT NOT NULL DEFAULT '',
+			is_complete INTEGER NOT NULL DEFAULT 0 CHECK (is_complete IN (0, 1)),
+			is_functional INTEGER NOT NULL DEFAULT 0 CHECK (is_functional IN (0, 1)),
 			sale_channel TEXT CHECK (sale_channel IS NULL OR sale_channel IN (${saleChannelValues})),
 			sold_at TEXT,
+			reserved_at TEXT,
 			sale_proceeds_cents INTEGER CHECK (sale_proceeds_cents IS NULL OR sale_proceeds_cents >= 0),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
@@ -1260,6 +1371,57 @@ function migrateSchema(database: Database.Database): void {
 	migrateAuthHardeningSchema(database);
 	migrateTenantScopedImageKeys(database);
 	migrateSaleStatus(database);
+	migrateItemDetailFields(database);
+	migrateItemReservation(database);
+}
+
+/**
+ * Add the reservation timestamp to items on databases that predate reservations.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateItemReservation(database: Database.Database): void {
+	if (hasMigrationVersion(database, itemReservationVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'items', 'reserved_at')) {
+			database.exec('ALTER TABLE items ADD COLUMN reserved_at TEXT');
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(itemReservationVersion, new Date().toISOString());
+	});
+}
+
+/**
+ * Add buyer-facing description and completeness/functionality flags to items
+ * on databases that predate the detail-page fields.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateItemDetailFields(database: Database.Database): void {
+	if (hasMigrationVersion(database, itemDetailFieldsVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'items', 'external_description')) {
+			database.exec("ALTER TABLE items ADD COLUMN external_description TEXT NOT NULL DEFAULT ''");
+		}
+		if (!hasColumn(database, 'items', 'is_complete')) {
+			database.exec('ALTER TABLE items ADD COLUMN is_complete INTEGER NOT NULL DEFAULT 0 CHECK (is_complete IN (0, 1))');
+		}
+		if (!hasColumn(database, 'items', 'is_functional')) {
+			database.exec('ALTER TABLE items ADD COLUMN is_functional INTEGER NOT NULL DEFAULT 0 CHECK (is_functional IN (0, 1))');
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(itemDetailFieldsVersion, new Date().toISOString());
+	});
 }
 
 /**
@@ -1523,8 +1685,12 @@ function rebuildItems(database: Database.Database): void {
 			category TEXT NOT NULL CHECK (category IN (${categoryValues})),
 			condition TEXT NOT NULL CHECK (condition IN (${conditionValues})),
 			internal_notes TEXT NOT NULL DEFAULT '',
+			external_description TEXT NOT NULL DEFAULT '',
+			is_complete INTEGER NOT NULL DEFAULT 0 CHECK (is_complete IN (0, 1)),
+			is_functional INTEGER NOT NULL DEFAULT 0 CHECK (is_functional IN (0, 1)),
 			sale_channel TEXT CHECK (sale_channel IS NULL OR sale_channel IN (${saleChannelValues})),
 			sold_at TEXT,
+			reserved_at TEXT,
 			sale_proceeds_cents INTEGER CHECK (sale_proceeds_cents IS NULL OR sale_proceeds_cents >= 0),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
@@ -1695,6 +1861,10 @@ function mapItemRow(row: ItemRow): Item {
 		category: row.category,
 		condition: row.condition,
 		internalNotes: row.internal_notes,
+		externalDescription: row.external_description,
+		isComplete: row.is_complete === 1,
+		isFunctional: row.is_functional === 1,
+		reservedAt: row.reserved_at,
 		saleChannel: row.sale_channel,
 		soldAt: row.sold_at,
 		saleProceedsCents: row.sale_proceeds_cents

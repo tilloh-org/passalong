@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { formatPrice } from '$lib/utils/format';
 	import { minimumPasswordLength } from '$lib/password-policy';
 
@@ -387,8 +388,8 @@
 					</label>
 					<div class="form-grid">
 						<label>
-							<span>Preis in Cent</span>
-							<input name="priceCents" type="number" min="0" step="1" required />
+								<span>Preis (€)</span>
+								<input name="priceEuros" type="text" inputmode="decimal" placeholder="z. B. 12,50" required />
 						</label>
 						<label>
 							<span>Kategorie</span>
@@ -408,9 +409,23 @@
 						</label>
 					</div>
 					<label>
-						<span>Interne Notizen</span>
+						<span>Externe Beschreibung (für Käufer sichtbar)</span>
+						<textarea name="externalDescription" rows="3" data-testid="item-external-description-input"></textarea>
+					</label>
+					<label>
+						<span>Interne Notizen (nur für dich sichtbar)</span>
 						<textarea name="internalNotes" rows="3"></textarea>
 					</label>
+					<div class="flag-checkboxes">
+						<label class="checkbox">
+							<input name="isComplete" type="checkbox" value="1" data-testid="item-complete-checkbox" />
+							<span>Vollständig</span>
+						</label>
+						<label class="checkbox">
+							<input name="isFunctional" type="checkbox" value="1" data-testid="item-functional-checkbox" />
+							<span>Funktionsfähig</span>
+						</label>
+					</div>
 					{#if form?.addItemError}
 						<p class="form-error" role="alert">{form.addItemError}</p>
 					{/if}
@@ -462,8 +477,19 @@
 				</div>
 				{#if data.items.length}
 				<div class="item-grid">
-					{#each data.items as item}
-<article data-testid="item-card">
+					{#each data.items as item (item.id)}
+						<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
+						<article
+							data-testid="item-card"
+							class="tile-link"
+							tabindex="0"
+							onclick={() => goto(`/artikel/${encodeURIComponent(item.id)}`)}
+							onkeydown={(event) => {
+								if (event.key === 'Enter' || event.key === ' ') {
+									goto(`/artikel/${encodeURIComponent(item.id)}`);
+								}
+							}}
+						>
 							<div class="tile-media">
 								{#if item.coverImageKey}
 									<img class="item-image photo" src={`/media/${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />
@@ -846,6 +872,26 @@
 	label {
 		display: grid;
 		gap: 0.3rem;
+	}
+
+	.flag-checkboxes {
+		display: flex;
+		gap: 1rem;
+	}
+
+	label.checkbox {
+		align-items: center;
+		display: flex;
+		flex-direction: row;
+		gap: 0.45rem;
+	}
+
+	label.checkbox span {
+		color: var(--color-text);
+		font-size: 0.9rem;
+		font-weight: 600;
+		letter-spacing: 0;
+		text-transform: none;
 	}
 
 	label span {

@@ -41,6 +41,7 @@ interface ActionFixture {
 	rawSessionToken: string;
 	scope: SessionScope;
 	loadActions: () => Promise<PageServerActions>;
+	loadDetailActions: () => Promise<PageServerActions>;
 	loadPage: () => Promise<(input: unknown) => unknown>;
 }
 
@@ -72,6 +73,7 @@ function createActionFixtureWithOwner(): ActionFixture {
 		rawSessionToken,
 		scope,
 		loadActions: async () => (await import('../../routes/+page.server')).actions as unknown as PageServerActions,
+		loadDetailActions: async () => (await import('../../routes/artikel/[id]/+page.server')).actions as unknown as PageServerActions,
 		loadPage: async () => (await import('../../routes/+page.server')).load as unknown as (input: unknown) => unknown
 	};
 }
@@ -104,13 +106,16 @@ function actionInput(formData: FormData, rawSessionToken?: string): object {
 describe('instance-admin actions', () => {
 	it('rejects reset issuance from an authenticated account without the instance-admin role', async () => {
 		// arrange
-		const { repository, databasePath, loadActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const { repository, databasePath, loadDetailActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Garage' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Bicycle', priceCents: 5000, category: 'hobby', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Bicycle', priceCents: 5000, category: 'hobby', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			scope
 		);
-		const actions = await loadActions();
+		const actions = await loadDetailActions();
 		const url = new URL('http://localhost/');
 		const formData = new FormData();
 		formData.set('itemId', item.id);
@@ -130,28 +135,73 @@ describe('instance-admin actions', () => {
 		const storedImages = repository.listItemImages(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: '/' });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: `/artikel/${encodeURIComponent(item.id)}` });
 		expect(storedImages).toHaveLength(1);
 		expect(storedImages[0]).toMatchObject({ isCover: true, position: 0 });
 		expect(existsSync(join(mediaRoot, storedImages[0].storageKey))).toBe(true);
 		expect(databasePath).toBeTruthy();
 	});
 
-	it('marks an owned item sold through the form action and rejects anonymous callers', async () => {
+	it('stores several uploaded images at once with the first as cover', async () => {
 		// arrange
-		const { repository, loadActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const { repository, loadDetailActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			scope
 		);
-		const actions = await loadActions();
+		const actions = await loadDetailActions();
+		const url = new URL('http://localhost/');
+		const formData = new FormData();
+		formData.set('itemId', item.id);
+		const sidePng = buildTestPng();
+		sidePng[sidePng.length - 1] = (sidePng[sidePng.length - 1] + 1) % 256;
+		formData.append('image', new File([new Uint8Array(buildTestPng())], 'front.png', { type: 'image/png' }));
+		formData.append('image', new File([new Uint8Array(sidePng)], 'side.png', { type: 'image/png' }));
+
+		// act
+		let redirectOutcome: unknown;
+		try {
+			await actions.uploadItemImage({
+				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+				request: new Request('http://localhost/', { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				url
+			} as never);
+		} catch (error) {
+			redirectOutcome = error;
+		}
+		const storedImages = repository.listItemImages(item.id, scope);
+
+		// assume
+		expect(redirectOutcome).toMatchObject({ status: 303, location: `/artikel/${encodeURIComponent(item.id)}` });
+		expect(storedImages).toHaveLength(2);
+		expect(storedImages.map((image) => image.position)).toEqual([0, 1]);
+		expect(storedImages.filter((image) => image.isCover)).toHaveLength(1);
+		for (const image of storedImages) {
+			expect(existsSync(join(mediaRoot, image.storageKey))).toBe(true);
+		}
+	});
+
+	it('marks an owned item sold through the form action and rejects anonymous callers', async () => {
+		// arrange
+		const { repository, loadDetailActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
+		const item = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
+			scope
+		);
+		const actions = await loadDetailActions();
 		const url = new URL('http://localhost/');
 		const saleParameters = {
 			itemId: item.id,
 			channel: 'flea-market',
-			soldAt: '2026-08-31T10:30:00.000Z',
-			proceedsCents: '750'
+			proceedsEuros: '7,50'
 		};
 		const saleForm = new URLSearchParams(saleParameters);
 
@@ -167,7 +217,7 @@ describe('instance-admin actions', () => {
 					method: 'POST'
 				}),
 				url
-			} as never);
+		} as never);
 		} catch (error) {
 			redirectOutcome = error;
 		}
@@ -188,11 +238,11 @@ describe('instance-admin actions', () => {
 		const reopenedItem = repository.unmarkItemSold(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: '/' });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: `/artikel/${encodeURIComponent(item.id)}` });
 		expect(anonymousOutcome).toMatchObject({ status: 401, data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
 		expect(itemAfterSale).toMatchObject({
 			saleChannel: 'flea-market',
-			soldAt: '2026-08-31T10:30:00.000Z',
+			soldAt: expect.any(String),
 			saleProceedsCents: 750
 		});
 		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
@@ -203,7 +253,10 @@ describe('instance-admin actions', () => {
 		const { repository, loadPage, scope, rawSessionToken } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			scope
 		);
 		repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, scope);
@@ -234,7 +287,10 @@ describe('instance-admin actions', () => {
 		const { repository, loadActions, scope, rawSessionToken } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			scope
 		);
 		const actions = await loadActions();

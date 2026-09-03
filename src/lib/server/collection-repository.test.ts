@@ -253,7 +253,10 @@ describe('collection repository', () => {
 				priceCents: 1200,
 				category: 'home',
 				condition: 'good',
-				internalNotes: 'Replace the bulb before listing.'
+				internalNotes: 'Replace the bulb before listing.',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false
 			},
 			admin
 		);
@@ -266,7 +269,10 @@ describe('collection repository', () => {
 				priceCents: 1200,
 				category: 'home',
 				condition: 'good',
-				internalNotes: 'Replace the bulb before listing.'
+				internalNotes: 'Replace the bulb before listing.',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false
 			})
 		]);
 	});
@@ -295,7 +301,10 @@ describe('collection repository', () => {
 					priceCents: 400,
 					category: 'books',
 					condition: 'good',
-					internalNotes: ''
+					internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false
 				},
 				anotherScope
 			);
@@ -437,7 +446,10 @@ describe('collection repository', () => {
 				priceCents: 100,
 				category: 'home',
 				condition: 'good',
-				internalNotes: ''
+				internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false
 			},
 			alpha
 		);
@@ -866,7 +878,10 @@ describe('collection repository', () => {
 				priceCents: 5000,
 				category: 'hobby',
 				condition: 'good',
-				internalNotes: ''
+				internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false
 			},
 			owner
 		);
@@ -899,7 +914,10 @@ describe('collection repository', () => {
 				priceCents: 2500,
 				category: 'hobby',
 				condition: 'fair',
-				internalNotes: ''
+				internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false
 			},
 			owner
 		);
@@ -934,7 +952,10 @@ describe('collection repository', () => {
 				priceCents: 3000,
 				category: 'furniture',
 				condition: 'fair',
-				internalNotes: ''
+				internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false
 			},
 			owner
 		);
@@ -965,11 +986,17 @@ describe('collection repository', () => {
 		const firstCollection = repository.createCollection({ name: 'First' }, owner);
 		const secondCollection = repository.createCollection({ name: 'Second' }, owner);
 		const firstItem = repository.createItem(
-			{ collectionId: firstCollection.id, title: 'First item', priceCents: 100, category: 'home', condition: 'good', internalNotes: '' },
+			{ collectionId: firstCollection.id, title: 'First item', priceCents: 100, category: 'home', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			owner
 		);
 		const secondItem = repository.createItem(
-			{ collectionId: secondCollection.id, title: 'Second item', priceCents: 200, category: 'books', condition: 'fair', internalNotes: '' },
+			{ collectionId: secondCollection.id, title: 'Second item', priceCents: 200, category: 'books', condition: 'fair', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			owner
 		);
 		const database = new Database(databasePath);
@@ -983,7 +1010,10 @@ describe('collection repository', () => {
 		const otherScope = { userId: 'other-user', tenantId: 'other-tenant' };
 		const otherCollection = repository.createCollection({ name: 'Other' }, otherScope);
 		const otherItem = repository.createItem(
-			{ collectionId: otherCollection.id, title: 'Other item', priceCents: 300, category: 'tools', condition: 'poor', internalNotes: '' },
+			{ collectionId: otherCollection.id, title: 'Other item', priceCents: 300, category: 'tools', condition: 'poor', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			otherScope
 		);
 		let duplicateContentError: unknown;
@@ -1085,7 +1115,10 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			owner
 		);
 		const foreignScope = { userId: 'other-user', tenantId: 'other-tenant' };
@@ -1141,15 +1174,24 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const firstItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			owner
 		);
 		const secondItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Lampe', priceCents: 1500, category: 'decor', condition: 'fair', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Lampe', priceCents: 1500, category: 'decor', condition: 'fair', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			owner
 		);
 		const thirdItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '' },
+			{ collectionId: collection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			owner
 		);
 		repository.markItemSold(firstItem.id, { channel: 'flea-market', soldAt: '2026-07-12T09:00:00.000Z', proceedsCents: 700 }, owner);
@@ -1209,15 +1251,24 @@ describe('collection repository', () => {
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const availableItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: 'Nur abends abgeben' },
+			{ collectionId: standCollection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: 'Nur abends abgeben',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			owner
 		);
 		const secondAvailableItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '' },
+			{ collectionId: standCollection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			owner
 		);
 		const privateNotesItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair', internalNotes: 'Privates Detail' },
+			{ collectionId: standCollection.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair', internalNotes: 'Privates Detail',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
 			owner
 		);
 		repository.markItemSold(availableItem.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, owner);

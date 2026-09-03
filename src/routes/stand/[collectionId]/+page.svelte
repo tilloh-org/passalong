@@ -46,8 +46,11 @@
 					<div class="img" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
 					<div class="body">
 						<div class="name">{item.title}</div>
-						<div class="preis">{formatPrice(item.priceCents)}</div>
+						<div class="price">{formatPrice(item.priceCents)}</div>
 						<div class="meta">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</div>
+						{#if item.externalDescription}
+							<p class="description" data-testid="stand-item-description">{item.externalDescription}</p>
+						{/if}
 					</div>
 				</a>
 			{/each}
@@ -166,7 +169,7 @@
 		line-height: 1.3;
 	}
 
-	.tile .preis {
+	.tile .price {
 		color: var(--color-accent);
 		font-size: 1.05rem;
 		font-weight: 800;
@@ -177,6 +180,13 @@
 		color: var(--color-text-muted);
 		font-size: 0.78rem;
 		margin-top: 2px;
+	}
+	.description {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.45;
+		margin: 0.3rem 0 0;
+		white-space: pre-line;
 	}
 
 	.empty {

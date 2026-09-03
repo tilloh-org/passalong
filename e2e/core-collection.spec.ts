@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 
 test.describe('Core collection', () => {
@@ -89,10 +90,13 @@ test.describe('Core collection', () => {
 
 		// act
 		await page.getByLabel('Artikelname').fill('Leselampe');
-		await page.getByLabel('Preis in Cent').fill('1200');
+		await page.getByLabel('Preis (€)').fill('12,00');
 		await page.getByLabel('Kategorie').selectOption('home');
 		await page.getByLabel('Zustand').selectOption('good');
-		await page.getByLabel('Interne Notizen').fill('Vor dem Inserieren die Glühbirne austauschen.');
+		await page.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Warme Leselampe mit flexiblem Arm.');
+		await page.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Vor dem Inserieren die Glühbirne austauschen.');
+		await page.getByTestId('item-complete-checkbox').check();
+		await page.getByTestId('item-functional-checkbox').check();
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
 
 		// assume
@@ -105,12 +109,91 @@ test.describe('Core collection', () => {
 		await expect(itemCard.locator('.kat')).toContainText('Haushalt');
 		await expect(itemCard.locator('.badge.open')).toBeVisible();
 
-		// act
-		await itemCard.getByTestId('quick-sell-item').click();
+		// act — open the detail page from the tile
+		await itemCard.click();
+
+		// assume
+		await expect(page).toHaveURL(/\/artikel\//);
+		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
+		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+		await expect(page.getByTestId('item-flag-pills')).toContainText('Haushalt');
+		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Vollständig');
+		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Funktionsfähig');
+		await expect(page.getByTestId('item-external-description')).toContainText('Warme Leselampe');
+		await expect(page.getByTestId('item-internal-notes')).toContainText('Glühbirne');
+		await expect(page.getByTestId('item-qr-panel')).toBeVisible();
+		const qrDownload = page.getByTestId('item-qr-download');
+		await expect(qrDownload).toHaveAttribute('download', /qr-.+\.png/);
+		await expect(qrDownload).toHaveAttribute('href', /^data:image\/png;base64,/);
+		await expect(page.getByTestId('item-qr-image')).toBeVisible();
+
+		// act — reserve the item from the action row (and undo it again)
+		await page.getByTestId('toggle-item-reservation').click();
+		await expect(page.getByTestId('item-reserved-badge')).toBeVisible();
+		await page.getByTestId('toggle-item-reservation').click();
+		await expect(page.getByTestId('item-reserved-badge')).toHaveCount(0);
+
+		// act — upload two photos via the images dialog from the action row
+		const testPngBytes = Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+			'base64'
+		);
+		const secondPngBytes = Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/AAAMBAQAY3Y2wAAAAAElFTkSuQmCC',
+			'base64'
+		);
+		await page.getByTestId('images-dialog-trigger').click();
+		await expect(page.getByTestId('images-dialog')).toBeVisible();
+		await page.getByTestId('item-image-input').setInputFiles([
+			{ name: 'leselampe.png', mimeType: 'image/png', buffer: testPngBytes },
+			{ name: 'leselampe-detail.png', mimeType: 'image/png', buffer: secondPngBytes }
+		]);
+		await page.getByRole('button', { name: 'Foto speichern' }).click();
+
+		// assume — both stored; cover auto-assigned to the first upload
+		await page.getByTestId('images-dialog-trigger').click();
+		await expect(page.getByTestId('images-dialog')).toBeVisible();
+		await expect(page.getByTestId('item-image-key')).toHaveText(['Titelbild', 'Bild 2']);
+		await expect(page.locator('img.cover')).toBeVisible();
+
+		// act — pick the second image as cover inside the preview dialog
+		await page.getByTestId('set-item-cover').click();
+
+		// assume — the second image is now the cover
+		await expect(page.getByTestId('item-image-key').first()).toContainText('Bild 1');
+		await expect(page.getByTestId('item-image-key').nth(1)).toContainText('Titelbild');
+		// dialog closed itself after the set-cover redirect
+
+		// act — register a sale with the full form on the detail page (euro input, date auto-set)
+		await page.getByTestId('item-proceeds').fill('9,50');
+		await page.getByTestId('mark-item-sold').click();
 
 		// assume
 		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
-		await expect(itemCard.locator('.badge.sold')).toBeVisible();
+		await expect(page.getByTestId('item-sold-badge')).toContainText('9,50 €');
+
+		// act — unmark the sale again (card shows sold after quick-sell was replaced by detail flow)
+		await page.getByTestId('unmark-item-sold').click();
+
+		// assume
+		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+
+		// act — edit the item through the edit dialog
+		await page.getByTestId('edit-dialog-trigger').click();
+		await expect(page.getByTestId('edit-dialog')).toBeVisible();
+		await page.getByLabel('Artikelname').fill('Leselampe (gebraucht)');
+		await page.getByTestId('edit-dialog').getByRole('button', { name: 'Änderungen speichern' }).click();
+
+		// assume
+		await expect(page.getByRole('heading', { name: 'Leselampe (gebraucht)' })).toBeVisible();
+
+		// act — go back to the portfolio and quick-sell from the card
+		await page.getByRole('link', { name: '← Zurück zum Portfolio' }).click();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+		await page.getByTestId('item-card').first().getByTestId('quick-sell-item').click();
+
+		// assume
+		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
 		await expect(page.getByTestId('sale-statistics')).toContainText('1 Artikel verkauft');
 		await expect(page.getByTestId('sale-statistics')).toContainText('12,00 € Erlös');
 		await expect(page.getByTestId('sale-statistics-channels')).toContainText('Flohmarkt');
