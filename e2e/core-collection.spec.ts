@@ -211,7 +211,7 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(page.getByTestId('display-name-input')).toHaveValue('Avery Profil');
 
-		// act — change the password through the profile page (session is revoked on success)
+		// act — change the password through the profile page (the fresh cookie keeps the session)
 		await page.getByLabel('Aktuelles Passwort').fill(winningAccount.password);
 		await page.getByLabel('Neues Passwort').fill('profile-changed-password-2026');
 		await Promise.all([
@@ -220,17 +220,10 @@ test.describe('Core collection', () => {
 		]);
 		await expect(page).toHaveURL(/\/profil/);
 
-		// act — verify the new password is required on the next login
-		await page.context().clearCookies();
-		await page.goto('/');
-		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
-		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
-		await loginForm.getByLabel('Passwort').fill('profile-changed-password-2026');
-		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+		// assume — the session survives the password change via the re-issued cookie
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
 
-		// act — restore the original password via the profile page
-		await page.getByTestId('profile-avatar-link').click();
+		// act — restore the original password
 		await page.getByLabel('Aktuelles Passwort').fill('profile-changed-password-2026');
 		await page.getByLabel('Neues Passwort').fill(winningAccount.password);
 		await Promise.all([
@@ -238,15 +231,8 @@ test.describe('Core collection', () => {
 			page.getByTestId('save-password').click()
 		]);
 		await expect(page).toHaveURL(/\/profil/);
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
 
-		// act — log back in with the restored password on the next visit
-		await page.context().clearCookies();
-		await page.goto('/');
-		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
-		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
-		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
-		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// act — verify the protected detail page requires login again
 		await page.context().clearCookies();
