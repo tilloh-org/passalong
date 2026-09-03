@@ -38,6 +38,7 @@
 	const qrCodeDataUrl = $derived(data.qrCodeDataUrl);
 
 	let imagesDialog = $state<HTMLDialogElement | null>(null);
+	let editDialog = $state<HTMLDialogElement | null>(null);
 </script>
 
 <svelte:head>
@@ -77,6 +78,9 @@
 					<span class="flag-pill functional">✓ Funktionsfähig</span>
 				{/if}
 			</div>
+			{#if data.item.reservedAt && !data.item.soldAt}
+				<p class="reserved-badge" data-testid="item-reserved-badge">🔖 Reserviert</p>
+			{/if}
 			{#if data.item.soldAt}
 				<p class="sold-badge" data-testid="item-sold-badge">
 					Verkauft · {saleChannelLabels[data.item.saleChannel ?? 'other']}{data.item.saleProceedsCents !== null ? ` · Erlös ${formatPrice(data.item.saleProceedsCents)} €` : ''}
@@ -96,75 +100,85 @@
 			{/if}
 
 			<section class="panel" aria-labelledby="photos-title">
-				<h2 id="photos-title">Fotos</h2>
-				<form method="POST" action="?/uploadItemImage" enctype="multipart/form-data">
-					<input name="itemId" type="hidden" value={data.item.id} />
-					<input
-						name="image"
-						id="item-image-file"
-						type="file"
-						accept="image/png,image/jpeg,image/webp"
-						multiple
-						data-testid="item-image-input"
-						class="visually-hidden-input"
-						required
-					/>
-					<label class="file-button" for="item-image-file">
-						🖼 Foto auswählen
-					</label>
+					<h2 id="photos-title">Fotos</h2>
+					{#if data.images.length}
+						<div class="cover-preview">
+							{#if coverImageKey}
+								<img
+									class="cover-thumb"
+									src={`/media/${encodeURIComponent(coverImageKey)}`}
+									alt="Titelbild von {data.item.title}"
+								/>
+							{:else}
+								<div class="cover-thumb placeholder" aria-hidden="true">{data.item.title.slice(0, 1).toUpperCase()}</div>
+							{/if}
+							<span class="cover-count" data-testid="item-image-count">{data.images.length} {(data.images.length === 1 ? 'Foto' : 'Fotos')}</span>
+						</div>
+					{:else}
+						<p class="empty">Noch keine Fotos vorhanden.</p>
+					{/if}
+				</section>
+
+				<dialog class="images-dialog" bind:this={imagesDialog} aria-label="Fotos verwalten" data-testid="images-dialog">
+					<div class="dialog-head">
+						<h3>Fotos verwalten</h3>
+						<button type="button" class="secondary" onclick={() => imagesDialog?.close()}>Schließen</button>
+					</div>
+					<p class="dialog-hint">Klicke auf „Als Titelbild", um das Vorschaubild des Artikels festzulegen.</p>
+					<form method="POST" action="?/uploadItemImage" enctype="multipart/form-data" class="dialog-upload">
+						<input name="itemId" type="hidden" value={data.item.id} />
+						<input
+							name="image"
+							id="item-image-file"
+							type="file"
+							accept="image/png,image/jpeg,image/webp"
+							multiple
+							data-testid="item-image-input"
+							class="visually-hidden-input"
+							required
+						/>
+						<label class="file-button" for="item-image-file">
+							🖼 Foto auswählen
+						</label>
+						<button type="submit">Foto speichern</button>
+					</form>
 					{#if form?.uploadImageError}
 						<p class="form-error" role="alert">{form.uploadImageError}</p>
 					{/if}
-					<button type="submit">Foto speichern</button>
-				</form>
-				{#if data.images.length}
-					<button type="button" class="secondary images-trigger" onclick={() => imagesDialog?.showModal()} data-testid="images-dialog-trigger">
-						🖼 Bilder ({data.images.length})
-					</button>
-					<dialog class="images-dialog" bind:this={imagesDialog} aria-label="Fotos verwalten" data-testid="images-dialog">
-						<div class="dialog-head">
-							<h3>Fotos verwalten</h3>
-							<button type="button" class="secondary" onclick={() => imagesDialog?.close()}>Schließen</button>
-						</div>
-						<p class="dialog-hint">Klicke auf „Als Titelbild", um das Vorschaubild des Artikels festzulegen.</p>
-						<ul class="image-list">
-							{#each data.images as image (image.id)}
-								<li class:image-selected={image.isCover}>
-									<img
-										class="thumb"
-										src={`/media/${encodeURIComponent(image.storageKey)}`}
-										alt="Foto von {data.item.title}"
-										loading="lazy"
-									/>
-									<div class="image-actions">
-										<span class="image-name" data-testid="item-image-key">
-											{image.isCover ? 'Titelbild' : `Bild ${image.position + 1}`}
-										</span>
-										<div class="image-buttons">
-											{#if !image.isCover}
-												<form method="POST" action="?/setItemCover">
-													<input name="itemId" type="hidden" value={data.item.id} />
-													<input name="imageId" type="hidden" value={image.id} />
-													<button type="submit" class="secondary" data-testid="set-item-cover">Als Titelbild</button>
-												</form>
-											{/if}
-											<form method="POST" action="?/removeItemImage">
+					<ul class="image-list">
+						{#each data.images as image (image.id)}
+							<li class:image-selected={image.isCover}>
+								<img
+									class="thumb"
+									src={`/media/${encodeURIComponent(image.storageKey)}`}
+									alt="Foto von {data.item.title}"
+									loading="lazy"
+								/>
+								<div class="image-actions">
+									<span class="image-name" data-testid="item-image-key">
+										{image.isCover ? 'Titelbild' : `Bild ${image.position + 1}`}
+									</span>
+									<div class="image-buttons">
+										{#if !image.isCover}
+											<form method="POST" action="?/setItemCover">
 												<input name="itemId" type="hidden" value={data.item.id} />
 												<input name="imageId" type="hidden" value={image.id} />
-												<button type="submit" class="danger" data-testid="remove-item-image">Entfernen</button>
+												<button type="submit" class="secondary" data-testid="set-item-cover">Als Titelbild</button>
 											</form>
-										</div>
+										{/if}
+										<form method="POST" action="?/removeItemImage">
+											<input name="itemId" type="hidden" value={data.item.id} />
+											<input name="imageId" type="hidden" value={image.id} />
+											<button type="submit" class="danger" data-testid="remove-item-image">Entfernen</button>
+										</form>
 									</div>
-								</li>
-							{/each}
-						</ul>
-					</dialog>
-				{:else}
-					<p class="empty">Noch keine Fotos vorhanden.</p>
-				{/if}
-			</section>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				</dialog>
 
-			<section class="panel" aria-labelledby="sale-title">
+				<section class="panel" aria-labelledby="sale-title">
 				<h2 id="sale-title">Verkauf</h2>
 				{#if data.item.soldAt}
 					<p class="sold-summary">
@@ -211,6 +225,83 @@
 			</section>
 		</div>
 	</section>
+
+	<section class="actions-row" aria-label="Artikel-Aktionen" data-testid="item-actions">
+		<form method="POST" action="?/deleteItem" class="action-form">
+			<input name="itemId" type="hidden" value={data.item.id} />
+			<button type="submit" class="action-btn danger-btn" data-testid="delete-item">🗑 Artikel löschen</button>
+		</form>
+		<button type="button" class="action-btn blue-btn" onclick={() => imagesDialog?.showModal()} data-testid="images-dialog-trigger">
+			🖼 Bilder ({data.images.length})
+		</button>
+		<button type="button" class="action-btn blue-btn" onclick={() => editDialog?.showModal()} data-testid="edit-dialog-trigger">
+			✎ Bearbeiten
+		</button>
+		<form method="POST" action="?/setItemReservation" class="action-form">
+			<input name="itemId" type="hidden" value={data.item.id} />
+			<button type="submit" class="action-btn amber-btn" data-testid="toggle-item-reservation">
+				{data.item.reservedAt ? '🔖 Reservierung aufheben' : '🔖 Reservieren'}
+			</button>
+		</form>
+	</section>
+
+	<dialog class="edit-dialog" bind:this={editDialog} aria-label="Artikel bearbeiten" data-testid="edit-dialog">
+		<div class="dialog-head">
+			<h3>Artikel bearbeiten</h3>
+			<button type="button" class="secondary" onclick={() => editDialog?.close()}>Schließen</button>
+		</div>
+		<form method="POST" action="?/updateItem">
+			<input name="itemId" type="hidden" value={data.item.id} />
+			<div class="form-grid">
+				<label>
+					<span>Artikelname</span>
+					<input name="title" type="text" value={data.item.title} required />
+				</label>
+				<label>
+					<span>Preis (€)</span>
+					<input name="priceEuros" type="text" inputmode="decimal" value={formatPrice(data.item.priceCents)} required />
+				</label>
+				<label>
+					<span>Kategorie</span>
+					<select name="category" aria-label="Kategorie">
+						{#each data.categoryOptions as category}
+							<option value={category} selected={category === data.item.category}>{categoryLabels[category]}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					<span>Zustand</span>
+					<select name="condition" aria-label="Zustand">
+						{#each data.conditionOptions as condition}
+							<option value={condition} selected={condition === data.item.condition}>{conditionLabels[condition]}</option>
+						{/each}
+					</select>
+				</label>
+			</div>
+			<label class="dialog-textarea">
+				<span>Externe Beschreibung (für Käufer sichtbar)</span>
+				<textarea name="externalDescription" rows="3">{data.item.externalDescription}</textarea>
+			</label>
+			<label class="dialog-textarea">
+				<span>Interne Notizen (nur für dich sichtbar)</span>
+				<textarea name="internalNotes" rows="3">{data.item.internalNotes}</textarea>
+			</label>
+			<div class="flag-checkboxes">
+				<label class="checkbox">
+					<input name="isComplete" type="checkbox" value="1" checked={data.item.isComplete} />
+					<span>Vollständig</span>
+				</label>
+				<label class="checkbox">
+					<input name="isFunctional" type="checkbox" value="1" checked={data.item.isFunctional} />
+					<span>Funktionsfähig</span>
+				</label>
+			</div>
+			{#if form?.updateItemError}
+				<p class="form-error" role="alert">{form.updateItemError}</p>
+			{/if}
+			<button type="submit">Änderungen speichern</button>
+		</form>
+	</dialog>
 
 	<section class="qr-panel" aria-labelledby="qr-title" data-testid="item-qr-panel">
 		<h2 id="qr-title">QR-Code <span class="qr-hint">— ausdrucken und an den Gegenstand heften</span></h2>
@@ -301,6 +392,121 @@
 		font-size: 1.3rem;
 		font-weight: 800;
 		margin: 0.5rem 0 0;
+	}
+
+	.reserved-badge {
+		align-self: flex-start;
+		background: var(--color-warn-soft, rgba(240, 179, 0, 0.12));
+		border: 1px solid var(--color-warn-border, rgba(240, 179, 0, 0.5));
+		border-radius: 999px;
+		color: var(--color-warn, #f0b300);
+		display: inline-block;
+		font-size: 0.75rem;
+		font-weight: 800;
+		letter-spacing: 0.03em;
+		margin: 0.6rem 0 0;
+		padding: 4px 10px;
+	}
+
+	.cover-preview {
+		align-items: center;
+		display: flex;
+		gap: 0.9rem;
+	}
+
+	.cover-thumb {
+		border-radius: var(--radius-small);
+		height: 4.5rem;
+		object-fit: cover;
+		width: 4.5rem;
+	}
+
+	.cover-thumb.placeholder {
+		align-items: center;
+		background: linear-gradient(135deg, var(--color-surface-strong), var(--fog));
+		color: var(--color-accent);
+		display: flex;
+		font-size: 1.6rem;
+		font-weight: 800;
+		justify-content: center;
+	}
+
+	.cover-count {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		font-weight: 700;
+	}
+
+	.actions-row {
+		align-items: center;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem;
+		justify-content: flex-end;
+		margin: 1.25rem 0 2rem;
+	}
+
+	.action-form {
+		display: contents;
+	}
+
+	.action-btn {
+		border-radius: var(--radius-control);
+		cursor: pointer;
+		font-size: 0.9rem;
+		font-weight: 700;
+		padding: 0.55rem 1rem;
+		transition:
+			filter 0.2s ease,
+			transform 0.2s ease;
+	}
+
+	.action-btn:hover {
+		filter: brightness(1.12);
+		transform: translateY(-1px);
+	}
+
+	.action-btn.danger-btn {
+		background: var(--color-danger-soft, rgba(220, 60, 60, 0.12));
+		border: 1px solid var(--color-danger);
+		color: var(--color-danger);
+	}
+
+	.action-btn.blue-btn {
+		background: var(--color-info-soft, rgba(56, 132, 255, 0.12));
+		border: 1px solid var(--color-info-border, rgba(56, 132, 255, 0.5));
+		color: var(--color-info, #3884ff);
+	}
+
+	.action-btn.amber-btn {
+		background: var(--color-warn-soft, rgba(240, 179, 0, 0.12));
+		border: 1px solid var(--color-warn-border, rgba(240, 179, 0, 0.5));
+		color: var(--color-warn, #f0b300);
+	}
+
+	.edit-dialog {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		max-width: min(34rem, 92vw);
+		padding: 1.25rem;
+		width: 34rem;
+	}
+
+	.edit-dialog::backdrop {
+		background: rgba(10, 20, 28, 0.6);
+	}
+
+	.dialog-textarea {
+		margin-top: 0.85rem;
+	}
+
+	.edit-dialog .flag-checkboxes {
+		margin: 0.9rem 0;
+	}
+
+	.edit-dialog form > button {
+		margin-top: 0.4rem;
 	}
 
 	.sold-badge {
@@ -464,10 +670,6 @@
 	.panel form {
 		display: grid;
 		gap: 0.85rem;
-	}
-
-	.images-trigger {
-		margin: 0.9rem 0 0;
 	}
 
 	.images-dialog {

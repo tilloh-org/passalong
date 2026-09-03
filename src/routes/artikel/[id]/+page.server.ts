@@ -4,6 +4,8 @@ import {
 	itemConditions,
 	saleChannels,
 	type Item,
+	type ItemCategory,
+	type ItemCondition,
 	type ItemImage,
 	type SaleChannel
 } from '$lib/server/collection-repository';
@@ -77,6 +79,27 @@ function imageActionError(error: unknown): string {
 		return error.message;
 	}
 	return imageErrorMessage;
+}
+
+const itemActionErrorByInternalMessage: Record<string, string> = {
+	'item was not found': 'Der Artikel wurde nicht gefunden.',
+	'priceCents must be a non-negative integer': 'Bitte gib einen gültigen Preis in Euro ein.',
+	'category is not supported': 'Bitte wähle eine gültige Kategorie.',
+	'condition is not supported': 'Bitte wähle einen gültigen Zustand.'
+};
+const itemActionGenericError = 'Die Änderung konnte nicht gespeichert werden. Bitte prüfe die Angaben.';
+
+/**
+ * Map item-action failures to German user-facing messages without leaking internals.
+ *
+ * @param {unknown} error - The thrown value.
+ * @returns {string} A safe user-facing message.
+ */
+function itemActionError(error: unknown): string {
+	if (error instanceof Error && error.message in itemActionErrorByInternalMessage) {
+		return itemActionErrorByInternalMessage[error.message];
+	}
+	return itemActionGenericError;
 }
 
 /**
@@ -276,13 +299,90 @@ export const actions: Actions = {
 		}
 
 		const formData = await request.formData();
+		const itemId = getFormText(formData, 'itemId');
 		try {
-			const itemId = getFormText(formData, 'itemId');
 			getCollectionRepository().setItemCover(itemId, getFormText(formData, 'imageId'), scope);
 		} catch (error) {
 			return fail(httpStatus.badRequest, { coverError: imageActionError(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(getFormText(formData, 'itemId'))}`);
+		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
+	},
+
+	deleteItem: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { deleteItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		try {
+			getCollectionRepository().deleteItem(getFormText(formData, 'itemId'), scope);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { deleteItemError: itemActionError(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
+	},
+
+	updateItem: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { updateItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		const itemId = getFormText(formData, 'itemId');
+		try {
+			getCollectionRepository().updateItem(
+				itemId,
+				{
+					title: getFormText(formData, 'title'),
+					priceCents: parseEuroAmount(getFormText(formData, 'priceEuros')) ?? -1,
+					category: getFormText(formData, 'category') as ItemCategory,
+					condition: getFormText(formData, 'condition') as ItemCondition,
+					internalNotes: getFormText(formData, 'internalNotes'),
+					externalDescription: getFormText(formData, 'externalDescription'),
+					isComplete: formData.get('isComplete') === '1',
+					isFunctional: formData.get('isFunctional') === '1'
+				},
+				scope
+			);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { updateItemError: itemActionError(error) });
+		}
+
+		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
+	},
+
+	setItemReservation: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { reservationError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		const itemId = getFormText(formData, 'itemId');
+		try {
+			const repository = getCollectionRepository();
+			const item = repository.getItemForOwner(itemId, scope);
+			if (!item) {
+				throw new Error('item was not found');
+			}
+			repository.setItemReservation(itemId, item.reservedAt === null, scope);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { reservationError: itemActionError(error) });
+		}
+
+		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
 	}
 };

@@ -127,7 +127,13 @@ test.describe('Core collection', () => {
 		await expect(qrDownload).toHaveAttribute('href', /^data:image\/png;base64,/);
 		await expect(page.getByTestId('item-qr-image')).toBeVisible();
 
-		// act — upload two photos in one multi-select upload
+		// act — reserve the item from the action row (and undo it again)
+		await page.getByTestId('toggle-item-reservation').click();
+		await expect(page.getByTestId('item-reserved-badge')).toBeVisible();
+		await page.getByTestId('toggle-item-reservation').click();
+		await expect(page.getByTestId('item-reserved-badge')).toHaveCount(0);
+
+		// act — upload two photos via the images dialog from the action row
 		const testPngBytes = Buffer.from(
 			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
 			'base64'
@@ -136,6 +142,8 @@ test.describe('Core collection', () => {
 			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/AAAMBAQAY3Y2wAAAAAElFTkSuQmCC',
 			'base64'
 		);
+		await page.getByTestId('images-dialog-trigger').click();
+		await expect(page.getByTestId('images-dialog')).toBeVisible();
 		await page.getByTestId('item-image-input').setInputFiles([
 			{ name: 'leselampe.png', mimeType: 'image/png', buffer: testPngBytes },
 			{ name: 'leselampe-detail.png', mimeType: 'image/png', buffer: secondPngBytes }
@@ -154,6 +162,7 @@ test.describe('Core collection', () => {
 		// assume — the second image is now the cover
 		await expect(page.getByTestId('item-image-key').first()).toContainText('Bild 1');
 		await expect(page.getByTestId('item-image-key').nth(1)).toContainText('Titelbild');
+		// dialog closed itself after the set-cover redirect
 
 		// act — register a sale with the full form on the detail page (euro input, date auto-set)
 		await page.getByTestId('item-proceeds').fill('9,50');
@@ -168,6 +177,15 @@ test.describe('Core collection', () => {
 
 		// assume
 		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+
+		// act — edit the item through the edit dialog
+		await page.getByTestId('edit-dialog-trigger').click();
+		await expect(page.getByTestId('edit-dialog')).toBeVisible();
+		await page.getByLabel('Artikelname').fill('Leselampe (gebraucht)');
+		await page.getByTestId('edit-dialog').getByRole('button', { name: 'Änderungen speichern' }).click();
+
+		// assume
+		await expect(page.getByRole('heading', { name: 'Leselampe (gebraucht)' })).toBeVisible();
 
 		// act — go back to the portfolio and quick-sell from the card
 		await page.getByRole('link', { name: '← Zurück zum Portfolio' }).click();
