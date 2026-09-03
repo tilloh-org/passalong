@@ -7,7 +7,6 @@
 
 	let menuOpen = $state(false);
 	let instanceAdminOpen = $state(false);
-	let passwordPanelOpen = $state(false);
 	let resetPanelOpen = $state(false);
 	let theme = $state<'light' | 'dark'>('light');
 	let navOverflow = $state(false);
@@ -159,6 +158,19 @@
 						<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
 					</svg>
 				</button>
+				<a
+					class="profile-avatar"
+					href="/profil"
+					aria-label="Profil öffnen"
+					title="Profil"
+					data-testid="profile-avatar-link"
+				>
+					{#if data.profile?.avatarStorageKey}
+						<img class="profile-avatar-img" src={`/media/${encodeURIComponent(data.profile.avatarStorageKey)}`} alt="" />
+					{:else}
+						<span class="profile-avatar-fallback">{(data.profile?.displayName ?? 'P').slice(0, 1).toUpperCase()}</span>
+					{/if}
+				</a>
 				<button
 					class="burger"
 					aria-label={menuOpen ? 'Menü schließen' : 'Menü öffnen'}
@@ -194,16 +206,8 @@
 						Instanzverwaltung
 					</a>
 				{/if}
-				<a
-					class="password-panel-link"
-					href="/"
-					onclick={(event) => {
-						event.preventDefault();
-						passwordPanelOpen = !passwordPanelOpen;
-						setMenuOpen(false);
-					}}
-				>
-					Passwort ändern
+				<a class="password-panel-link" href="/profil" onclick={() => setMenuOpen(false)}>
+					Profil
 				</a>
 				<hr class="nav-divider" />
 				<form class="nav-logout" method="POST" action="?/logout">
@@ -224,27 +228,8 @@
 		</section>
 	{/if}
 
-	{#if data.isAuthenticated && (passwordPanelOpen || instanceAdminOpen)}
+	{#if data.isAuthenticated && instanceAdminOpen}
 		<section class="settings-panel" aria-label="Einstellungen">
-			{#if passwordPanelOpen}
-				<div class="password-help">
-					<h2>Passwort ändern</h2>
-					<form method="POST" action="?/changePassword">
-						<label>
-							<span>Aktuelles Passwort</span>
-							<input name="currentPassword" type="password" autocomplete="current-password" required />
-						</label>
-						<label>
-							<span>Neues Passwort</span>
-							<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
-						</label>
-						{#if form && 'changePasswordError' in form && form.changePasswordError}
-							<p class="form-error" role="alert">{form.changePasswordError}</p>
-						{/if}
-						<button type="submit">Passwort speichern</button>
-					</form>
-				</div>
-			{/if}
 			{#if data.isInstanceAdmin && instanceAdminOpen}
 				<div class="password-help instance-administration">
 					<h2>Instanzverwaltung</h2>
@@ -608,6 +593,35 @@
 		align-items: center;
 		gap: 8px;
 		margin-left: auto;
+	}
+
+	.profile-avatar {
+		align-items: center;
+		border-radius: 999px;
+		display: flex;
+		height: 2.4rem;
+		justify-content: center;
+		overflow: hidden;
+		width: 2.4rem;
+	}
+
+	.profile-avatar-img {
+		height: 100%;
+		object-fit: cover;
+		width: 100%;
+	}
+
+	.profile-avatar-fallback {
+		align-items: center;
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		border-radius: 999px;
+		color: white;
+		display: flex;
+		font-size: 0.95rem;
+		font-weight: 800;
+		height: 100%;
+		justify-content: center;
+		width: 100%;
 	}
 
 	.burger {

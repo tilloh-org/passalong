@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionRepository, type SessionScope } from '$lib/server/collection-repository';
 import { hashSessionToken } from '$lib/server/session-token';
+import { hashPassword } from '$lib/server/password';
 
 const temporaryDirectories: string[] = [];
 const sessionCookieName = 'passalong_session';
@@ -42,6 +43,7 @@ interface ActionFixture {
 	scope: SessionScope;
 	loadActions: () => Promise<PageServerActions>;
 	loadDetailActions: () => Promise<PageServerActions>;
+	loadProfileActions: () => Promise<PageServerActions>;
 	loadPage: () => Promise<(input: unknown) => unknown>;
 }
 
@@ -74,6 +76,7 @@ function createActionFixtureWithOwner(): ActionFixture {
 		scope,
 		loadActions: async () => (await import('../../routes/+page.server')).actions as unknown as PageServerActions,
 		loadDetailActions: async () => (await import('../../routes/artikel/[id]/+page.server')).actions as unknown as PageServerActions,
+		loadProfileActions: async () => (await import('../../routes/profil/+page.server')).actions as unknown as PageServerActions,
 		loadPage: async () => (await import('../../routes/+page.server')).load as unknown as (input: unknown) => unknown
 	};
 }
@@ -332,5 +335,123 @@ describe('instance-admin actions', () => {
 		expect(anonymousOutcome).toMatchObject({ status: 401, data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
 		expect(itemAfterSale).toMatchObject({ saleChannel: 'flea-market', saleProceedsCents: 800 });
 		expect(itemAfterSale.soldAt).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/));
+	});
+
+	it('updates the profile display name through the profile action and rejects anonymous callers', async () => {
+		// arrange
+		const { repository, loadProfileActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const actions = await loadProfileActions();
+		const url = new URL('http://localhost/');
+		const formData = new FormData();
+		formData.set('displayName', 'Avery Updated');
+
+		// act
+		let redirectOutcome: unknown;
+		let anonymousOutcome: unknown;
+		try {
+			await actions.updateProfile({
+				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+				request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				url
+			} as never);
+		} catch (error) {
+			redirectOutcome = error;
+		}
+		anonymousOutcome = await actions.updateProfile({
+			cookies: { get: () => undefined },
+			request: new Request(url, { body: new FormData(), headers: { Origin: url.origin }, method: 'POST' }),
+			url
+		} as never);
+
+		// assume
+		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profil' });
+		expect(repository.getProfile(scope)).toMatchObject({ displayName: 'Avery Updated' });
+		expect(anonymousOutcome).toMatchObject({ status: 401, data: { updateProfileError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
+	});
+
+	it('stores and removes the profile avatar with the previous file cleaned up', async () => {
+		// arrange
+		const { repository, loadProfileActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const actions = await loadProfileActions();
+		const url = new URL('http://localhost/');
+		const formData = new FormData();
+		formData.set('avatar', new File([new Uint8Array(buildTestPng())], 'avatar.png', { type: 'image/png' }));
+
+		// act
+		let redirectOutcome: unknown;
+		try {
+			await actions.uploadAvatar({
+				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+				request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				url
+			} as never);
+		} catch (error) {
+			redirectOutcome = error;
+		}
+		const withAvatar = repository.getProfile(scope);
+
+		// assume
+		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profil' });
+		expect(withAvatar?.avatarStorageKey).toBeTruthy();
+		expect(existsSync(join(mediaRoot, withAvatar?.avatarStorageKey ?? 'missing'))).toBe(true);
+
+		// act — remove the avatar again
+		let removeOutcome: unknown;
+		try {
+			await actions.removeAvatar({
+				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+				request: new Request(url, { body: new FormData(), headers: { Origin: url.origin }, method: 'POST' }),
+				url
+			} as never);
+		} catch (error) {
+			removeOutcome = error;
+		}
+
+		// assume
+		expect(removeOutcome).toMatchObject({ status: 303, location: '/profil' });
+		expect(repository.getProfile(scope)?.avatarStorageKey).toBeNull();
+		expect(existsSync(join(mediaRoot, withAvatar?.avatarStorageKey ?? 'missing'))).toBe(false);
+	});
+
+	it('changes the password through the profile action and rejects a wrong current password', async () => {
+		// arrange
+		const { repository, loadProfileActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const actions = await loadProfileActions();
+		const url = new URL('http://localhost/');
+		const currentPassword = 'initial-owner-password-2026';
+		repository.updatePassword(scope, await hashPassword(currentPassword));
+		const passwordParameters = {
+			currentPassword,
+			password: 'correct-horse-battery-staple'
+		};
+		const cookiesMock = {
+			get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined),
+			set: () => undefined
+		};
+
+		// act — the wrong attempt runs first so the session is still valid
+		const wrongPasswordOutcome = await actions.changePassword({
+			cookies: cookiesMock,
+			request: new Request(url, { body: new URLSearchParams({ ...passwordParameters, currentPassword: 'wrong' }), headers: { Origin: url.origin, 'Content-Type': 'application/x-www-form-urlencoded' }, method: 'POST' }),
+			url
+		} as never);
+
+		// assume
+		expect(wrongPasswordOutcome).toMatchObject({ status: 400, data: { changePasswordError: 'Das aktuelle Passwort ist nicht korrekt.' } });
+
+		// act — the successful change revokes all sessions and issues a fresh cookie
+		let redirectOutcome: unknown;
+		try {
+			await actions.changePassword({
+				cookies: cookiesMock,
+				request: new Request(url, { body: new URLSearchParams(passwordParameters), headers: { Origin: url.origin, 'Content-Type': 'application/x-www-form-urlencoded' }, method: 'POST' }),
+				url
+			} as never);
+		} catch (error) {
+			redirectOutcome = error;
+		}
+
+		// assume
+		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profil' });
 	});
 });

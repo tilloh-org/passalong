@@ -200,23 +200,55 @@ test.describe('Core collection', () => {
 		const currentMonth = new Date().toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
 		await expect(page.getByTestId('sale-statistics-months')).toContainText(currentMonth);
 
-		// act
+		// act — open the profile page via the header avatar and change the display name
 		const protectedUrl = page.url();
-		await page.getByRole('button', { name: 'Abmelden' }).click();
+		await page.getByTestId('profile-avatar-link').click();
+		await expect(page).toHaveURL(/\/profil/);
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
+		await page.getByTestId('display-name-input').fill('Avery Profil');
+		await page.getByTestId('save-profile').click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
-		await expect(page.getByText('Vor dem Inserieren die Glühbirne austauschen.')).not.toBeVisible();
+		await expect(page.getByTestId('display-name-input')).toHaveValue('Avery Profil');
 
-		// act
+		// act — change the password through the profile page (session is revoked on success)
+		await page.getByLabel('Aktuelles Passwort').fill(winningAccount.password);
+		await page.getByLabel('Neues Passwort').fill('profile-changed-password-2026');
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('changePassword')),
+			page.getByTestId('save-password').click()
+		]);
+		await expect(page).toHaveURL(/\/profil/);
+
+		// act — verify the new password is required on the next login
+		await page.context().clearCookies();
+		await page.goto('/');
+		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
+		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
+		await loginForm.getByLabel('Passwort').fill('profile-changed-password-2026');
+		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+
+		// act — restore the original password via the profile page
+		await page.getByTestId('profile-avatar-link').click();
+		await page.getByLabel('Aktuelles Passwort').fill('profile-changed-password-2026');
+		await page.getByLabel('Neues Passwort').fill(winningAccount.password);
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('changePassword')),
+			page.getByTestId('save-password').click()
+		]);
+		await expect(page).toHaveURL(/\/profil/);
+
+		// act — log back in with the restored password on the next visit
+		await page.context().clearCookies();
+		await page.goto('/');
+		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-
-		// assume
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
-		// act
+		// act — verify the protected detail page requires login again
 		await page.context().clearCookies();
 		await page.goto(protectedUrl);
 

@@ -134,6 +134,16 @@ export interface SessionScope {
 	tenantId: string;
 }
 
+export interface UserProfile {
+	username: string;
+	displayName: string;
+	avatarStorageKey: string | null;
+}
+
+export interface UpdateProfileInput {
+	displayName: string;
+}
+
 export interface AdminAccount extends SessionScope {
 	username: string;
 	displayName: string;
@@ -180,6 +190,9 @@ export interface CollectionRepository {
 	consumePasswordReset(username: string, secretHash: string, passwordHash: string): SessionScope | null;
 	getPasswordHashForScope(scope: SessionScope): string | null;
 	updatePassword(scope: SessionScope, passwordHash: string): void;
+	getProfile(scope: SessionScope): UserProfile | null;
+	updateProfile(scope: SessionScope, input: UpdateProfileInput): UserProfile;
+	setProfileAvatar(scope: SessionScope, avatarStorageKey: string | null): UserProfile;
 	createItem(input: CreateItemInput, scope: SessionScope): Item;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
@@ -194,6 +207,7 @@ export interface CollectionRepository {
 	updateItem(itemId: string, input: UpdateItemInput, scope: SessionScope): Item;
 	setItemReservation(itemId: string, reserved: boolean, scope: SessionScope): Item;
 	findImageMetadataForTenant(storageKey: string, scope: SessionScope): ItemImage | null;
+	findProfileAvatarForTenant(storageKey: string, scope: SessionScope): boolean;
 }
 
 export interface UpdateItemInput {
@@ -240,6 +254,7 @@ const itemScopedImageKeysVersion = '2026083101_item_scoped_image_keys';
 const saleStatusVersion = '2026083102_item_sale_status';
 const itemDetailFieldsVersion = '2026090101_item_detail_fields';
 const itemReservationVersion = '2026090201_item_reservation';
+const userAvatarVersion = '2026090202_user_avatar';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -697,6 +712,59 @@ export function createCollectionRepository(
 			}
 		},
 
+		getProfile(scope) {
+			const row = database
+				.prepare('SELECT username, display_name, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?')
+				.get(scope.userId, scope.tenantId) as
+					| { username: string; display_name: string; avatar_storage_key: string | null }
+					| undefined;
+			if (!row) {
+				return null;
+			}
+			return {
+				username: row.username,
+				displayName: row.display_name,
+				avatarStorageKey: row.avatar_storage_key
+			};
+		},
+
+		updateProfile(scope, input) {
+			const displayName = requireText(input.displayName, 'displayName');
+			const result = database
+				.prepare('UPDATE users SET display_name = ? WHERE id = ? AND tenant_id = ?')
+				.run(displayName, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('authenticated owner was not found');
+			}
+			const profile = database
+				.prepare('SELECT username, display_name, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?')
+				.get(scope.userId, scope.tenantId) as
+					| { username: string; display_name: string; avatar_storage_key: string | null };
+			return {
+				username: profile.username,
+				displayName: profile.display_name,
+				avatarStorageKey: profile.avatar_storage_key
+			};
+		},
+
+		setProfileAvatar(scope, avatarStorageKey) {
+			const result = database
+				.prepare('UPDATE users SET avatar_storage_key = ? WHERE id = ? AND tenant_id = ?')
+				.run(avatarStorageKey, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('authenticated owner was not found');
+			}
+			const profile = database
+				.prepare('SELECT username, display_name, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?')
+				.get(scope.userId, scope.tenantId) as
+					| { username: string; display_name: string; avatar_storage_key: string | null };
+			return {
+				username: profile.username,
+				displayName: profile.display_name,
+				avatarStorageKey: profile.avatar_storage_key
+			};
+		},
+
 		createItem(input, scope) {
 			const title = requireText(input.title, 'title');
 			const internalNotes = input.internalNotes.trim();
@@ -1024,6 +1092,14 @@ export function createCollectionRepository(
 				)
 				.get(validatedStorageKey, scope.tenantId, scope.userId) as ImageRow | undefined;
 			return row ? mapImageRow(row) : null;
+		},
+
+		findProfileAvatarForTenant(storageKey, scope) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare('SELECT 1 FROM users WHERE avatar_storage_key = ? AND id = ? AND tenant_id = ?')
+				.get(validatedStorageKey, scope.userId, scope.tenantId);
+			return Boolean(row);
 		}
 	};
 }
@@ -1218,6 +1294,7 @@ function createSchema(database: Database.Database): void {
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
 			password_hash TEXT,
 			password_reset_required INTEGER NOT NULL DEFAULT 0 CHECK (password_reset_required IN (0, 1)),
+			avatar_storage_key TEXT,
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id)
 		);
@@ -1373,6 +1450,28 @@ function migrateSchema(database: Database.Database): void {
 	migrateSaleStatus(database);
 	migrateItemDetailFields(database);
 	migrateItemReservation(database);
+	migrateUserAvatar(database);
+}
+
+/**
+ * Add the avatar storage key to users on databases that predate profile avatars.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateUserAvatar(database: Database.Database): void {
+	if (hasMigrationVersion(database, userAvatarVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'users', 'avatar_storage_key')) {
+			database.exec('ALTER TABLE users ADD COLUMN avatar_storage_key TEXT');
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(userAvatarVersion, new Date().toISOString());
+	});
 }
 
 /**
@@ -1611,6 +1710,7 @@ function rebuildUsers(database: Database.Database): void {
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
 			password_hash TEXT,
 			password_reset_required INTEGER NOT NULL DEFAULT 0 CHECK (password_reset_required IN (0, 1)),
+			avatar_storage_key TEXT,
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id)
 		);
