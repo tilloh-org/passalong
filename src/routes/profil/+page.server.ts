@@ -229,7 +229,7 @@ function profileActionError(error: unknown): string {
  * @returns {string} A safe user-facing message.
  */
 function getProfileErrorMessage(error: unknown): string {
-	if (error instanceof Error && error.message.includes('password must')) {
+	if (error instanceof Error && error.message.toLowerCase().includes('password must')) {
 		return `Das Passwort muss mindestens ${minimumPasswordLength} Zeichen lang sein.`;
 	}
 	if (error instanceof Error && error.message.includes('password')) {
