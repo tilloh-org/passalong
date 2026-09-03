@@ -502,7 +502,48 @@
 	}
 
 	.edit-dialog .flag-checkboxes {
+		display: flex;
+		gap: 1.1rem;
 		margin: 0.9rem 0;
+	}
+
+	label.checkbox {
+		align-items: center;
+		cursor: pointer;
+		display: flex;
+		flex-direction: row;
+		gap: 0.5rem;
+	}
+
+	label.checkbox span {
+		color: var(--color-text);
+		font-size: 0.9rem;
+		font-weight: 600;
+		letter-spacing: 0;
+		text-transform: none;
+	}
+
+	label.checkbox input[type='checkbox'] {
+		accent-color: var(--color-accent);
+		cursor: pointer;
+		height: 1.05rem;
+		width: 1.05rem;
+	}
+
+	label.checkbox:has(input[name='isComplete']:checked) span {
+		color: var(--color-ok);
+	}
+
+	label.checkbox:has(input[name='isFunctional']:checked) span {
+		color: var(--color-info, #3884ff);
+	}
+
+	label.checkbox:has(input[name='isComplete']:checked) input[type='checkbox'] {
+		accent-color: var(--color-ok);
+	}
+
+	label.checkbox:has(input[name='isFunctional']:checked) input[type='checkbox'] {
+		accent-color: var(--color-info, #3884ff);
 	}
 
 	.edit-dialog form > button {
@@ -828,7 +869,8 @@
 	}
 
 	input,
-	select {
+	select,
+	textarea {
 		background: var(--color-input);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-control);
@@ -838,7 +880,8 @@
 	}
 
 	input:focus,
-	select:focus {
+	select:focus,
+	textarea:focus {
 		border-color: var(--color-ice);
 		box-shadow: 0 0 0 4px var(--focus-ring);
 		outline: none;
