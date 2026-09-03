@@ -546,7 +546,13 @@
 		accent-color: var(--color-info, #3884ff);
 	}
 
-	.edit-dialog form > button {
+	.edit-dialog form {
+		display: grid;
+	}
+
+	.edit-dialog form > button,
+	.images-dialog .dialog-upload > button {
+		justify-self: end;
 		margin-top: 0.4rem;
 	}
 
