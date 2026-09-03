@@ -108,6 +108,43 @@
 				</form>
 			</div>
 		</div>
+
+		{#if data.isInstanceAdmin}
+			<section class="panel backup-panel" aria-labelledby="backup-title" data-testid="backup-panel">
+				<h2 id="backup-title">Backup &amp; Restore</h2>
+				<div class="backup-grid">
+					<div class="backup-block">
+						<h3>Vollständiges Backup</h3>
+						<p class="backup-hint">Lädt eine ZIP-Datei mit Datenbank, Medien und Prüfsummen-Manifest herunter.</p>
+						<a class="backup-download" href="/profil/backup" download data-testid="download-backup">
+							⬇ Backup herunterladen
+						</a>
+					</div>
+					<div class="backup-block">
+						<h3>Restore</h3>
+						<p class="backup-hint">
+							Das Hochladen ersetzt die gesamte Instanz (Datenbank und Medien) durch das Backup. Die Sitzung wird beendet.
+						</p>
+						<form method="POST" action="?/restoreBackup" enctype="multipart/form-data" data-testid="restore-form">
+							<input
+								name="backupArchive"
+								id="backup-file"
+								type="file"
+								accept=".zip,application/zip"
+								data-testid="restore-input"
+								class="visually-hidden-input"
+								required
+							/>
+							<label class="file-button" for="backup-file">📦 Backup-Datei auswählen</label>
+							{#if form?.backupError}
+								<p class="form-error" role="alert">{form.backupError}</p>
+							{/if}
+							<button type="submit" class="danger" data-testid="restore-submit">Restore ausführen</button>
+						</form>
+					</div>
+				</div>
+			</section>
+		{/if}
 	</section>
 </main>
 
@@ -376,8 +413,67 @@
 		transform: none;
 	}
 
+	.backup-panel {
+		border-top: 1px solid var(--color-border);
+		display: block;
+		padding-top: 1rem;
+	}
+
+	.backup-panel h2 {
+		font-size: 1.05rem;
+		margin: 0 0 0.75rem;
+	}
+
+	.backup-grid {
+		display: grid;
+		gap: 1.25rem;
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.backup-block h3 {
+		font-size: 0.95rem;
+		margin: 0 0 0.4rem;
+	}
+
+	.backup-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0 0 0.6rem;
+	}
+
+	.backup-download {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		display: inline-block;
+		font-size: 0.9rem;
+		font-weight: 700;
+		padding: 0.7rem 1.1rem;
+		text-decoration: none;
+		transition: background 0.2s ease;
+	}
+
+	.backup-download:hover {
+		background: var(--color-accent-soft);
+	}
+
+	.backup-block form {
+		display: grid;
+		gap: 0.6rem;
+	}
+
+	.backup-block button.danger {
+		justify-self: start;
+	}
+
 	@media (max-width: 48rem) {
 		.profile-layout {
+			grid-template-columns: 1fr;
+		}
+
+		.backup-grid {
 			grid-template-columns: 1fr;
 		}
 	}

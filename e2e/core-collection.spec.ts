@@ -279,6 +279,14 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(page).toHaveURL(/\/profil/);
 
+		// act — the admin sees the backup panel and downloads a full instance backup
+		await expect(page.getByTestId('backup-panel')).toBeVisible();
+		const backupResponse = await page.request.get('/profil/backup');
+		expect(backupResponse.status()).toBe(200);
+		expect(backupResponse.headers()['content-type']).toContain('application/zip');
+		const backupBody = await backupResponse.body();
+		expect(backupBody.length).toBeGreaterThan(1000);
+
 		// act
 		await page.context().storageState({ path: 'e2e/.auth-owner.json' });
 	});

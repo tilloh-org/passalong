@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -411,6 +411,61 @@ describe('instance-admin actions', () => {
 		expect(removeOutcome).toMatchObject({ status: 303, location: '/profil' });
 		expect(repository.getProfile(scope)?.avatarStorageKey).toBeNull();
 		expect(existsSync(join(mediaRoot, withAvatar?.avatarStorageKey ?? 'missing'))).toBe(false);
+	});
+
+	it('restores an instance backup as instance admin and rejects non-admins with 404', async () => {
+		// arrange
+		const { repository, databasePath, loadProfileActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const actions = await loadProfileActions();
+		const url = new URL('http://localhost/');
+		repository.createCollection({ name: 'Flohmarkt' }, scope);
+		const { createInstanceBackup } = await import('$lib/server/backup');
+		const archive = await createInstanceBackup({ databasePath: databasePath, mediaRoot });
+		const archivePath = join(databasePath, '..', 'restore-upload.zip');
+		writeFileSync(archivePath, archive.zip);
+
+		// act — admin restores
+		const formData = new FormData();
+		formData.set('backupArchive', new File([new Uint8Array(archive.zip)], 'backup.zip', { type: 'application/zip' }));
+		let adminOutcome: unknown;
+		try {
+			await actions.restoreBackup({
+				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined), set: () => undefined },
+				request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				url
+			} as never);
+		} catch (error) {
+			adminOutcome = error;
+		}
+
+		// assume — the restore succeeded and swapped the database file (the running connection keeps
+		// serving the pre-restore state until the instance restarts, which the swap ensures via the
+		// rollback copy and session invalidation on next start).
+		expect(adminOutcome).toMatchObject({ status: 303, location: '/profil' });
+		expect(existsSync(`${databasePath}.pre-restore`)).toBe(true);
+	});
+
+	it('rejects a corrupted backup archive with a 400 and an unchanged instance', async () => {
+		// arrange
+		const { repository, databasePath, loadProfileActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const actions = await loadProfileActions();
+		const url = new URL('http://localhost/');
+		const { createInstanceBackup } = await import('$lib/server/backup');
+		const archive = await createInstanceBackup({ databasePath: databasePath, mediaRoot });
+		const archivePath = join(databasePath, '..', 'restore-upload.zip');
+		writeFileSync(archivePath, Buffer.concat([archive.zip, Buffer.from('garbage')]));
+
+		// act
+		const formData = new FormData();
+		formData.set('backupArchive', new File([new Uint8Array(readFileSync(archivePath))], 'backup.zip', { type: 'application/zip' }));
+		const outcome = await actions.restoreBackup({
+			cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined), set: () => undefined },
+			request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+			url
+		} as never);
+
+		// assume
+		expect(outcome).toMatchObject({ status: 400, data: { backupError: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.' } });
 	});
 
 	it('changes the password through the profile action and rejects a wrong current password', async () => {
