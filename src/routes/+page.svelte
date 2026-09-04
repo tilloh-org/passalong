@@ -5,66 +5,10 @@
 
 	let { data, form } = $props();
 
-	let menuOpen = $state(false);
-	let instanceAdminOpen = $state(false);
+
+
+
 	let resetPanelOpen = $state(false);
-	let theme = $state<'light' | 'dark'>('light');
-	let navOverflow = $state(false);
-	let headerElement: HTMLElement | undefined = $state();
-	let navElement: HTMLElement | undefined = $state();
-
-	$effect(() => {
-		if (!headerElement || !navElement) {
-			return;
-		}
-		const measure = () => {
-			if (!navElement || !headerElement) {
-				return;
-			}
-			// Hysteresis: switch to the drawer as soon as the header row overflows. Switch back to
-			// inline only when the whole row (brand + actions + nav) genuinely fits again — measured
-			// on the drawer-mode header, where brand and actions still occupy their inline widths.
-			const brand = headerElement.querySelector('.brand-wrap');
-			const actions = headerElement.querySelector('.header-actions');
-			const reservedWidth =
-				((brand?.scrollWidth ?? 0) + (actions?.scrollWidth ?? 0)) * 2 + 96;
-			if (navOverflow) {
-				navOverflow = headerElement.clientWidth - reservedWidth < navElement.scrollWidth;
-			} else {
-				navOverflow = headerElement.scrollWidth > headerElement.clientWidth + 1;
-			}
-		};
-		measure();
-		const observer = new ResizeObserver(measure);
-		observer.observe(headerElement);
-		observer.observe(navElement);
-		return () => observer.disconnect();
-	});
-
-	$effect(() => {
-		const saved = localStorage.getItem('passalong-theme');
-		const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-		theme = saved === 'dark' || saved === 'light' ? saved : prefersDark ? 'dark' : 'light';
-	});
-
-	/**
-	 * Toggle the persisted light/dark theme on the document element.
-	 */
-	function toggleTheme(): void {
-		theme = theme === 'dark' ? 'light' : 'dark';
-		document.documentElement.setAttribute('data-theme', theme);
-		localStorage.setItem('passalong-theme', theme);
-	}
-
-	/**
-	 * Open or close the burger navigation and lock body scrolling while open.
-	 *
-	 * @param {boolean} open - Whether the drawer should be open.
-	 */
-	function setMenuOpen(open: boolean): void {
-		menuOpen = open;
-		document.body.style.overflow = open ? 'hidden' : '';
-	}
 
 	const categoryLabels: Record<string, string> = {
 		clothing: 'Kleidung',
@@ -131,91 +75,7 @@
 	<meta name="description" content="Verwalte deine Sammlung von Dingen, die weiterziehen dürfen." />
 </svelte:head>
 
-<svelte:window onkeydown={(event) => {
-	if (event.key === 'Escape') {
-		menuOpen = false;
-	}
-}} />
-
 <main>
-	<header class="masthead" class:nav-overflow={navOverflow} bind:this={headerElement}>
-		<h1 class="brand-wrap">
-			<a class="brand" href="/">
-				<img class="header-logo" src="/passalong-icon.svg" alt="" />
-				passalong
-			</a>
-		</h1>
-		{#if data.isAuthenticated}
-			<div class="header-actions">
-				<button
-					class="icon-btn theme-toggle"
-					aria-label="Dark Mode umschalten"
-					title="Hell/Dunkel"
-					type="button"
-					onclick={toggleTheme}
-				>
-					<svg class="icon" aria-hidden="true" focusable="false">
-						<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
-					</svg>
-				</button>
-				<a
-					class="profile-avatar"
-					href="/profil"
-					aria-label="Profil öffnen"
-					title="Profil"
-					data-testid="profile-avatar-link"
-				>
-					{#if data.profile?.avatarStorageKey}
-						<img class="profile-avatar-img" src={`/media/${encodeURIComponent(data.profile.avatarStorageKey)}`} alt="" />
-					{:else}
-						<span class="profile-avatar-fallback">{(data.profile?.displayName ?? 'P').slice(0, 1).toUpperCase()}</span>
-					{/if}
-				</a>
-				<button
-					class="burger"
-					aria-label={menuOpen ? 'Menü schließen' : 'Menü öffnen'}
-					aria-expanded={menuOpen}
-					type="button"
-					onclick={() => setMenuOpen(!menuOpen)}
-				>
-					<span></span><span></span><span></span>
-				</button>
-			</div>
-			{#if menuOpen}
-				<button class="nav-backdrop open" aria-label="Menü schließen" type="button" onclick={() => setMenuOpen(false)}></button>
-			{/if}
-			<nav class:open={menuOpen} bind:this={navElement}>
-				<a
-					class="nav-cta"
-					href="/#add-item-title"
-					onclick={() => setMenuOpen(false)}
-				>
-					+ Neu
-				</a>
-				<hr class="nav-divider" />
-				{#if data.isInstanceAdmin}
-					<a
-						class="instance-admin-link"
-						href="/"
-						onclick={(event) => {
-							event.preventDefault();
-							instanceAdminOpen = !instanceAdminOpen;
-							setMenuOpen(false);
-						}}
-					>
-						Instanzverwaltung
-					</a>
-				{/if}
-				<a class="password-panel-link" href="/profil" onclick={() => setMenuOpen(false)}>
-					Profil
-				</a>
-				<hr class="nav-divider" />
-				<form class="nav-logout" method="POST" action="?/logout">
-					<button type="submit" onclick={() => setMenuOpen(false)}>Abmelden</button>
-				</form>
-			</nav>
-		{/if}
-	</header>
 
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
@@ -228,24 +88,23 @@
 		</section>
 	{/if}
 
-	{#if data.isAuthenticated && instanceAdminOpen}
-		<section class="settings-panel" aria-label="Einstellungen">
-			{#if data.isInstanceAdmin && instanceAdminOpen}
-				<div class="password-help instance-administration">
-					<h2>Instanzverwaltung</h2>
-					<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
-					<form method="POST" action="?/createPasswordReset">
-						<label>
-							<span>Benutzername des Kontos</span>
-							<input name="username" autocomplete="username" required />
-						</label>
-						{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
-							<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
-						{/if}
-						<button type="submit">Zurücksetzungscode erzeugen</button>
-					</form>
-				</div>
-			{/if}
+
+	{#if data.isAuthenticated && data.isInstanceAdmin}
+		<section class="settings-panel" id="instanzverwaltung" aria-label="Instanzverwaltung">
+			<div class="password-help instance-administration">
+				<h2>Instanzverwaltung</h2>
+				<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
+				<form method="POST" action="?/createPasswordReset">
+					<label>
+						<span>Benutzername des Kontos</span>
+						<input name="username" autocomplete="username" required />
+					</label>
+					{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
+						<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
+					{/if}
+					<button type="submit">Zurücksetzungscode erzeugen</button>
+				</form>
+			</div>
 		</section>
 	{/if}
 
@@ -518,214 +377,33 @@
 		padding: 0 1.5rem 4rem;
 	}
 
-	.masthead {
-		position: sticky;
-		top: 0;
-		z-index: 65;
-		align-items: center;
-		background: var(--glass);
-		backdrop-filter: blur(14px) saturate(1.4);
-		-webkit-backdrop-filter: blur(14px) saturate(1.4);
-		border-bottom: 1px solid var(--color-border);
-		container-type: inline-size;
-		display: flex;
-		gap: 16px;
-		margin: 0 -1.5rem 2rem;
-		padding: 0.65rem 1.5rem;
-	}
 
-	.brand-wrap {
-		font-size: 1.2rem;
-		font-weight: 800;
-		letter-spacing: 0.02em;
-		margin: 0;
-	}
 
-	.brand {
-		align-items: center;
-		color: var(--color-accent-strong);
-		display: flex;
-		font-size: 1.2rem;
-		font-weight: 800;
-		gap: 9px;
-		letter-spacing: 0.02em;
-		text-decoration: none;
-	}
 
-	.icon-btn {
-		align-items: center;
-		background: none;
-		border: 1px solid var(--color-border);
-		border-radius: 999px;
-		box-shadow: none;
-		color: var(--color-accent);
-		cursor: pointer;
-		display: flex;
-		font-size: 1.1rem;
-		height: 40px;
-		justify-content: center;
-		padding: 0;
-		transition: all 0.25s ease;
-		width: 40px;
-	}
 
-	.icon-btn:hover {
-		background: var(--color-accent-soft);
-		box-shadow: none;
-		transform: rotate(15deg);
-	}
 
-	.icon {
-		height: 1.1rem;
-		width: 1.1rem;
-	}
 
-	.header-logo {
-		display: inline-block;
-		filter: drop-shadow(var(--shadow-logo));
-		flex-shrink: 0;
-		height: 22px;
-		width: 22px;
-	}
 
-	.header-actions {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		margin-left: auto;
-	}
 
-	.profile-avatar {
-		align-items: center;
-		border-radius: 999px;
-		display: flex;
-		height: 2.4rem;
-		justify-content: center;
-		overflow: hidden;
-		width: 2.4rem;
-	}
 
-	.profile-avatar-img {
-		height: 100%;
-		object-fit: cover;
-		width: 100%;
-	}
 
-	.profile-avatar-fallback {
-		align-items: center;
-		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
-		border-radius: 999px;
-		color: white;
-		display: flex;
-		font-size: 0.95rem;
-		font-weight: 800;
-		height: 100%;
-		justify-content: center;
-		width: 100%;
-	}
 
-	.burger {
-		background: none;
-		border: 0;
-		border-radius: 12px;
-		box-shadow: none;
-		cursor: pointer;
-		display: none;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 5px;
-		height: 40px;
-		padding: 0;
-		position: relative;
-		transition: background 0.25s ease;
-		width: 40px;
-		z-index: 86;
-	}
 
-	.burger:hover {
-		background: var(--color-accent-soft);
-		box-shadow: none;
-		transform: none;
-	}
 
-	.burger span {
-		background: var(--color-text);
-		border-radius: 2px;
-		display: block;
-		height: 2.5px;
-		transition:
-			transform 0.3s ease,
-			opacity 0.3s ease;
-		width: 22px;
-	}
 
-	.burger[aria-expanded='true'] span:nth-child(1) {
-		transform: translateY(7.5px) rotate(45deg);
-	}
 
-	.burger[aria-expanded='true'] span:nth-child(2) {
-		opacity: 0;
-	}
 
-	.burger[aria-expanded='true'] span:nth-child(3) {
-		transform: translateY(-7.5px) rotate(-45deg);
-	}
 
-	.nav-backdrop {
-		background: rgba(14, 42, 58, 0.4);
-		border: 0;
-		cursor: default;
-		display: none;
-		height: 100vh;
-		left: 0;
-		padding: 0;
-		position: fixed;
-		top: 0;
-		width: 100vw;
-		z-index: 84;
-	}
 
-	.nav-backdrop.open {
-		display: block;
-	}
 
-	nav {
-		display: flex;
-		gap: 4px;
-	}
 
 	nav a,
-	nav form button {
-		align-items: center;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: 999px;
-		box-shadow: none;
-		color: var(--color-accent);
-		cursor: pointer;
-		display: inline-flex;
-		font-size: 0.9rem;
-		font-weight: 600;
-		height: 40px;
-		justify-content: center;
-		padding: 0 14px;
-		text-decoration: none;
-		transition: all 0.25s ease;
-		white-space: nowrap;
-	}
 
 	nav a:hover {
 		background: var(--color-accent-soft);
 		transform: translateY(-1px);
 	}
 
-	nav a.nav-cta {
-		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
-		box-shadow: var(--shadow-cta);
-		color: #fff;
-		font-weight: 700;
-	}
 
 	nav a[aria-current='page'] {
 		background: var(--color-accent-strong);
@@ -733,35 +411,10 @@
 		color: #fff;
 	}
 
-	nav form button {
-		color: var(--color-danger);
-	}
 
-	nav form button:hover {
-		background: var(--color-danger-soft);
-		transform: translateY(-1px);
-	}
 
-	.nav-logout {
-		display: block;
-		margin-left: 8px;
-		padding: 0;
-	}
 
-	.nav-divider {
-		background: var(--color-border);
-		border: 0;
-		display: none;
-		height: 1px;
-		margin: 8px 0;
-	}
 
-	.settings-panel {
-		display: grid;
-		gap: 1rem;
-		margin: 0 auto 1.5rem;
-		max-width: 26rem;
-	}
 
 	.password-help {
 		background: var(--color-surface);
@@ -771,14 +424,7 @@
 		padding: 1.1rem 1.2rem;
 	}
 
-	.password-help h2 {
-		font-size: 1.05rem;
-		margin: 0 0 0.75rem;
-	}
 
-	.password-help form {
-		margin-top: 0;
-	}
 
 	.collection-list {
 		display: grid;
@@ -1237,59 +883,13 @@
 		color: #fff;
 	}
 
-	/* Nav läuft auf einer Zeile; läuft sie über den verfügbaren Platz hinaus, übernimmt der Burger */
-	nav {
-		flex-shrink: 0;
-		flex-wrap: nowrap;
+	.settings-panel {
+		margin: 0 0 1.5rem;
 	}
 
-	.masthead.nav-overflow .burger {
-		display: flex;
-	}
-
-	.masthead.nav-overflow nav {
-		background: var(--color-surface);
-		border-left: 1px solid var(--color-border);
-		box-shadow: var(--shadow-card);
-		flex-direction: column;
-		height: 100vh;
-		overflow-y: auto;
-		padding: 76px 18px 20px;
-		position: fixed;
-		right: 0;
-		top: 0;
-		transform: translateX(105%);
-		transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
-		width: min(80vw, 300px);
-		z-index: 85;
-	}
-
-	.masthead.nav-overflow nav.open {
-		transform: translateX(0);
-	}
-
-	.masthead.nav-overflow nav a,
-	.masthead.nav-overflow nav form button {
-		border-radius: var(--radius-control);
-		font-size: 1rem;
-		height: 44px;
-		justify-content: flex-start;
-		padding: 0 16px;
-		width: 100%;
-	}
-
-	.masthead.nav-overflow .nav-backdrop {
-		display: block;
-	}
-
-	.masthead.nav-overflow .nav-divider {
-		display: block;
-		width: auto;
-	}
-
-	.masthead.nav-overflow .nav-logout {
-		margin-left: 0;
-		margin-top: 24px;
+	.password-help {
+		display: grid;
+		gap: 0.85rem;
 	}
 
 	@media (max-width: 48rem) {

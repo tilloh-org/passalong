@@ -91,7 +91,7 @@
 
 				{#if data.activeCollection}
 					<section class="panel stand-panel" aria-labelledby="stand-title" data-testid="stand-panel">
-						<h2 id="stand-title">🛒 Mein Angebot</h2>
+						<h2 id="stand-title">🛒 Meine Angebote</h2>
 						<p class="stand-hint">
 							Eine Galerie deiner offenen Artikel — ohne Login für Käufer erreichbar. Ideal als QR-Code am Stand.
 						</p>
@@ -120,7 +120,7 @@
 									rel="noopener"
 									data-testid="open-stand-link"
 								>
-									↗ Mein Angebot öffnen
+									↗ Meine Angebote öffnen
 								</a>
 							</div>
 							<button type="submit" data-testid="save-stand-intro">✓ Einleitung speichern</button>
