@@ -211,6 +211,16 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(page.getByTestId('display-name-input')).toHaveValue('Avery Profil');
 
+		// act — save a stand introduction and verify it on the public stand page
+		await expect(page.getByTestId('stand-panel')).toBeVisible();
+		await page.getByTestId('stand-intro-input').fill('Alles muss raus — von Deko bis Technik.');
+		await page.getByTestId('save-stand-intro').click();
+		await expect(page).toHaveURL(/\/profil/);
+		const standHref = await page.getByTestId('open-stand-link').getAttribute('href');
+		const standPage = await page.context().newPage();
+		await standPage.goto(`http://localhost:4173${standHref}`);
+		await expect(standPage.getByTestId('stand-intro')).toContainText('Alles muss raus');
+
 		// act — change the password through the profile page (the fresh cookie keeps the session)
 		await page.getByLabel('Aktuelles Passwort').fill(winningAccount.password);
 		await page.getByLabel('Neues Passwort').fill('profile-changed-password-2026');

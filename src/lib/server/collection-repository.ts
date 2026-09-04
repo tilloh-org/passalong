@@ -33,6 +33,7 @@ export interface Collection {
 	id: string;
 	name: string;
 	ownerName: string;
+	standIntro: string;
 }
 
 export interface Item {
@@ -88,6 +89,7 @@ export interface PublicStandItem {
 
 export interface PublicStandView {
 	collectionName: string;
+	intro: string;
 	items: PublicStandItem[];
 }
 
@@ -208,6 +210,7 @@ export interface CollectionRepository {
 	setItemReservation(itemId: string, reserved: boolean, scope: SessionScope): Item;
 	findImageMetadataForTenant(storageKey: string, scope: SessionScope): ItemImage | null;
 	findProfileAvatarForTenant(storageKey: string, scope: SessionScope): boolean;
+	updateStandIntro(collectionId: string, intro: string, scope: SessionScope): Collection;
 }
 
 export interface UpdateItemInput {
@@ -255,6 +258,7 @@ const saleStatusVersion = '2026083102_item_sale_status';
 const itemDetailFieldsVersion = '2026090101_item_detail_fields';
 const itemReservationVersion = '2026090201_item_reservation';
 const userAvatarVersion = '2026090202_user_avatar';
+const collectionStandIntroVersion = '2026090203_collection_stand_intro';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -496,24 +500,26 @@ export function createCollectionRepository(
 			if (result.changes !== singleDatabaseRowChange) {
 				throw new Error('authenticated owner was not found');
 			}
-			return { id: collectionId, name, ownerName: getOwnerDisplayName(database, scope) };
+			return { id: collectionId, name, ownerName: getOwnerDisplayName(database, scope), standIntro: '' };
 		},
 
 		getCollectionForOwner(collectionId, scope) {
 			const row = database
 				.prepare(
-					`SELECT collections.id, collections.name, users.display_name AS owner_name
+					`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 				)
 				.get(collectionId, scope.userId, scope.tenantId) as
-				| { id: string; name: string; owner_name: string }
+				| { id: string; name: string; stand_intro: string; owner_name: string }
 				| undefined;
-			return row ? { id: row.id, name: row.name, ownerName: row.owner_name } : null;
+			return row
+				? { id: row.id, name: row.name, ownerName: row.owner_name, standIntro: row.stand_intro }
+				: null;
 		},
 
-		getItemForOwner(itemId, scope) {
+				getItemForOwner(itemId, scope) {
 			const row = database
 				.prepare(
 					'SELECT * FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?'
@@ -525,7 +531,7 @@ export function createCollectionRepository(
 		listCollectionsForOwner(scope) {
 			return database
 				.prepare(
-					`SELECT collections.id, collections.name, users.display_name AS owner_name
+					`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.owner_id = ? AND collections.tenant_id = ?
@@ -533,8 +539,8 @@ export function createCollectionRepository(
 				)
 				.all(scope.userId, scope.tenantId)
 				.map((row) => {
-					const collection = row as { id: string; name: string; owner_name: string };
-					return { id: collection.id, name: collection.name, ownerName: collection.owner_name };
+					const collection = row as { id: string; name: string; owner_name: string; stand_intro: string };
+					return { id: collection.id, name: collection.name, ownerName: collection.owner_name, standIntro: collection.stand_intro };
 				});
 		},
 
@@ -889,8 +895,8 @@ export function createCollectionRepository(
 
 		getPublicStandView(collectionId) {
 			const collection = database
-				.prepare('SELECT name FROM collections WHERE id = ?')
-				.get(collectionId) as { name: string } | undefined;
+				.prepare('SELECT name, stand_intro FROM collections WHERE id = ?')
+				.get(collectionId) as { name: string; stand_intro: string } | undefined;
 			if (!collection) {
 				return null;
 			}
@@ -908,7 +914,7 @@ export function createCollectionRepository(
 						condition: row.condition,
 						externalDescription: row.external_description
 						}));
-			return { collectionName: collection.name, items };
+			return { collectionName: collection.name, intro: collection.stand_intro, items };
 		},
 
 		listItemsForOwner(collectionId, scope) {
@@ -1100,6 +1106,19 @@ export function createCollectionRepository(
 				.prepare('SELECT 1 FROM users WHERE avatar_storage_key = ? AND id = ? AND tenant_id = ?')
 				.get(validatedStorageKey, scope.userId, scope.tenantId);
 			return Boolean(row);
+		},
+
+		updateStandIntro(collectionId, intro, scope) {
+			const normalizedIntro = typeof intro === 'string' ? intro.trim() : '';
+			const result = database
+				.prepare(
+					'UPDATE collections SET stand_intro = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.run(normalizedIntro, requireText(collectionId, 'collectionId'), scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('collection was not found');
+			}
+			return getCollectionForOwnerRow(database, collectionId, scope);
 		}
 	};
 }
@@ -1192,6 +1211,36 @@ function requireOwnedItem(database: Database.Database, itemId: string, scope: Se
 		throw new Error('item was not found');
 	}
 	return row;
+}
+
+/**
+ * Load one owner-scoped collection row as a {@link Collection}.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} collectionId - The target collection identifier.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {Collection} The collection with its stand intro.
+ */
+function getCollectionForOwnerRow(database: Database.Database, collectionId: string, scope: SessionScope): Collection {
+	const row = database
+		.prepare(
+			`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
+			 FROM collections
+			 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+			 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
+		)
+		.get(collectionId, scope.userId, scope.tenantId) as
+			| { id: string; name: string; stand_intro: string; owner_name: string }
+			| undefined;
+	if (!row) {
+		throw new Error('collection was not found');
+	}
+	return {
+		id: row.id,
+		name: row.name,
+		ownerName: row.owner_name,
+		standIntro: row.stand_intro
+	};
 }
 
 /**
@@ -1337,6 +1386,7 @@ function createSchema(database: Database.Database): void {
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+			stand_intro TEXT NOT NULL DEFAULT '',
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
@@ -1451,6 +1501,28 @@ function migrateSchema(database: Database.Database): void {
 	migrateItemDetailFields(database);
 	migrateItemReservation(database);
 	migrateUserAvatar(database);
+	migrateCollectionStandIntro(database);
+}
+
+/**
+ * Add the public stand introduction to collections on databases that predate stand intros.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateCollectionStandIntro(database: Database.Database): void {
+	if (hasMigrationVersion(database, collectionStandIntroVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'collections', 'stand_intro')) {
+			database.exec("ALTER TABLE collections ADD COLUMN stand_intro TEXT NOT NULL DEFAULT ''");
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(collectionStandIntroVersion, new Date().toISOString());
+	});
 }
 
 /**
@@ -1757,6 +1829,7 @@ function rebuildCollections(database: Database.Database): void {
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+			stand_intro TEXT NOT NULL DEFAULT '',
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT

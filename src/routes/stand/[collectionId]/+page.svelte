@@ -36,6 +36,9 @@
 			<span class="initial">{data.stand.collectionName.slice(0, 1).toUpperCase()}</span>
 		</div>
 		<h1 data-testid="stand-title">{data.stand.collectionName}</h1>
+		{#if data.stand.intro}
+			<p class="intro" data-testid="stand-intro">{data.stand.intro}</p>
+		{/if}
 		<p class="sub">Schau dir die Artikel an — direkt hier oder live am Stand</p>
 	</section>
 
@@ -120,6 +123,15 @@
 		color: var(--color-text-muted);
 		font-size: 0.95rem;
 		margin: 6px 0 0;
+	}
+
+	.intro {
+		color: var(--color-text);
+		font-size: 1rem;
+		line-height: 1.6;
+		margin: 0.4rem auto 0;
+		max-width: 40rem;
+		white-space: pre-line;
 	}
 
 	.stand-grid {

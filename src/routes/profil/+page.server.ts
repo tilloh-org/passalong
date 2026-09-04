@@ -90,8 +90,11 @@ export const load: PageServerLoad = ({ cookies }) => {
 	if (!profile) {
 		redirect(httpStatus.seeOther, '/');
 	}
+	const collections = getCollectionRepository().listCollectionsForOwner(scope);
+	const activeCollection = collections[0] ?? null;
 	return {
 		profile,
+		activeCollection,
 		isInstanceAdmin: getCollectionRepository().isInstanceAdmin(scope),
 		minimumPasswordLength,
 		maximumPasswordLength
@@ -233,6 +236,25 @@ export const actions: Actions = {
 			}
 		} finally {
 			rmSync(stagingPath, { force: true });
+		}
+
+		redirect(httpStatus.seeOther, '/profil');
+	},
+
+	saveStandIntro: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { standIntroError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		try {
+			getCollectionRepository().updateStandIntro(getFormText(formData, 'collectionId'), getFormText(formData, 'standIntro'), scope);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { standIntroError: 'Die Einleitung konnte nicht gespeichert werden.' });
 		}
 
 		redirect(httpStatus.seeOther, '/profil');

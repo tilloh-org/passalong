@@ -1,7 +1,13 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	let { data, form } = $props();
 
 	const avatarFallback = $derived((data.profile.displayName ?? 'P').slice(0, 1).toUpperCase());
+	const standUrl = $derived(data.activeCollection ? `${page.url.origin}/stand/${encodeURIComponent(data.activeCollection.id)}` : '');
+
+	async function copyStandLink(): Promise<void> {
+		await navigator.clipboard.writeText(standUrl);
+	}
 </script>
 
 <svelte:head>
@@ -82,6 +88,45 @@
 					{/if}
 					<button type="submit" data-testid="save-profile">Änderungen speichern</button>
 				</form>
+
+				{#if data.activeCollection}
+					<section class="panel stand-panel" aria-labelledby="stand-title" data-testid="stand-panel">
+						<h2 id="stand-title">🏪 Mein Stand</h2>
+						<p class="stand-hint">
+							Eine Galerie deiner offenen Artikel — ohne Login für Käufer erreichbar. Ideal als QR-Code am Stand.
+						</p>
+						<form method="POST" action="?/saveStandIntro" data-testid="stand-intro-form">
+							<input name="collectionId" type="hidden" value={data.activeCollection.id} />
+							<label>
+								<span>Einleitung für die Standseite</span>
+								<textarea
+									name="standIntro"
+									rows="3"
+									placeholder="optional — z.B. ein paar Sätze zu deinem Sortiment"
+									data-testid="stand-intro-input">{data.activeCollection.standIntro}</textarea>
+							</label>
+							<p class="stand-hint">Wird auf deiner Standseite unter deinem Namen angezeigt.</p>
+							{#if form?.standIntroError}
+								<p class="form-error" role="alert">{form.standIntroError}</p>
+							{/if}
+							<div class="stand-actions">
+								<button type="button" class="secondary" onclick={() => copyStandLink()} data-testid="copy-stand-link">
+									🔗 Link kopieren
+								</button>
+								<a
+									class="stand-open"
+									href={`/stand/${encodeURIComponent(data.activeCollection.id)}`}
+									target="_blank"
+									rel="noopener"
+									data-testid="open-stand-link"
+								>
+									↗ Mein Stand öffnen
+								</a>
+							</div>
+							<button type="submit" data-testid="save-stand-intro">✓ Einleitung speichern</button>
+						</form>
+					</section>
+				{/if}
 
 				<form method="POST" action="?/changePassword" class="panel" data-testid="password-form">
 					<h2>Passwort ändern</h2>
@@ -411,6 +456,81 @@
 		background: var(--color-danger-soft);
 		box-shadow: none;
 		transform: none;
+	}
+
+	.stand-panel {
+		border-top: 1px solid var(--color-border);
+		display: block;
+		padding-top: 1rem;
+	}
+
+	.stand-panel h2 {
+		font-size: 1.05rem;
+		margin: 0 0 0.4rem;
+	}
+
+	.stand-panel form {
+		display: grid;
+		gap: 0.6rem;
+	}
+
+	.stand-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0 0 0.4rem;
+	}
+
+	.stand-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem;
+		justify-content: flex-end;
+	}
+
+	.stand-panel button.secondary {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		box-shadow: none;
+		color: var(--color-accent);
+		font-size: 0.85rem;
+		padding: 0.5rem 0.9rem;
+	}
+
+	.stand-panel button.secondary:hover {
+		background: var(--color-accent-soft);
+		transform: none;
+	}
+
+	.stand-open {
+		align-items: center;
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		border-radius: var(--radius-control);
+		box-shadow: var(--shadow-btn);
+		color: white;
+		font-size: 0.85rem;
+		font-weight: 700;
+		padding: 0.5rem 0.9rem;
+		text-decoration: none;
+	}
+
+	.stand-open:hover {
+		filter: brightness(1.08);
+	}
+
+	textarea {
+		background: var(--color-input);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-text);
+		font: inherit;
+		padding: 0.68rem 0.85rem;
+	}
+
+	textarea:focus {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
 	}
 
 	.backup-panel {
