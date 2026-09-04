@@ -138,9 +138,6 @@
 						Instanzverwaltung
 					</a>
 				{/if}
-				<a class="password-panel-link" href="/profil" onclick={() => setMenuOpen(false)}>
-					Profil
-				</a>
 				<hr class="nav-divider" />
 				<form class="nav-logout" method="POST" action="/abmelden?/logout">
 					<button type="submit" onclick={() => setMenuOpen(false)}>Abmelden</button>
@@ -216,12 +213,23 @@
 	}
 	.profile-avatar {
 		align-items: center;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
 		border-radius: 999px;
+		box-shadow: none;
 		display: flex;
-		height: 2.4rem;
+		height: 2.6rem;
 		justify-content: center;
 		overflow: hidden;
-		width: 2.4rem;
+		padding: 2px;
+		transition: all 0.25s ease;
+		width: 2.6rem;
+	}
+	.profile-avatar:hover,
+	.profile-avatar:focus-visible {
+		background: var(--color-accent-soft);
+		box-shadow: var(--shadow-btn-hover);
+		transform: translateY(-1px);
 	}
 	.profile-avatar-img {
 		height: 100%;
@@ -295,7 +303,44 @@
 	}
 	nav {
 		display: flex;
-		gap: 4px;
+		gap: var(--gap-action-row, 0.6rem);
+	}
+	nav a,
+	nav form button {
+		align-items: center;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		box-shadow: none;
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-flex;
+		font: inherit;
+		font-size: 0.9rem;
+		font-weight: 600;
+		height: 40px;
+		justify-content: center;
+		padding: 0 14px;
+		text-decoration: none;
+		transition: all 0.25s ease;
+		white-space: nowrap;
+	}
+	nav a:hover {
+		background: var(--color-accent-soft);
+		transform: translateY(-1px);
+	}
+	nav a.nav-cta {
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		box-shadow: var(--shadow-cta);
+		color: #fff;
+		font-weight: 700;
+	}
+	nav form button {
+		color: var(--color-danger);
+	}
+	nav form button:hover {
+		background: var(--color-danger-soft);
+		transform: translateY(-1px);
 	}
 	.nav-logout {
 		display: block;
