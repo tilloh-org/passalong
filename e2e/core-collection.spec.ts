@@ -205,6 +205,8 @@ test.describe('Core collection', () => {
 		await page.getByTestId('profile-avatar-link').click();
 		await expect(page).toHaveURL(/\/profil/);
 		await expect(page.getByTestId('profile-avatar')).toBeVisible();
+		// assume — the avatar save button is disabled until an image file is selected
+		await expect(page.getByRole('button', { name: 'Avatar speichern' })).toBeDisabled();
 		await page.getByTestId('display-name-input').fill('Avery Profil');
 		await page.getByTestId('save-profile').click();
 
@@ -213,7 +215,10 @@ test.describe('Core collection', () => {
 
 		// act — save a stand introduction and verify it on the public stand page
 		await expect(page.getByTestId('stand-panel')).toBeVisible();
+		// assume — the intro save button is disabled until the draft differs from the stored intro
+		await expect(page.getByTestId('save-stand-intro')).toBeDisabled();
 		await page.getByTestId('stand-intro-input').fill('Alles muss raus — von Deko bis Technik.');
+		await expect(page.getByTestId('save-stand-intro')).toBeEnabled();
 		await page.getByTestId('save-stand-intro').click();
 		await expect(page).toHaveURL(/\/profil/);
 		const standHref = await page.getByTestId('open-stand-link').getAttribute('href');
@@ -291,6 +296,8 @@ test.describe('Core collection', () => {
 
 		// act — the admin sees the backup panel and downloads a full instance backup
 		await expect(page.getByTestId('backup-panel')).toBeVisible();
+		// assume — the restore action is disabled until a backup file is selected
+		await expect(page.getByTestId('restore-submit')).toBeDisabled();
 		const backupResponse = await page.request.get('/profil/backup');
 		expect(backupResponse.status()).toBe(200);
 		expect(backupResponse.headers()['content-type']).toContain('application/zip');

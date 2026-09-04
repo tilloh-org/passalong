@@ -5,6 +5,42 @@
 	const avatarFallback = $derived((data.profile.displayName ?? 'P').slice(0, 1).toUpperCase());
 	const standUrl = $derived(data.activeCollection ? `${page.url.origin}/stand/${encodeURIComponent(data.activeCollection.id)}` : '');
 
+	let avatarFile: File | undefined = $state();
+	let restoreFile: File | undefined = $state();
+	let standIntroDraft = $state('');
+	let standIntroBaseline = $state('');
+
+	$effect(() => {
+		standIntroBaseline = data.activeCollection?.standIntro ?? '';
+		standIntroDraft = data.activeCollection?.standIntro ?? '';
+	});
+
+	/**
+	 * Bind the avatar file input to the prerequisite state.
+	 *
+	 * @param {Event} event - The change event from the file input.
+	 * @returns {void}
+	 */
+	function onAvatarFileChange(event: Event): void {
+		const input = event.currentTarget as HTMLInputElement;
+		avatarFile = input.files?.[0];
+	}
+
+	/**
+	 * Bind the restore file input to the prerequisite state.
+	 *
+	 * @param {Event} event - The change event from the file input.
+	 * @returns {void}
+	 */
+	function onRestoreFileChange(event: Event): void {
+		const input = event.currentTarget as HTMLInputElement;
+		restoreFile = input.files?.[0];
+	}
+
+	const avatarReady = $derived(Boolean(avatarFile));
+	const restoreReady = $derived(Boolean(restoreFile));
+	const standIntroChanged = $derived(standIntroDraft !== standIntroBaseline);
+
 	async function copyStandLink(): Promise<void> {
 		await navigator.clipboard.writeText(standUrl);
 	}
@@ -58,9 +94,10 @@
 						data-testid="avatar-input"
 						class="visually-hidden-input"
 						required
+						onchange={onAvatarFileChange}
 					/>
 					<label class="file-button" for="avatar-file">🖼 Bild auswählen</label>
-					<button type="submit">Avatar speichern</button>
+					<button type="submit" disabled={!avatarReady} aria-disabled={!avatarReady}>Avatar speichern</button>
 				</form>
 				{#if data.profile.avatarStorageKey}
 					<form method="POST" action="?/removeAvatar">
@@ -103,13 +140,14 @@
 									name="standIntro"
 									rows="3"
 									placeholder="optional — z.B. ein paar Sätze zu deinem Sortiment"
-									data-testid="stand-intro-input">{data.activeCollection.standIntro}</textarea>
+									data-testid="stand-intro-input"
+									bind:value={standIntroDraft}>{data.activeCollection.standIntro}</textarea>
 							</label>
 							<p class="stand-hint">Wird auf deiner Standseite unter deinem Namen angezeigt.</p>
 						{#if form?.standIntroError}
 							<p class="form-error" role="alert">{form.standIntroError}</p>
 						{/if}
-						<button type="submit" data-testid="save-stand-intro">✓ Einleitung speichern</button>
+						<button type="submit" data-testid="save-stand-intro" disabled={!standIntroChanged} aria-disabled={!standIntroChanged}>✓ Einleitung speichern</button>
 					</form>
 
 					<hr class="stand-divider" />
@@ -185,7 +223,7 @@
 									{#if form?.backupError}
 										<p class="form-error" role="alert">{form.backupError}</p>
 									{/if}
-									<button type="submit" class="danger" data-testid="restore-submit">Restore ausführen</button>
+									<button type="submit" class="danger" data-testid="restore-submit" disabled={!restoreReady} aria-disabled={!restoreReady}>Restore ausführen</button>
 								</form>
 							</div>
 						</div>
@@ -318,7 +356,7 @@
 
 	.avatar-form {
 		display: grid;
-		gap: 0.6rem;
+		gap: var(--gap-action-row);
 	}
 
 	.visually-hidden-input {
@@ -433,10 +471,17 @@
 			filter 0.2s ease;
 	}
 
-	button:hover {
+	button:hover:not(:disabled) {
 		box-shadow: var(--shadow-btn-hover);
 		filter: brightness(1.08);
 		transform: translateY(-2px);
+	}
+
+	button:disabled {
+		cursor: not-allowed;
+		filter: grayscale(0.6) opacity(0.55);
+		box-shadow: none;
+		transform: none;
 	}
 
 	button.danger {
@@ -448,7 +493,7 @@
 		padding: 0.5rem 0.9rem;
 	}
 
-	button.danger:hover {
+	button.danger:hover:not(:disabled) {
 		background: var(--color-danger-soft);
 		box-shadow: none;
 		transform: none;
@@ -465,7 +510,7 @@
 
 	.stand-panel form {
 		display: grid;
-		gap: 0.6rem;
+		gap: var(--gap-action-row);
 	}
 
 	.stand-hint {
@@ -478,13 +523,13 @@
 	.stand-divider {
 		border: 0;
 		border-top: 1px solid var(--color-border);
-		margin: 1.1rem 0 0.9rem;
+		margin: var(--gap-action-block) 0 var(--gap-action-row);
 	}
 
 	.stand-actions {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.6rem;
+		gap: var(--gap-action-row);
 		justify-content: flex-end;
 	}
 
@@ -586,7 +631,7 @@
 
 	.backup-block form {
 		display: grid;
-		gap: 0.6rem;
+		gap: var(--gap-action-row);
 	}
 
 	.backup-block button.danger {
