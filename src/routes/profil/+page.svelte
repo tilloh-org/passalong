@@ -478,7 +478,7 @@
 	.stand-divider {
 		border: 0;
 		border-top: 1px solid var(--color-border);
-		margin: 0.25rem 0 0.9rem;
+		margin: 1.1rem 0 0.9rem;
 	}
 
 	.stand-actions {
