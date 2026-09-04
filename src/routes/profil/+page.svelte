@@ -91,7 +91,7 @@
 
 				{#if data.activeCollection}
 					<section class="panel stand-panel" aria-labelledby="stand-title" data-testid="stand-panel">
-						<h2 id="stand-title">🏪 Mein Stand</h2>
+						<h2 id="stand-title">🛒 Mein Angebot</h2>
 						<p class="stand-hint">
 							Eine Galerie deiner offenen Artikel — ohne Login für Käufer erreichbar. Ideal als QR-Code am Stand.
 						</p>
@@ -120,7 +120,7 @@
 									rel="noopener"
 									data-testid="open-stand-link"
 								>
-									↗ Mein Stand öffnen
+									↗ Mein Angebot öffnen
 								</a>
 							</div>
 							<button type="submit" data-testid="save-stand-intro">✓ Einleitung speichern</button>
@@ -151,45 +151,46 @@
 					{/if}
 					<button type="submit" data-testid="save-password">Passwort speichern</button>
 				</form>
+
+				{#if data.isInstanceAdmin}
+					<section class="panel backup-panel" aria-labelledby="backup-title" data-testid="backup-panel">
+						<h2 id="backup-title">Backup &amp; Restore</h2>
+						<div class="backup-grid">
+							<div class="backup-block">
+								<h3>Vollständiges Backup</h3>
+								<p class="backup-hint">Lädt eine ZIP-Datei mit Datenbank, Medien und Prüfsummen-Manifest herunter.</p>
+								<a class="backup-download" href="/profil/backup" download data-testid="download-backup">
+									⬇ Backup herunterladen
+								</a>
+							</div>
+							<div class="backup-block">
+								<h3>Restore</h3>
+								<p class="backup-hint">
+									Das Hochladen ersetzt die gesamte Instanz (Datenbank und Medien) durch das Backup. Die Sitzung wird beendet.
+								</p>
+								<form method="POST" action="?/restoreBackup" enctype="multipart/form-data" data-testid="restore-form">
+									<input
+										name="backupArchive"
+										id="backup-file"
+										type="file"
+										accept=".zip,application/zip"
+										data-testid="restore-input"
+										class="visually-hidden-input"
+										required
+									/>
+									<label class="file-button" for="backup-file">📦 Backup-Datei auswählen</label>
+									{#if form?.backupError}
+										<p class="form-error" role="alert">{form.backupError}</p>
+									{/if}
+									<button type="submit" class="danger" data-testid="restore-submit">Restore ausführen</button>
+								</form>
+							</div>
+						</div>
+					</section>
+				{/if}
 			</div>
 		</div>
 
-		{#if data.isInstanceAdmin}
-			<section class="panel backup-panel" aria-labelledby="backup-title" data-testid="backup-panel">
-				<h2 id="backup-title">Backup &amp; Restore</h2>
-				<div class="backup-grid">
-					<div class="backup-block">
-						<h3>Vollständiges Backup</h3>
-						<p class="backup-hint">Lädt eine ZIP-Datei mit Datenbank, Medien und Prüfsummen-Manifest herunter.</p>
-						<a class="backup-download" href="/profil/backup" download data-testid="download-backup">
-							⬇ Backup herunterladen
-						</a>
-					</div>
-					<div class="backup-block">
-						<h3>Restore</h3>
-						<p class="backup-hint">
-							Das Hochladen ersetzt die gesamte Instanz (Datenbank und Medien) durch das Backup. Die Sitzung wird beendet.
-						</p>
-						<form method="POST" action="?/restoreBackup" enctype="multipart/form-data" data-testid="restore-form">
-							<input
-								name="backupArchive"
-								id="backup-file"
-								type="file"
-								accept=".zip,application/zip"
-								data-testid="restore-input"
-								class="visually-hidden-input"
-								required
-							/>
-							<label class="file-button" for="backup-file">📦 Backup-Datei auswählen</label>
-							{#if form?.backupError}
-								<p class="form-error" role="alert">{form.backupError}</p>
-							{/if}
-							<button type="submit" class="danger" data-testid="restore-submit">Restore ausführen</button>
-						</form>
-					</div>
-				</div>
-			</section>
-		{/if}
 	</section>
 </main>
 
@@ -199,13 +200,6 @@
 		max-width: 56rem;
 		padding: 0 1.5rem 4rem;
 	}
-
-	.masthead {
-		align-items: center;
-		display: flex;
-		padding: 1.25rem 0;
-	}
-
 
 	.masthead {
 		align-items: center;
@@ -262,11 +256,7 @@
 	}
 
 	.profile-card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
-		padding: 1.5rem;
+		padding: 0 0 2rem;
 	}
 
 	.eyebrow {
@@ -355,14 +345,17 @@
 
 	.details-column {
 		display: grid;
-		gap: 1.25rem;
+		gap: 1.5rem;
 	}
 
 	.panel {
-		border-top: 1px solid var(--color-border);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
 		display: grid;
 		gap: 0.85rem;
-		padding-top: 1rem;
+		padding: 1.25rem;
 	}
 
 	.panel h2 {
@@ -459,9 +452,7 @@
 	}
 
 	.stand-panel {
-		border-top: 1px solid var(--color-border);
 		display: block;
-		padding-top: 1rem;
 	}
 
 	.stand-panel h2 {
@@ -534,9 +525,7 @@
 	}
 
 	.backup-panel {
-		border-top: 1px solid var(--color-border);
 		display: block;
-		padding-top: 1rem;
 	}
 
 	.backup-panel h2 {
