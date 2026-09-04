@@ -106,27 +106,30 @@
 									data-testid="stand-intro-input">{data.activeCollection.standIntro}</textarea>
 							</label>
 							<p class="stand-hint">Wird auf deiner Standseite unter deinem Namen angezeigt.</p>
-							{#if form?.standIntroError}
-								<p class="form-error" role="alert">{form.standIntroError}</p>
-							{/if}
-							<div class="stand-actions">
-								<button type="button" class="secondary" onclick={() => copyStandLink()} data-testid="copy-stand-link">
-									🔗 Link kopieren
-								</button>
-								<a
-									class="stand-open"
-									href={`/stand/${encodeURIComponent(data.activeCollection.id)}`}
-									target="_blank"
-									rel="noopener"
-									data-testid="open-stand-link"
-								>
-									↗ Meine Angebote öffnen
-								</a>
-								<button type="submit" data-testid="save-stand-intro">✓ Einleitung speichern</button>
-							</div>
-						</form>
-					</section>
-				{/if}
+						{#if form?.standIntroError}
+							<p class="form-error" role="alert">{form.standIntroError}</p>
+						{/if}
+						<button type="submit" data-testid="save-stand-intro">✓ Einleitung speichern</button>
+					</form>
+
+					<hr class="stand-divider" />
+
+					<div class="stand-actions">
+						<button type="button" class="secondary" onclick={() => copyStandLink()} data-testid="copy-stand-link">
+							🔗 Link kopieren
+						</button>
+						<a
+							class="stand-open"
+							href={`/stand/${encodeURIComponent(data.activeCollection.id)}`}
+							target="_blank"
+							rel="noopener"
+							data-testid="open-stand-link"
+						>
+							↗ Meine Angebote öffnen
+						</a>
+					</div>
+				</section>
+			{/if}
 
 				<form method="POST" action="?/changePassword" class="panel" data-testid="password-form">
 					<h2>Passwort ändern</h2>
@@ -470,6 +473,12 @@
 		font-size: 0.82rem;
 		line-height: 1.5;
 		margin: 0 0 0.4rem;
+	}
+
+	.stand-divider {
+		border: 0;
+		border-top: 1px solid var(--color-border);
+		margin: 0.25rem 0 0.9rem;
 	}
 
 	.stand-actions {
