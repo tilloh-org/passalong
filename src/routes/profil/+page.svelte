@@ -122,8 +122,8 @@
 								>
 									↗ Meine Angebote öffnen
 								</a>
+								<button type="submit" data-testid="save-stand-intro">✓ Einleitung speichern</button>
 							</div>
-							<button type="submit" data-testid="save-stand-intro">✓ Einleitung speichern</button>
 						</form>
 					</section>
 				{/if}
@@ -422,7 +422,7 @@
 		font: inherit;
 		font-size: 0.95rem;
 		font-weight: 700;
-		justify-self: start;
+		justify-self: end;
 		padding: 0.7rem 1.25rem;
 		transition:
 			transform 0.2s ease,
@@ -539,6 +539,12 @@
 		grid-template-columns: 1fr 1fr;
 	}
 
+	.backup-block {
+		display: grid;
+		gap: 0.4rem;
+		align-content: start;
+	}
+
 	.backup-block h3 {
 		font-size: 0.95rem;
 		margin: 0 0 0.4rem;
@@ -559,6 +565,7 @@
 		display: inline-block;
 		font-size: 0.9rem;
 		font-weight: 700;
+		justify-self: end;
 		padding: 0.7rem 1.1rem;
 		text-decoration: none;
 		transition: background 0.2s ease;
@@ -574,7 +581,15 @@
 	}
 
 	.backup-block button.danger {
-		justify-self: start;
+		justify-self: end;
+	}
+
+	.backup-download {
+		justify-self: end;
+	}
+
+	.backup-block .file-button {
+		justify-self: end;
 	}
 
 	@media (max-width: 48rem) {

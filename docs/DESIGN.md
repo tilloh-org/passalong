@@ -7,7 +7,12 @@ UI; deviations need an explicit decision (e.g. in the PR description).
 
 - **Primary/confirm actions of a modal or form** (e.g. „Änderungen speichern", „Als verkauft
   erfassen", „Foto speichern") are rendered at the **bottom right** of their container/modal —
-  never top-left or centered. This applies to every existing and future modal and panel.
+  never top-left or centered. This applies to every existing and future modal, panel, and card
+  (e.g. the profile page cards). Within a shared action row, secondary controls sit to the left
+  of the primary confirm button.
+- **Design rules take precedence over the Marktbude reference.** The Marktbude UI is a migration
+  source, not a style authority: where a Marktbude pattern conflicts with a passalong design rule,
+  the rule wins and the migrated feature adapts to it.
 - The app-wide primary button style is a dark-teal gradient fill with white bold label.
 - Destructive actions use the red danger tint (e.g. „🗑 Artikel löschen").
 - Secondary/tinted action buttons in the item action row follow the Marktbude scheme:
