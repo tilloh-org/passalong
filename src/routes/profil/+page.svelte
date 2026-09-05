@@ -100,7 +100,7 @@
 					<button type="submit" disabled={!avatarReady} aria-disabled={!avatarReady}>Avatar speichern</button>
 				</form>
 				{#if data.profile.avatarStorageKey}
-					<form method="POST" action="?/removeAvatar">
+					<form method="POST" action="?/removeAvatar" class="avatar-remove-form">
 						<button type="submit" class="danger" data-testid="remove-avatar">Avatar entfernen</button>
 					</form>
 				{/if}
@@ -649,6 +649,21 @@
 	@media (max-width: 48rem) {
 		.profile-layout {
 			grid-template-columns: 1fr;
+		}
+
+		.avatar-column {
+			column-gap: 0.9rem;
+			grid-template-columns: minmax(8rem, 8.5rem) minmax(0, 1fr);
+			row-gap: var(--gap-action-row);
+		}
+
+		.avatar-large {
+			grid-row: 1 / span 3;
+		}
+
+		.avatar-form,
+		.avatar-remove-form {
+			grid-column: 2;
 		}
 
 		.backup-grid {
