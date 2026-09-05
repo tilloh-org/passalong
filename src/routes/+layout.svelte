@@ -162,7 +162,6 @@
 		border-bottom: 1px solid var(--color-border);
 		container-type: inline-size;
 		display: flex;
-		gap: 16px;
 		margin: 0 -1.5rem 2rem;
 		padding: 0.65rem 1.5rem;
 	}
@@ -170,7 +169,7 @@
 		font-size: 1.2rem;
 		font-weight: 800;
 		letter-spacing: 0.02em;
-		margin: 0;
+		margin: 0 16px 0 0;
 	}
 	.brand {
 		align-items: center;
@@ -209,7 +208,6 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		margin-left: auto;
 	}
 	.profile-avatar {
 		align-items: center;
@@ -304,6 +302,7 @@
 	nav {
 		display: flex;
 		gap: var(--gap-action-row, 0.6rem);
+		margin-left: auto;
 	}
 	nav a,
 	nav form button {
@@ -356,6 +355,9 @@
 	}
 	.masthead.nav-overflow .burger {
 		display: flex;
+	}
+	.masthead.nav-overflow .header-actions {
+		margin-left: auto;
 	}
 	.masthead.nav-overflow nav {
 		background: var(--color-surface);
