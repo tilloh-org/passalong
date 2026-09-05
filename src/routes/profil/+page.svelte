@@ -9,10 +9,12 @@
 	let restoreFile: File | undefined = $state();
 	let standIntroDraft = $state('');
 	let standIntroBaseline = $state('');
+	let deleteAccountDraft = $state('');
 
 	$effect(() => {
 		standIntroBaseline = data.activeCollection?.standIntro ?? '';
 		standIntroDraft = data.activeCollection?.standIntro ?? '';
+		deleteAccountDraft = '';
 	});
 
 	/**
@@ -40,6 +42,7 @@
 	const avatarReady = $derived(Boolean(avatarFile));
 	const restoreReady = $derived(Boolean(restoreFile));
 	const standIntroChanged = $derived(standIntroDraft !== standIntroBaseline);
+	const deleteAccountReady = $derived(deleteAccountDraft.trim().toLowerCase() === data.profile.username);
 
 	async function copyStandLink(): Promise<void> {
 		await navigator.clipboard.writeText(standUrl);
@@ -229,6 +232,32 @@
 						</div>
 					</section>
 				{/if}
+				<section class="panel delete-account-panel" aria-labelledby="delete-account-title" data-testid="delete-account-panel">
+					<h2 id="delete-account-title">Konto löschen</h2>
+					<p class="delete-account-hint">
+						Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Zum Bestätigen gib bitte deinen Benutzernamen ein.
+					</p>
+					<form method="POST" action="?/deleteAccount" class="delete-account-form" data-testid="delete-account-form">
+						<label>
+							<span>Benutzername bestätigen</span>
+							<input
+								name="confirmUsername"
+								autocomplete="username"
+								autocapitalize="off"
+								autocorrect="off"
+								spellcheck="false"
+								placeholder={data.profile.username}
+								bind:value={deleteAccountDraft}
+								data-testid="delete-account-input"
+								required
+							/>
+						</label>
+						{#if form?.deleteAccountError}
+							<p class="form-error" role="alert">{form.deleteAccountError}</p>
+						{/if}
+						<button type="submit" class="danger" data-testid="delete-account-submit" disabled={!deleteAccountReady} aria-disabled={!deleteAccountReady}>Konto endgültig löschen</button>
+					</form>
+				</section>
 			</div>
 		</div>
 
