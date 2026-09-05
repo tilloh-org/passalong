@@ -191,6 +191,7 @@ export interface CollectionRepository {
 	revokeSession(tokenHash: string): void;
 	revokeSessionsForUser(scope: SessionScope): void;
 	deleteAccount(scope: SessionScope): DeletedAccountArtifacts;
+	transaction<T>(callback: () => T): T;
 	getLoginAttemptStatus(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
 	recordLoginFailure(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
 	clearLoginFailures(username: string, requestIp: string): void;
@@ -655,6 +656,10 @@ export function createCollectionRepository(
 					itemImageStorageKeys
 				};
 			});
+		},
+
+		transaction(callback) {
+			return database.transaction(callback)();
 		},
 
 		getLoginAttemptStatus(username, requestIp, now = new Date()) {
@@ -1224,6 +1229,9 @@ function requirePassword(value: string): string {
  * @throws {unknown} When the operation fails after rolling back its writes.
  */
 function runImmediateTransaction<T>(database: Database.Database, operation: () => T): T {
+	if (database.inTransaction) {
+		return operation();
+	}
 	database.exec('BEGIN IMMEDIATE');
 	try {
 		const result = operation();

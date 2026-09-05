@@ -85,7 +85,7 @@ function collectMediaKeys(mediaRoot: string): string[] {
  * @param {Array<[string, Buffer]>} entries - Name and payload pairs, names use forward slashes.
  * @returns {Buffer} Complete ZIP archive bytes.
  */
-function buildZip(entries: Array<[string, Buffer]>): Buffer {
+export function buildZip(entries: Array<[string, Buffer]>): Buffer {
 	const state: ZipWriterState = { chunks: [], centralDirectory: [], offset: 0, count: 0 };
 	for (const [name, payload] of entries) {
 		const nameBytes = Buffer.from(name, 'utf8');
@@ -212,7 +212,7 @@ const tamperedArchiveMessage = 'archive is not a valid backup';
  * @param {Buffer} payload - Archive bytes.
  * @returns {boolean} Whether a valid EOCD signature exists at the tail.
  */
-function hasValidEndOfCentralDirectory(payload: Buffer): boolean {
+export function hasValidEndOfCentralDirectory(payload: Buffer): boolean {
 	const minimumLength = 22;
 	if (payload.length < minimumLength) {
 		return false;
@@ -226,7 +226,7 @@ function hasValidEndOfCentralDirectory(payload: Buffer): boolean {
  * @param {Buffer} payload - Archive bytes.
  * @returns {Map<string, ZipEntry>} Entries keyed by name.
  */
-function parseZip(payload: Buffer): Map<string, ZipEntry> {
+export function parseZip(payload: Buffer): Map<string, ZipEntry> {
 	const entries = new Map<string, ZipEntry>();
 	let offset = 0;
 	while (offset + localFileHeaderFixedLength <= payload.length) {

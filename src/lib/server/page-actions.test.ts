@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionRepository, type SessionScope } from '$lib/server/collection-repository';
 import { hashSessionToken } from '$lib/server/session-token';
 import { hashPassword } from '$lib/server/password';
+import { saveUploadedImage } from '$lib/server/media-storage';
 
 const temporaryDirectories: string[] = [];
 const sessionCookieName = 'passalong_session';
@@ -415,11 +416,11 @@ describe('instance-admin actions', () => {
 
 	it('deletes the authenticated account only after the username is confirmed', async () => {
 		// arrange
-		const { repository, loadProfileActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const { repository, loadProfileActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
 		const actions = await loadProfileActions();
 		const url = new URL('http://localhost/');
 		const collection = repository.createCollection({ name: 'Garage' }, scope);
-		repository.createItem(
+		const item = repository.createItem(
 			{
 				collectionId: collection.id,
 				title: 'Bicycle',
@@ -433,6 +434,9 @@ describe('instance-admin actions', () => {
 			},
 			scope
 		);
+		const itemImageStorageKey = await saveUploadedImage(mediaRoot, 'image/png', buildTestPng());
+		repository.addItemImage(item.id, itemImageStorageKey, scope);
+		expect(existsSync(join(mediaRoot, itemImageStorageKey))).toBe(true);
 		const currentUsername = repository.getProfile(scope)?.username ?? 'missing';
 
 		// act
@@ -476,6 +480,7 @@ describe('instance-admin actions', () => {
 		expect(repository.getUserForLogin(currentUsername)).toBeNull();
 		expect(repository.listCollectionsForOwner(scope)).toHaveLength(0);
 		expect(repository.getSession(hashSessionToken(rawSessionToken))).toBeNull();
+		expect(existsSync(join(mediaRoot, itemImageStorageKey))).toBe(false);
 	});
 
 	it('restores an instance backup as instance admin and rejects non-admins with 404', async () => {
