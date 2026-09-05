@@ -38,6 +38,9 @@
 	--radius-control: 12px;
 	--radius-small: 10px;
 
+	--gap-action-row: 0.6rem;
+	--gap-action-block: 1.1rem;
+
 	--shadow-card: 0 10px 30px rgba(14, 42, 58, 0.1);
 	--shadow-tile: 0 4px 14px rgba(14, 42, 58, 0.08);
 	--shadow-tile-hover: 0 16px 40px rgba(14, 42, 58, 0.16);

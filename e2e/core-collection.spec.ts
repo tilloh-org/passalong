@@ -200,23 +200,56 @@ test.describe('Core collection', () => {
 		const currentMonth = new Date().toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
 		await expect(page.getByTestId('sale-statistics-months')).toContainText(currentMonth);
 
-		// act
+		// act — open the profile page via the header avatar and change the display name
 		const protectedUrl = page.url();
-		await page.getByRole('button', { name: 'Abmelden' }).click();
+		await page.getByTestId('profile-avatar-link').click();
+		await expect(page).toHaveURL(/\/profil/);
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
+		// assume — the avatar save button is disabled until an image file is selected
+		await expect(page.getByRole('button', { name: 'Avatar speichern' })).toBeDisabled();
+		await page.getByTestId('display-name-input').fill('Avery Profil');
+		await page.getByTestId('save-profile').click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
-		await expect(page.getByText('Vor dem Inserieren die Glühbirne austauschen.')).not.toBeVisible();
+		await expect(page.getByTestId('display-name-input')).toHaveValue('Avery Profil');
 
-		// act
-		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
-		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
-		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+		// act — save a stand introduction and verify it on the public stand page
+		await expect(page.getByTestId('stand-panel')).toBeVisible();
+		// assume — the intro save button is disabled until the draft differs from the stored intro
+		await expect(page.getByTestId('save-stand-intro')).toBeDisabled();
+		await page.getByTestId('stand-intro-input').fill('Alles muss raus — von Deko bis Technik.');
+		await expect(page.getByTestId('save-stand-intro')).toBeEnabled();
+		await page.getByTestId('save-stand-intro').click();
+		await expect(page).toHaveURL(/\/profil/);
+		const standHref = await page.getByTestId('open-stand-link').getAttribute('href');
+		const standPage = await page.context().newPage();
+		await standPage.goto(`http://localhost:4173${standHref}`);
+		await expect(standPage.getByTestId('stand-intro')).toContainText('Alles muss raus');
 
-		// assume
-		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+		// act — change the password through the profile page (the fresh cookie keeps the session)
+		await page.getByLabel('Aktuelles Passwort').fill(winningAccount.password);
+		await page.getByLabel('Neues Passwort').fill('profile-changed-password-2026');
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('changePassword')),
+			page.getByTestId('save-password').click()
+		]);
+		await expect(page).toHaveURL(/\/profil/);
 
-		// act
+		// assume — the session survives the password change via the re-issued cookie
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
+
+		// act — restore the original password
+		await page.getByLabel('Aktuelles Passwort').fill('profile-changed-password-2026');
+		await page.getByLabel('Neues Passwort').fill(winningAccount.password);
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('changePassword')),
+			page.getByTestId('save-password').click()
+		]);
+		await expect(page).toHaveURL(/\/profil/);
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
+
+
+		// act — verify the protected detail page requires login again
 		await page.context().clearCookies();
 		await page.goto(protectedUrl);
 
@@ -248,15 +281,28 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
-		// act
-		await page.locator('.password-panel-link').click();
+		// act — restore the original password via the profile page
+		await page.getByTestId('profile-avatar-link').click();
 		const changeForm = page.locator('form[action="?/changePassword"]');
 		await changeForm.getByLabel('Aktuelles Passwort').fill('recovered-correct-battery-horse');
 		await changeForm.getByLabel('Neues Passwort').fill('correct-horse-battery-staple');
-		await changeForm.getByRole('button', { name: 'Passwort speichern' }).click();
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('changePassword')),
+			changeForm.getByRole('button', { name: 'Passwort speichern' }).click()
+		]);
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+		await expect(page).toHaveURL(/\/profil/);
+
+		// act — the admin sees the backup panel and downloads a full instance backup
+		await expect(page.getByTestId('backup-panel')).toBeVisible();
+		// assume — the restore action is disabled until a backup file is selected
+		await expect(page.getByTestId('restore-submit')).toBeDisabled();
+		const backupResponse = await page.request.get('/profil/backup');
+		expect(backupResponse.status()).toBe(200);
+		expect(backupResponse.headers()['content-type']).toContain('application/zip');
+		const backupBody = await backupResponse.body();
+		expect(backupBody.length).toBeGreaterThan(1000);
 
 		// act
 		await page.context().storageState({ path: 'e2e/.auth-owner.json' });

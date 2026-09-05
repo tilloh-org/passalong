@@ -1283,6 +1283,7 @@ describe('collection repository', () => {
 		expect(publicView?.items).toHaveLength(2);
 		expect(publicView).toEqual({
 			collectionName: 'Flohmarkt',
+			intro: '',
 			items: expect.arrayContaining([
 				expect.objectContaining({ id: privateNotesItem.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair' }),
 				expect.objectContaining({ id: secondAvailableItem.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair' })

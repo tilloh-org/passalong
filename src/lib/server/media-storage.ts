@@ -1,7 +1,8 @@
 import { accessSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
+import { rm } from 'node:fs/promises';
 
 export const maximumImageBytes = 5 * 1024 * 1024;
 const digestEncoding = 'hex';
@@ -84,4 +85,22 @@ function payloadAlreadyExists(mediaRoot: string, storageKey: string): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Remove a stored media file from the media root.
+ *
+ * Rejects paths that escape the media root so tenant keys cannot delete arbitrary files.
+ *
+ * @param {string} mediaRoot - Absolute directory that stores image files.
+ * @param {string} storageKey - Storage key relative to the media root.
+ * @returns {Promise<void>} Resolves when the file is gone or was never present.
+ */
+export async function removeStoredMedia(mediaRoot: string, storageKey: string): Promise<void> {
+	const normalizedRoot = resolve(mediaRoot);
+	const target = resolve(normalizedRoot, storageKey);
+	if (!target.startsWith(normalizedRoot + sep)) {
+		throw new Error('storage key escapes the media root');
+	}
+	await rm(target, { force: true });
 }

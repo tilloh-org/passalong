@@ -27,17 +27,19 @@ export const GET: RequestHandler = ({ cookies, params }) => {
 		throw error(404, 'image not found');
 	}
 	const image = getCollectionRepository().findImageMetadataForTenant(params.key, scope);
-	if (!image) {
+	const isProfileAvatar = image ? false : getCollectionRepository().findProfileAvatarForTenant(params.key, scope);
+	if (!image && !isProfileAvatar) {
 		throw error(404, 'image not found');
 	}
-	const storagePath = join(getMediaRoot(), image.storageKey);
+	const storageKey = image?.storageKey ?? params.key;
+	const storagePath = join(getMediaRoot(), storageKey);
 	if (!isPathInsideMediaRoot(storagePath)) {
 		throw error(404, 'image not found');
 	}
 	const filePayload = readFileSync(storagePath);
 	return new Response(new Uint8Array(filePayload), {
 		headers: {
-			'Content-Type': getContentType(image.storageKey),
+			'Content-Type': getContentType(storageKey),
 			'Cache-Control': 'private, no-store',
 			'Content-Length': String(filePayload.length)
 		}

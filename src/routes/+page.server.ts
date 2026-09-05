@@ -68,6 +68,7 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	const collectionId = requestedCollectionId ?? collections[firstCollectionIndex]?.id;
 	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
 	const items = collection && scope ? repository.listItemsForOwner(collection.id, scope).map(enrichItemWithImages(scope)) : [];
+	const profile = scope ? repository.getProfile(scope) : null;
 
 	return {
 		collection,
@@ -75,6 +76,7 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 		items,
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
+		profile,
 		isAuthenticated: Boolean(scope),
 		isInitialSetup: !repository.hasAccounts(),
 		isInstanceAdmin,
@@ -205,33 +207,6 @@ export const actions: Actions = {
 			setSessionCookie(cookies, scope, url);
 		} catch {
 			return fail(httpStatus.badRequest, { resetError: 'Der Zurücksetzungscode ist ungültig oder abgelaufen.' });
-		}
-		redirect(httpStatus.seeOther, '/');
-	},
-
-	changePassword: async ({ cookies, request, url }) => {
-		if (!hasSameOrigin(request, url)) {
-			return fail(httpStatus.forbidden, { csrfError });
-		}
-		const token = cookies.get(sessionCookieName);
-		const scope = getSessionScope(token);
-		if (!scope) {
-			return fail(httpStatus.unauthorized, { changePasswordError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
-		}
-		const formData = await request.formData();
-		try {
-			const currentPasswordHash = getCollectionRepository().getPasswordHashForScope(scope);
-			if (!currentPasswordHash || !(await verifyPassword(getFormText(formData, 'currentPassword'), currentPasswordHash))) {
-				return fail(httpStatus.badRequest, { changePasswordError: invalidCredentialsError });
-			}
-			const password = getFormText(formData, 'password');
-			validatePassword(password);
-			const repository = getCollectionRepository();
-			repository.updatePassword(scope, await hashPassword(password));
-			repository.revokeSessionsForUser(scope);
-			setSessionCookie(cookies, scope, url);
-		} catch (error) {
-			return fail(httpStatus.badRequest, { changePasswordError: getErrorMessage(error) });
 		}
 		redirect(httpStatus.seeOther, '/');
 	},
