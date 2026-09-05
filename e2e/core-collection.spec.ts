@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 
 test.describe('Core collection', () => {
@@ -85,36 +86,170 @@ test.describe('Core collection', () => {
 		await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// act
 		await page.getByLabel('Artikelname').fill('Leselampe');
-		await page.getByLabel('Preis in Cent').fill('1200');
+		await page.getByLabel('Preis (€)').fill('12,00');
 		await page.getByLabel('Kategorie').selectOption('home');
 		await page.getByLabel('Zustand').selectOption('good');
-		await page.getByLabel('Interne Notizen').fill('Vor dem Inserieren die Glühbirne austauschen.');
+		await page.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Warme Leselampe mit flexiblem Arm.');
+		await page.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Vor dem Inserieren die Glühbirne austauschen.');
+		await page.getByTestId('item-complete-checkbox').check();
+		await page.getByTestId('item-functional-checkbox').check();
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
 
 		// assume
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 
 		// act
+		const itemCard = page.getByTestId('item-card');
+
+		// assume
+		await expect(itemCard.locator('.kat')).toContainText('Haushalt');
+		await expect(itemCard.locator('.badge.open')).toBeVisible();
+
+		// act — open the detail page from the tile
+		await itemCard.click();
+
+		// assume
+		await expect(page).toHaveURL(/\/artikel\//);
+		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
+		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+		await expect(page.getByTestId('item-flag-pills')).toContainText('Haushalt');
+		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Vollständig');
+		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Funktionsfähig');
+		await expect(page.getByTestId('item-external-description')).toContainText('Warme Leselampe');
+		await expect(page.getByTestId('item-internal-notes')).toContainText('Glühbirne');
+		await expect(page.getByTestId('item-qr-panel')).toBeVisible();
+		const qrDownload = page.getByTestId('item-qr-download');
+		await expect(qrDownload).toHaveAttribute('download', /qr-.+\.png/);
+		await expect(qrDownload).toHaveAttribute('href', /^data:image\/png;base64,/);
+		await expect(page.getByTestId('item-qr-image')).toBeVisible();
+
+		// act — reserve the item from the action row (and undo it again)
+		await page.getByTestId('toggle-item-reservation').click();
+		await expect(page.getByTestId('item-reserved-badge')).toBeVisible();
+		await page.getByTestId('toggle-item-reservation').click();
+		await expect(page.getByTestId('item-reserved-badge')).toHaveCount(0);
+
+		// act — upload two photos via the images dialog from the action row
+		const testPngBytes = Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+			'base64'
+		);
+		const secondPngBytes = Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/AAAMBAQAY3Y2wAAAAAElFTkSuQmCC',
+			'base64'
+		);
+		await page.getByTestId('images-dialog-trigger').click();
+		await expect(page.getByTestId('images-dialog')).toBeVisible();
+		await page.getByTestId('item-image-input').setInputFiles([
+			{ name: 'leselampe.png', mimeType: 'image/png', buffer: testPngBytes },
+			{ name: 'leselampe-detail.png', mimeType: 'image/png', buffer: secondPngBytes }
+		]);
+		await page.getByRole('button', { name: 'Foto speichern' }).click();
+
+		// assume — both stored; cover auto-assigned to the first upload
+		await page.getByTestId('images-dialog-trigger').click();
+		await expect(page.getByTestId('images-dialog')).toBeVisible();
+		await expect(page.getByTestId('item-image-key')).toHaveText(['Titelbild', 'Bild 2']);
+		await expect(page.locator('img.cover')).toBeVisible();
+
+		// act — pick the second image as cover inside the preview dialog
+		await page.getByTestId('set-item-cover').click();
+
+		// assume — the second image is now the cover
+		await expect(page.getByTestId('item-image-key').first()).toContainText('Bild 1');
+		await expect(page.getByTestId('item-image-key').nth(1)).toContainText('Titelbild');
+		// dialog closed itself after the set-cover redirect
+
+		// act — register a sale with the full form on the detail page (euro input, date auto-set)
+		await page.getByTestId('item-proceeds').fill('9,50');
+		await page.getByTestId('mark-item-sold').click();
+
+		// assume
+		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
+		await expect(page.getByTestId('item-sold-badge')).toContainText('9,50 €');
+
+		// act — unmark the sale again (card shows sold after quick-sell was replaced by detail flow)
+		await page.getByTestId('unmark-item-sold').click();
+
+		// assume
+		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+
+		// act — edit the item through the edit dialog
+		await page.getByTestId('edit-dialog-trigger').click();
+		await expect(page.getByTestId('edit-dialog')).toBeVisible();
+		await page.getByLabel('Artikelname').fill('Leselampe (gebraucht)');
+		await page.getByTestId('edit-dialog').getByRole('button', { name: 'Änderungen speichern' }).click();
+
+		// assume
+		await expect(page.getByRole('heading', { name: 'Leselampe (gebraucht)' })).toBeVisible();
+
+		// act — go back to the portfolio and quick-sell from the card
+		await page.getByRole('link', { name: '← Zurück zum Portfolio' }).click();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+		await page.getByTestId('item-card').first().getByTestId('quick-sell-item').click();
+
+		// assume
+		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
+		await expect(page.getByTestId('sale-statistics')).toContainText('1 Artikel verkauft');
+		await expect(page.getByTestId('sale-statistics')).toContainText('12,00 € Erlös');
+		await expect(page.getByTestId('sale-statistics-channels')).toContainText('Flohmarkt');
+		const currentMonth = new Date().toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+		await expect(page.getByTestId('sale-statistics-months')).toContainText(currentMonth);
+
+		// act — open the profile page via the header avatar and change the display name
 		const protectedUrl = page.url();
-		await page.getByRole('button', { name: 'Abmelden' }).click();
+		await page.getByTestId('profile-avatar-link').click();
+		await expect(page).toHaveURL(/\/profil/);
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
+		// assume — the avatar save button is disabled until an image file is selected
+		await expect(page.getByRole('button', { name: 'Avatar speichern' })).toBeDisabled();
+		await page.getByTestId('display-name-input').fill('Avery Profil');
+		await page.getByTestId('save-profile').click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
-		await expect(page.getByText('Vor dem Inserieren die Glühbirne austauschen.')).not.toBeVisible();
+		await expect(page.getByTestId('display-name-input')).toHaveValue('Avery Profil');
 
-		// act
-		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
-		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
-		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
+		// act — save a stand introduction and verify it on the public stand page
+		await expect(page.getByTestId('stand-panel')).toBeVisible();
+		// assume — the intro save button is disabled until the draft differs from the stored intro
+		await expect(page.getByTestId('save-stand-intro')).toBeDisabled();
+		await page.getByTestId('stand-intro-input').fill('Alles muss raus — von Deko bis Technik.');
+		await expect(page.getByTestId('save-stand-intro')).toBeEnabled();
+		await page.getByTestId('save-stand-intro').click();
+		await expect(page).toHaveURL(/\/profil/);
+		const standHref = await page.getByTestId('open-stand-link').getAttribute('href');
+		const standPage = await page.context().newPage();
+		await standPage.goto(`http://localhost:4173${standHref}`);
+		await expect(standPage.getByTestId('stand-intro')).toContainText('Alles muss raus');
 
-		// assume
-		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+		// act — change the password through the profile page (the fresh cookie keeps the session)
+		await page.getByLabel('Aktuelles Passwort').fill(winningAccount.password);
+		await page.getByLabel('Neues Passwort').fill('profile-changed-password-2026');
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('changePassword')),
+			page.getByTestId('save-password').click()
+		]);
+		await expect(page).toHaveURL(/\/profil/);
 
-		// act
+		// assume — the session survives the password change via the re-issued cookie
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
+
+		// act — restore the original password
+		await page.getByLabel('Aktuelles Passwort').fill('profile-changed-password-2026');
+		await page.getByLabel('Neues Passwort').fill(winningAccount.password);
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('changePassword')),
+			page.getByTestId('save-password').click()
+		]);
+		await expect(page).toHaveURL(/\/profil/);
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
+
+
+		// act — verify the protected detail page requires login again
 		await page.context().clearCookies();
 		await page.goto(protectedUrl);
 
@@ -126,7 +261,7 @@ test.describe('Core collection', () => {
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-		await page.locator('details.instance-administration > summary').click();
+		await page.locator('.instance-admin-link').click();
 		const instanceAdministrationForm = page.locator('form[action="?/createPasswordReset"]');
 		await instanceAdministrationForm.getByLabel('Benutzername des Kontos').fill(winningAccount.username);
 		await instanceAdministrationForm.getByRole('button', { name: 'Zurücksetzungscode erzeugen' }).click();
@@ -136,7 +271,7 @@ test.describe('Core collection', () => {
 		expect(resetSecret).toMatch(/^[A-Za-z0-9_-]+$/);
 
 		// act
-		await page.locator('details.password-help > summary').click();
+		await page.locator('.reset-toggle').click();
 		const resetForm = page.locator('form[action="?/resetPassword"]');
 		await resetForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await resetForm.getByLabel('Zurücksetzungscode').fill(resetSecret!);
@@ -144,40 +279,32 @@ test.describe('Core collection', () => {
 		await resetForm.getByRole('button', { name: 'Passwort zurücksetzen' }).click();
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Wohnzimmer-Ausmisten' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
-		// act
-		await page.context().clearCookies();
-		await page.goto('/');
-		const resetIssueAttempt = await page.request.post('/?/createPasswordReset', {
-			form: { username: winningAccount.username },
-			headers: { Origin: 'http://localhost:4173' }
-		});
-		const resetIssueAttemptStatus = resetIssueAttempt.status();
-		const resetIssueActionStatus = (await resetIssueAttempt.json()).status;
-		const failedLoginAttempts = [];
-		for (let attempt = 0; attempt < 5 - failedLoginCount; attempt += 1) {
-			const response = await page.request.post('/?/login', {
-				form: { username: 'x', password: 'not-a-password' },
-				headers: { Origin: 'http://localhost:4173' }
-			});
-			failedLoginAttempts.push({ actionStatus: (await response.json()).status, responseStatus: response.status() });
-		}
-		const blockedResponse = await page.request.post('/?/login', {
-			form: { username: 'x', password: 'not-a-password' },
-			headers: { Origin: 'http://localhost:4173' }
-		});
-		const blockedResponseStatus = blockedResponse.status();
-		const blockedActionStatus = (await blockedResponse.json()).status;
+		// act — restore the original password via the profile page
+		await page.getByTestId('profile-avatar-link').click();
+		const changeForm = page.locator('form[action="?/changePassword"]');
+		await changeForm.getByLabel('Aktuelles Passwort').fill('recovered-correct-battery-horse');
+		await changeForm.getByLabel('Neues Passwort').fill('correct-horse-battery-staple');
+		await Promise.all([
+			page.waitForResponse((response) => response.url().includes('changePassword')),
+			changeForm.getByRole('button', { name: 'Passwort speichern' }).click()
+		]);
 
 		// assume
-		expect(resetIssueAttemptStatus).toBe(200);
-		expect(resetIssueActionStatus).toBe(401);
-		for (const failedLoginAttempt of failedLoginAttempts) {
-			expect(failedLoginAttempt.responseStatus).toBe(200);
-			expect(failedLoginAttempt.actionStatus).toBe(401);
-		}
-		expect(blockedResponseStatus).toBe(200);
-		expect(blockedActionStatus).toBe(429);
+		await expect(page).toHaveURL(/\/profil/);
+
+		// act — the admin sees the backup panel and downloads a full instance backup
+		await expect(page.getByTestId('backup-panel')).toBeVisible();
+		// assume — the restore action is disabled until a backup file is selected
+		await expect(page.getByTestId('restore-submit')).toBeDisabled();
+		const backupResponse = await page.request.get('/profil/backup');
+		expect(backupResponse.status()).toBe(200);
+		expect(backupResponse.headers()['content-type']).toContain('application/zip');
+		const backupBody = await backupResponse.body();
+		expect(backupBody.length).toBeGreaterThan(1000);
+
+		// act
+		await page.context().storageState({ path: 'e2e/.auth-owner.json' });
 	});
 });

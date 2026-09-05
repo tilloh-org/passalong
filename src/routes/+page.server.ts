@@ -2,12 +2,19 @@ import { fail, redirect, type Cookies } from '@sveltejs/kit';
 import {
 	itemCategories,
 	itemConditions,
+	type Item,
 	type ItemCategory,
 	type ItemCondition,
+	type ItemImage,
+	type SaleChannel,
 	type SessionScope
 } from '$lib/server/collection-repository';
+import { readFileSync } from 'node:fs';
+import { isAbsolute, join, relative } from 'node:path';
 import { hasSameOrigin } from '$lib/server/csrf';
 import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
+import { getMediaRoot } from '$lib/server/media-root';
+import { saveUploadedImage } from '$lib/server/media-storage';
 import { hashPassword, needsPasswordRehash, validatePassword, verifyPassword } from '$lib/server/password';
 import { getCollectionRepository } from '$lib/server/repository';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
@@ -22,7 +29,6 @@ const passwordResetLifetimeHours = 1;
 const sessionLifetimeDays = 30;
 const firstCollectionIndex = 0;
 const maximumPriceCents = 10_000_000;
-const wholeNumberPattern = /^\d+$/;
 const httpStatus = {
 	seeOther: 303,
 	badRequest: 400,
@@ -36,6 +42,16 @@ const passwordResetLifetimeMilliseconds = passwordResetLifetimeHours * minutesPe
 const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
+const pngFileExtension = '.png';
+const jpegFileExtension = '.jpg';
+const pngMimeType = 'image/png';
+const jpegMimeType = 'image/jpeg';
+const webpMimeType = 'image/webp';
+
+interface ItemWithImages extends Item {
+	images: ItemImage[];
+	coverImageKey: string | null;
+}
 
 /**
  * Load account-aware and tenant-scoped collection data.
@@ -51,16 +67,20 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	const requestedCollectionId = url.searchParams.get('collection');
 	const collectionId = requestedCollectionId ?? collections[firstCollectionIndex]?.id;
 	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
+	const items = collection && scope ? repository.listItemsForOwner(collection.id, scope).map(enrichItemWithImages(scope)) : [];
+	const profile = scope ? repository.getProfile(scope) : null;
 
 	return {
 		collection,
 		collections,
-		items: collection && scope ? repository.listItemsForOwner(collection.id, scope) : [],
+		items,
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
+		profile,
 		isAuthenticated: Boolean(scope),
 		isInitialSetup: !repository.hasAccounts(),
-		isInstanceAdmin
+		isInstanceAdmin,
+		saleStatistics: scope ? repository.getSaleStatistics(scope) : undefined
 	};
 };
 
@@ -191,33 +211,6 @@ export const actions: Actions = {
 		redirect(httpStatus.seeOther, '/');
 	},
 
-	changePassword: async ({ cookies, request, url }) => {
-		if (!hasSameOrigin(request, url)) {
-			return fail(httpStatus.forbidden, { csrfError });
-		}
-		const token = cookies.get(sessionCookieName);
-		const scope = getSessionScope(token);
-		if (!scope) {
-			return fail(httpStatus.unauthorized, { changePasswordError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
-		}
-		const formData = await request.formData();
-		try {
-			const currentPasswordHash = getCollectionRepository().getPasswordHashForScope(scope);
-			if (!currentPasswordHash || !(await verifyPassword(getFormText(formData, 'currentPassword'), currentPasswordHash))) {
-				return fail(httpStatus.badRequest, { changePasswordError: invalidCredentialsError });
-			}
-			const password = getFormText(formData, 'password');
-			validatePassword(password);
-			const repository = getCollectionRepository();
-			repository.updatePassword(scope, await hashPassword(password));
-			repository.revokeSessionsForUser(scope);
-			setSessionCookie(cookies, scope, url);
-		} catch (error) {
-			return fail(httpStatus.badRequest, { changePasswordError: getErrorMessage(error) });
-		}
-		redirect(httpStatus.seeOther, '/');
-	},
-
 	createCollection: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
 			return fail(httpStatus.forbidden, { csrfError });
@@ -265,7 +258,10 @@ export const actions: Actions = {
 					priceCents: getPriceCents(formData),
 					category: getFormText(formData, 'category') as ItemCategory,
 					condition: getFormText(formData, 'condition') as ItemCondition,
-					internalNotes: getFormText(formData, 'internalNotes')
+					internalNotes: getFormText(formData, 'internalNotes'),
+					externalDescription: getFormText(formData, 'externalDescription'),
+					isComplete: formData.get('isComplete') === '1',
+					isFunctional: formData.get('isFunctional') === '1'
 				},
 				scope
 			);
@@ -274,6 +270,33 @@ export const actions: Actions = {
 		}
 
 		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collectionId)}`);
+	},
+
+	quickSellItem: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		try {
+			const item = getCollectionRepository().getItemForOwner(getFormText(formData, 'itemId'), scope);
+			if (!item) {
+				throw new Error('item was not found');
+			}
+			getCollectionRepository().markItemSold(
+				item.id,
+				{ channel: 'flea-market', soldAt: new Date().toISOString(), proceedsCents: item.priceCents },
+				scope
+			);
+		} catch (error) {
+			return fail(httpStatus.badRequest, { saleStatusError: saleStatusError(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
 	}
 };
 
@@ -289,23 +312,43 @@ function getFormText(formData: FormData, name: string): string {
 	return typeof value === 'string' ? value : '';
 }
 
+const euroAmountPattern = /^\d{1,7}([.,]\d{1,2})?$/;
+
 /**
- * Parse the required non-negative integer price submitted by the item form.
+ * Parse a German- or dot-formatted euro amount into euro cents.
+ *
+ * @param {string} value - Raw user input such as "12", "12,50" or "12.5".
+ * @returns {number | null} Euro cents, or null when the input is not a valid amount.
+ */
+function parseEuroAmount(value: string): number | null {
+	if (!euroAmountPattern.test(value)) {
+		return null;
+	}
+	const normalized = value.replace(',', '.');
+	const euros = Number(normalized);
+	if (!Number.isFinite(euros)) {
+		return null;
+	}
+	const cents = Math.round(euros * 100);
+	if (!Number.isSafeInteger(cents) || cents > maximumPriceCents) {
+		return null;
+	}
+	return cents;
+}
+
+/**
+ * Parse the submitted euro price into euro cents.
  *
  * @param {FormData} formData - Submitted form values.
  * @returns {number} The price in euro cents.
  * @throws {Error} When the submitted price is missing or invalid.
  */
 function getPriceCents(formData: FormData): number {
-	const value = getFormText(formData, 'priceCents').trim();
-	if (!wholeNumberPattern.test(value)) {
-		throw new Error('Bitte gib einen Preis in Cent als ganze Zahl ein.');
+	const euroValue = parseEuroAmount(getFormText(formData, 'priceEuros').trim());
+	if (euroValue === null) {
+		throw new Error('Bitte gib einen gültigen Preis in Euro ein, z. B. 12,50.');
 	}
-	const priceCents = Number(value);
-	if (!Number.isSafeInteger(priceCents) || priceCents > maximumPriceCents) {
-		throw new Error('Der Preis liegt außerhalb des erlaubten Bereichs.');
-	}
-	return priceCents;
+	return euroValue;
 }
 
 /**
@@ -346,4 +389,68 @@ function setSessionCookie(cookies: Cookies, scope: SessionScope, url: URL): void
  */
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : 'Die Eingabe konnte nicht gespeichert werden.';
+}
+
+const imageErrorMessage = 'Das Bild konnte nicht verarbeitet werden. Bitte prüfe Format und Größe.';
+const imageRemoveErrorMessage = 'Das Bild konnte nicht entfernt werden.';
+const userFacingImageMessages = [
+	'upload is not a supported image type',
+	'upload is empty',
+	'image exceeds the allowed size',
+	'upload is not a supported image',
+	'image was not found',
+	'item was not found'
+] as const;
+
+/**
+ * Map image-action failures to fixed user-facing messages without leaking
+ * internal storage or SQLite details.
+ *
+ * @param {unknown} error - The thrown value.
+ * @returns {string} A safe, fixed user-facing message.
+ */
+function imageActionError(error: unknown): string {
+	if (error instanceof Error && (userFacingImageMessages as readonly string[]).includes(error.message)) {
+		return error.message;
+	}
+	return imageErrorMessage;
+}
+
+const saleStatusErrorByInternalMessage: Record<string, string> = {
+	'item was not found': 'Der Artikel wurde nicht gefunden.',
+	'channel is not a supported sale channel': 'Bitte wähle einen gültigen Verkaufskanal.',
+	'soldAt must be a canonical UTC ISO timestamp': 'Bitte gib ein gültiges Verkaufsdatum an.'
+};
+const saleStatusGenericError =
+	'Die Verkaufsinformation konnte nicht gespeichert werden. Bitte prüfe die Angaben.';
+
+/**
+ * Map sale-status action failures to German user-facing messages without leaking
+ * internal error details.
+ *
+ * @param {unknown} error - The thrown value.
+ * @returns {string} A safe, fixed user-facing message.
+ */
+function saleStatusError(error: unknown): string {
+	if (error instanceof Error && error.message in saleStatusErrorByInternalMessage) {
+		return saleStatusErrorByInternalMessage[error.message];
+	}
+	if (error instanceof Error && error.message.includes('proceedsCents')) {
+		return 'Bitte gib einen gültigen Erlös in Cent als ganze Zahl ein.';
+	}
+	return saleStatusGenericError;
+}
+
+/**
+ * Enrich every item with its tenant-scoped image metadata.
+ *
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {(item: Item) => ItemWithImages} Item mapper including image metadata.
+ */
+function enrichItemWithImages(scope: SessionScope): (item: Item) => ItemWithImages {
+	return (item) => {
+		const images = getCollectionRepository().listItemImages(item.id, scope);
+		const coverImage = images.find((image) => image.isCover);
+		return { ...item, images, coverImageKey: coverImage?.storageKey ?? null };
+	};
 }
