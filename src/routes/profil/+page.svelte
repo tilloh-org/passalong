@@ -266,6 +266,10 @@
 					<p class="dialog-hint">
 						Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Zum Bestätigen gib bitte deinen Benutzernamen ein.
 					</p>
+					<div class="delete-account-warning" role="note" aria-label="Warnhinweis zur Konto-Löschung">
+						<span aria-hidden="true">⚠️</span>
+						<span>Mit der Bestätigung werden deine Account-Daten unwiederbringlich gelöscht.</span>
+					</div>
 					<form method="POST" action="?/deleteAccount" class="delete-account-form" data-testid="delete-account-form">
 						<label>
 							<span>Benutzername bestätigen</span>
@@ -610,6 +614,25 @@
 		font-size: 0.82rem;
 		line-height: 1.5;
 		margin: 0.25rem 0 0.75rem;
+	}
+
+	.delete-account-warning {
+		align-items: center;
+		background: var(--color-danger-soft);
+		border: 1px solid var(--color-danger);
+		border-radius: var(--radius-control);
+		color: var(--color-danger);
+		display: flex;
+		gap: 0.5rem;
+		font-size: 0.85rem;
+		font-weight: 800;
+		line-height: 1.4;
+		margin-bottom: 0.85rem;
+		padding: 0.75rem 0.9rem;
+	}
+
+	.delete-account-warning span:last-child {
+		color: var(--color-danger);
 	}
 
 	.delete-account-form {
