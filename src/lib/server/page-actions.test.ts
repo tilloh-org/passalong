@@ -413,6 +413,71 @@ describe('instance-admin actions', () => {
 		expect(existsSync(join(mediaRoot, withAvatar?.avatarStorageKey ?? 'missing'))).toBe(false);
 	});
 
+	it('deletes the authenticated account only after the username is confirmed', async () => {
+		// arrange
+		const { repository, loadProfileActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const actions = await loadProfileActions();
+		const url = new URL('http://localhost/');
+		const collection = repository.createCollection({ name: 'Garage' }, scope);
+		repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Bicycle',
+				priceCents: 5000,
+				category: 'hobby',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			scope
+		);
+		const currentUsername = repository.getProfile(scope)?.username ?? 'missing';
+
+		// act
+		const rejectedOutcome = await actions.deleteAccount({
+			cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined), delete: () => undefined },
+			request: new Request(url, {
+				body: new URLSearchParams({ confirmUsername: 'someone-else' }),
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
+				method: 'POST'
+			}),
+			url
+		} as never);
+
+		// assume
+		expect(rejectedOutcome).toMatchObject({
+			status: 400,
+			data: { deleteAccountError: 'Bitte gib deinen Benutzernamen zur Bestätigung ein.' }
+		});
+		expect(repository.getProfile(scope)).toMatchObject({ username: currentUsername });
+		expect(repository.listCollectionsForOwner(scope)).toHaveLength(1);
+
+		// act
+		let redirectOutcome: unknown;
+		try {
+			await actions.deleteAccount({
+				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined), delete: () => undefined },
+				request: new Request(url, {
+					body: new URLSearchParams({ confirmUsername: currentUsername }),
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
+					method: 'POST'
+				}),
+				url
+			} as never);
+		} catch (error) {
+			redirectOutcome = error;
+		}
+
+		// assume
+		expect(redirectOutcome).toMatchObject({ status: 303, location: '/' });
+		expect(repository.getProfile(scope)).toBeNull();
+		expect(repository.getUserForLogin(currentUsername)).toBeNull();
+		expect(repository.listCollectionsForOwner(scope)).toHaveLength(0);
+		expect(repository.getSession(hashSessionToken(rawSessionToken))).toBeNull();
+	});
+
 	it('restores an instance backup as instance admin and rejects non-admins with 404', async () => {
 		// arrange
 		const { repository, databasePath, loadProfileActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();

@@ -179,6 +179,38 @@ export const actions: Actions = {
 		redirect(httpStatus.seeOther, '/profil');
 	},
 
+	deleteAccount: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { deleteAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		const confirmUsername = getFormText(formData, 'confirmUsername');
+		const profile = getCollectionRepository().getProfile(scope);
+		if (!profile) {
+			return fail(httpStatus.unauthorized, { deleteAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+		if (confirmUsername.toLowerCase() !== profile.username) {
+			return fail(httpStatus.badRequest, { deleteAccountError: 'Bitte gib deinen Benutzernamen zur Bestätigung ein.' });
+		}
+
+		try {
+			const artifacts = getCollectionRepository().deleteAccount(scope);
+			if (artifacts.avatarStorageKey) {
+				await removeStoredMedia(getMediaRoot(), artifacts.avatarStorageKey);
+			}
+			cookies.delete(sessionCookieName, { path: '/' });
+		} catch (error) {
+			return fail(httpStatus.badRequest, { deleteAccountError: profileActionError(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
+	},
+
 	changePassword: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
 			return fail(httpStatus.forbidden, { csrfError });

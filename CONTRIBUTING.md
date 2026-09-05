@@ -50,8 +50,17 @@ pnpm lint
    ```
 2. Make your changes. Keep them focused — one logical change per PR.
 3. Run the test suite and the linter locally before pushing.
-4. Push the branch and open a pull request **against `develop`**.
+4. If the change affects the UI, refresh the committed screenshots before opening or updating the PR.
+5. Update the PR description so it always points at the latest screenshots for the current commit.
+6. Push the branch and open a pull request **against `develop`**.
    - `main` is release-only. PRs against `main` will be closed.
+
+### Screenshots for UI changes
+
+- Every visible UI change gets a current screenshot in the repository.
+- When the UI changes again, regenerate the screenshot and replace the old one in the PR description.
+- Use the latest screenshots only; do not leave stale image links in the PR body.
+- Prefer commit-pinned raw GitHub image URLs in the PR description so the linked image stays stable after squashes and merges.
 
 ### Conventional commits
 

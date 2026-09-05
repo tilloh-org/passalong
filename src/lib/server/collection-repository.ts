@@ -146,6 +146,11 @@ export interface UpdateProfileInput {
 	displayName: string;
 }
 
+export interface DeletedAccountArtifacts {
+	avatarStorageKey: string | null;
+	itemImageStorageKeys: string[];
+}
+
 export interface AdminAccount extends SessionScope {
 	username: string;
 	displayName: string;
@@ -185,6 +190,7 @@ export interface CollectionRepository {
 	isInstanceAdmin(scope: SessionScope): boolean;
 	revokeSession(tokenHash: string): void;
 	revokeSessionsForUser(scope: SessionScope): void;
+	deleteAccount(scope: SessionScope): DeletedAccountArtifacts;
 	getLoginAttemptStatus(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
 	recordLoginFailure(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
 	clearLoginFailures(username: string, requestIp: string): void;
@@ -614,6 +620,41 @@ export function createCollectionRepository(
 			database
 				.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?')
 				.run(new Date().toISOString(), scope.userId, scope.tenantId);
+		},
+
+		deleteAccount(scope) {
+			return runImmediateTransaction(database, () => {
+				const profile = database
+					.prepare('SELECT username, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?')
+					.get(scope.userId, scope.tenantId) as { username: string; avatar_storage_key: string | null } | undefined;
+				if (!profile) {
+					throw new Error('authenticated owner was not found');
+				}
+				const itemImageStorageKeys = (
+					database
+						.prepare(
+							`SELECT DISTINCT item_images.storage_key
+							 FROM item_images
+							 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+							 WHERE items.owner_id = ? AND items.tenant_id = ?`
+						)
+						.all(scope.userId, scope.tenantId) as { storage_key: string }[]
+				).map(({ storage_key }) => storage_key);
+				database.prepare("DELETE FROM login_attempts WHERE scope = 'username' AND subject = ?").run(profile.username);
+				database.prepare('DELETE FROM items WHERE owner_id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
+				database.prepare('DELETE FROM collections WHERE owner_id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
+				database.prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
+				const remainingUsers = database
+					.prepare('SELECT 1 FROM users WHERE tenant_id = ? LIMIT 1')
+					.get(scope.tenantId);
+				if (!remainingUsers) {
+					database.prepare('DELETE FROM tenants WHERE id = ?').run(scope.tenantId);
+				}
+				return {
+					avatarStorageKey: profile.avatar_storage_key,
+					itemImageStorageKeys
+				};
+			});
 		},
 
 		getLoginAttemptStatus(username, requestIp, now = new Date()) {
