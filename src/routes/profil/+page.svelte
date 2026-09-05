@@ -10,6 +10,7 @@
 	let standIntroDraft = $state('');
 	let standIntroBaseline = $state('');
 	let deleteAccountDraft = $state('');
+	let deleteAccountDialog = $state<HTMLDialogElement | null>(null);
 
 	$effect(() => {
 		standIntroBaseline = data.activeCollection?.standIntro ?? '';
@@ -43,6 +44,16 @@
 	const restoreReady = $derived(Boolean(restoreFile));
 	const standIntroChanged = $derived(standIntroDraft !== standIntroBaseline);
 	const deleteAccountReady = $derived(deleteAccountDraft.trim().toLowerCase() === data.profile.username);
+
+	function openDeleteAccountDialog(): void {
+		deleteAccountDraft = '';
+		if (!deleteAccountDialog?.open) {
+			deleteAccountDialog?.showModal();
+			queueMicrotask(() => {
+				deleteAccountDialog?.querySelector<HTMLInputElement>('[data-testid="delete-account-input"]')?.focus();
+			});
+		}
+	}
 
 	async function copyStandLink(): Promise<void> {
 		await navigator.clipboard.writeText(standUrl);
@@ -235,6 +246,24 @@
 				<section class="panel delete-account-panel" aria-labelledby="delete-account-title" data-testid="delete-account-panel">
 					<h2 id="delete-account-title">Konto löschen</h2>
 					<p class="delete-account-hint">
+						Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Die Bestätigung öffnet sich erst nach Klick auf den Lösch-Button.
+					</p>
+					<button type="button" class="danger delete-account-trigger" data-testid="delete-account-trigger" onclick={() => openDeleteAccountDialog()}>
+						Konto löschen
+					</button>
+				</section>
+
+				<dialog
+					bind:this={deleteAccountDialog}
+					class="delete-account-dialog"
+					aria-labelledby="delete-account-dialog-title"
+					data-testid="delete-account-dialog"
+				>
+					<div class="dialog-head">
+						<h3 id="delete-account-dialog-title">Konto löschen bestätigen</h3>
+						<button type="button" class="secondary" onclick={() => deleteAccountDialog?.close()}>Schließen</button>
+					</div>
+					<p class="dialog-hint">
 						Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Zum Bestätigen gib bitte deinen Benutzernamen ein.
 					</p>
 					<form method="POST" action="?/deleteAccount" class="delete-account-form" data-testid="delete-account-form">
@@ -257,7 +286,7 @@
 						{/if}
 						<button type="submit" class="danger" data-testid="delete-account-submit" disabled={!deleteAccountReady} aria-disabled={!deleteAccountReady}>Konto endgültig löschen</button>
 					</form>
-				</section>
+				</dialog>
 			</div>
 		</div>
 
@@ -528,8 +557,64 @@
 		transform: none;
 	}
 
-	.stand-panel {
-		display: block;
+	.delete-account-panel {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.delete-account-panel .delete-account-trigger {
+		justify-self: end;
+	}
+
+	.delete-account-dialog {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		max-width: min(32rem, 92vw);
+		padding: 1.25rem;
+		width: 32rem;
+	}
+
+	.delete-account-dialog::backdrop {
+		background: rgba(10, 20, 28, 0.6);
+	}
+
+	.dialog-head {
+		align-items: center;
+		display: flex;
+		gap: 0.75rem;
+		justify-content: space-between;
+	}
+
+	.dialog-head h3 {
+		font-size: 1.05rem;
+		margin: 0;
+	}
+
+	.dialog-head button.secondary {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		box-shadow: none;
+		color: var(--color-accent);
+		font-size: 0.85rem;
+		padding: 0.5rem 0.9rem;
+	}
+
+	.dialog-head button.secondary:hover {
+		background: var(--color-accent-soft);
+		transform: none;
+	}
+
+	.dialog-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0.25rem 0 0.75rem;
+	}
+
+	.delete-account-form {
+		display: grid;
+		gap: var(--gap-action-row);
 	}
 
 	.stand-panel h2 {

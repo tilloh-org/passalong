@@ -309,6 +309,9 @@ test.describe('Core collection', () => {
 
 		// act — delete the account after confirming the username
 		await expect(page.getByTestId('delete-account-panel')).toBeVisible();
+		await expect(page.getByTestId('delete-account-dialog')).toBeHidden();
+		await page.getByTestId('delete-account-trigger').click();
+		await expect(page.getByTestId('delete-account-dialog')).toBeVisible();
 		await expect(page.getByTestId('delete-account-submit')).toBeDisabled();
 		await page.getByTestId('delete-account-input').fill(winningAccount.username);
 		await expect(page.getByTestId('delete-account-submit')).toBeEnabled();
