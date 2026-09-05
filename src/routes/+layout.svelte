@@ -78,44 +78,6 @@
 			</a>
 		</h1>
 		{#if data.header?.isAuthenticated}
-			<div class="header-actions">
-				<button
-					class="icon-btn theme-toggle"
-					aria-label="Dark Mode umschalten"
-					title="Hell/Dunkel"
-					type="button"
-					onclick={toggleTheme}
-				>
-					<svg class="icon" aria-hidden="true" focusable="false">
-						<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
-					</svg>
-				</button>
-				<a
-					class="profile-avatar"
-					href="/profil"
-					aria-label="Profil öffnen"
-					title="Profil"
-					data-testid="profile-avatar-link"
-				>
-					{#if data.header?.profile?.avatarStorageKey}
-						<img class="profile-avatar-img" src={`/media/${encodeURIComponent(data.header?.profile?.avatarStorageKey ?? '')}`} alt="" />
-					{:else}
-						<span class="profile-avatar-fallback">{(data.header?.profile?.displayName ?? 'P').slice(0, 1).toUpperCase()}</span>
-					{/if}
-				</a>
-				<button
-					class="burger"
-					aria-label={menuOpen ? 'Menü schließen' : 'Menü öffnen'}
-					aria-expanded={menuOpen}
-					type="button"
-					onclick={() => setMenuOpen(!menuOpen)}
-				>
-					<span></span><span></span><span></span>
-				</button>
-			</div>
-			{#if menuOpen}
-				<button class="nav-backdrop open" aria-label="Menü schließen" type="button" onclick={() => setMenuOpen(false)}></button>
-			{/if}
 			<nav class:open={menuOpen} bind:this={navElement}>
 				<a
 					class="nav-cta"
@@ -143,8 +105,46 @@
 					<button type="submit" onclick={() => setMenuOpen(false)}>Abmelden</button>
 				</form>
 			</nav>
+			<div class="header-actions">
+				<button
+					class="burger"
+					aria-label={menuOpen ? 'Menü schließen' : 'Menü öffnen'}
+					aria-expanded={menuOpen}
+					type="button"
+					onclick={() => setMenuOpen(!menuOpen)}
+				>
+					<span></span><span></span><span></span>
+				</button>
+				<button
+					class="icon-btn theme-toggle"
+					aria-label="Dark Mode umschalten"
+					title="Hell/Dunkel"
+					type="button"
+					onclick={toggleTheme}
+				>
+					<svg class="icon" aria-hidden="true" focusable="false">
+						<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
+					</svg>
+				</button>
+				<a
+					class="profile-avatar"
+					href="/profil"
+					aria-label="Profil öffnen"
+					title="Profil"
+					data-testid="profile-avatar-link"
+				>
+					{#if data.header?.profile?.avatarStorageKey}
+						<img class="profile-avatar-img" src={`/media/${encodeURIComponent(data.header?.profile?.avatarStorageKey ?? '')}`} alt="" />
+					{:else}
+						<span class="profile-avatar-fallback">{(data.header?.profile?.displayName ?? 'P').slice(0, 1).toUpperCase()}</span>
+					{/if}
+				</a>
+			</div>
+			{#if menuOpen}
+				<button class="nav-backdrop open" aria-label="Menü schließen" type="button" onclick={() => setMenuOpen(false)}></button>
+			{/if}
 		{/if}
-	</header>
+		</header>
 
 
 <main class="layout-main">
