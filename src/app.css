@@ -33,6 +33,7 @@
 	--color-amber: #e0a458;
 	--color-ice: #7fa8bd;
 	--focus-ring: rgba(127, 168, 189, 0.35);
+	--scrim: rgba(14, 42, 58, 0.4);
 
 	--radius-card: 16px;
 	--radius-control: 12px;
@@ -48,6 +49,7 @@
 	--shadow-btn-hover: 0 10px 26px rgba(14, 42, 58, 0.3);
 	--shadow-cta: 0 4px 14px rgba(14, 42, 58, 0.3);
 	--shadow-logo: 0 8px 20px rgba(14, 42, 58, 0.3);
+	--shadow-drawer: -20px 0 44px rgba(14, 42, 58, 0.28);
 }
 
 [data-theme="dark"] {
@@ -70,6 +72,7 @@
 		--color-warn: #e0a458;
 		--color-warn-soft: rgba(224, 164, 88, 0.16);
 		--focus-ring: rgba(127, 168, 189, 0.4);
+		--scrim: rgba(0, 0, 0, 0.55);
 		--glass: rgba(15, 26, 34, 0.72);
 
 		--shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
@@ -79,6 +82,7 @@
 		--shadow-btn-hover: 0 10px 26px rgba(0, 0, 0, 0.45);
 		--shadow-cta: 0 4px 14px rgba(0, 0, 0, 0.4);
 		--shadow-logo: 0 8px 20px rgba(0, 0, 0, 0.5);
+		--shadow-drawer: -20px 0 44px rgba(0, 0, 0, 0.55);
 	}
 
 * {

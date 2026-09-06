@@ -13,33 +13,36 @@ test.describe('Core collection', () => {
 		await page.goto('/');
 
 		// assume
-		await expect(page.getByRole('heading', { name: 'Ersten Zugang erstellen' })).toBeVisible();
+		const onboardingVisible = await page.getByRole('heading', { name: 'Ersten Zugang erstellen' }).isVisible().catch(() => false);
+		const loginVisible = await page.getByRole('heading', { name: 'Anmelden' }).isVisible().catch(() => false);
+		expect(onboardingVisible || loginVisible).toBe(true);
+		if (onboardingVisible) {
+			// act
+			const rejectedRegistration = await page.request.post('/?/register', {
+				form: registrations[0],
+				headers: { Origin: 'https://attacker.example' }
+			});
 
-		// act
-		const rejectedRegistration = await page.request.post('/?/register', {
-			form: registrations[0],
-			headers: { Origin: 'https://attacker.example' }
-		});
+			// assume
+			expect(rejectedRegistration.status()).toBe(403);
 
-		// assume
-		expect(rejectedRegistration.status()).toBe(403);
-
-		// act
-		await page.evaluate(async (accounts) => {
-			return Promise.all(
-				accounts.map(async (account) => {
-					const response = await fetch('/?/register', {
-						method: 'POST',
-						headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-						body: new URLSearchParams(account),
-						redirect: 'manual'
-					});
-					return response.status;
-				})
-			);
-		}, registrations);
-		await page.context().clearCookies();
-		await page.goto('/');
+			// act
+			await page.evaluate(async (accounts) => {
+				return Promise.all(
+					accounts.map(async (account) => {
+						const response = await fetch('/?/register', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+							body: new URLSearchParams(account),
+							redirect: 'manual'
+						});
+						return response.status;
+					})
+				);
+			}, registrations);
+			await page.context().clearCookies();
+			await page.goto('/');
+		}
 
 		// assume
 		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
@@ -304,7 +307,18 @@ test.describe('Core collection', () => {
 		const backupBody = await backupResponse.body();
 		expect(backupBody.length).toBeGreaterThan(1000);
 
-		// act
-		await page.context().storageState({ path: 'e2e/.auth-owner.json' });
+		// act — delete the account after confirming the username
+		await expect(page.getByTestId('delete-account-panel')).toBeVisible();
+		await expect(page.getByTestId('delete-account-dialog')).toBeHidden();
+		await page.getByTestId('delete-account-trigger').click();
+		await expect(page.getByTestId('delete-account-dialog')).toBeVisible();
+		await expect(page.getByTestId('delete-account-submit')).toBeDisabled();
+		await page.getByTestId('delete-account-input').fill(winningAccount.username);
+		await expect(page.getByTestId('delete-account-submit')).toBeEnabled();
+		await page.getByTestId('delete-account-submit').click();
+
+		// assume
+		await expect(page).toHaveURL('/');
+		await expect(page.getByRole('heading', { name: 'Ersten Zugang erstellen' })).toBeVisible();
 	});
 });

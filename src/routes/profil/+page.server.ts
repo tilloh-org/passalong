@@ -4,6 +4,7 @@ import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-poli
 import { getMediaRoot } from '$lib/server/media-root';
 import { saveUploadedImage, removeStoredMedia } from '$lib/server/media-storage';
 import { createInstanceBackup, restoreInstanceBackup } from '$lib/server/backup';
+import { importAccountExport } from '$lib/server/account-transfer';
 import { getDatabasePath } from '$lib/server/repository';
 import { writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -179,6 +180,38 @@ export const actions: Actions = {
 		redirect(httpStatus.seeOther, '/profil');
 	},
 
+	deleteAccount: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { deleteAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		const confirmUsername = getFormText(formData, 'confirmUsername');
+		const profile = getCollectionRepository().getProfile(scope);
+		if (!profile) {
+			return fail(httpStatus.unauthorized, { deleteAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+		if (confirmUsername.toLowerCase() !== profile.username) {
+			return fail(httpStatus.badRequest, { deleteAccountError: 'Bitte gib deinen Benutzernamen zur Bestätigung ein.' });
+		}
+
+		try {
+			const artifacts = getCollectionRepository().deleteAccount(scope);
+			for (const storageKey of [...artifacts.itemImageStorageKeys, artifacts.avatarStorageKey].filter((value): value is string => Boolean(value))) {
+				await removeStoredMedia(getMediaRoot(), storageKey);
+			}
+			cookies.delete(sessionCookieName, { path: '/' });
+		} catch (error) {
+			return fail(httpStatus.badRequest, { deleteAccountError: profileActionError(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
+	},
+
 	changePassword: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
 			return fail(httpStatus.forbidden, { csrfError });
@@ -241,6 +274,34 @@ export const actions: Actions = {
 		redirect(httpStatus.seeOther, '/profil');
 	},
 
+	importAccountData: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { importAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+
+		const formData = await request.formData();
+		const upload = formData.get('accountArchive');
+		if (!(upload instanceof File) || upload.size === 0) {
+			return fail(httpStatus.badRequest, { importAccountError: 'Bitte wähle ein Export-Archiv aus.' });
+		}
+
+		try {
+			const summary = await importAccountExport({
+				repository: getCollectionRepository(),
+				scope,
+				mediaRoot: getMediaRoot(),
+				archive: Buffer.from(await upload.arrayBuffer())
+			});
+			return { importAccountSuccess: summary };
+		} catch (error) {
+			return fail(httpStatus.badRequest, { importAccountError: getImportErrorMessage(error) });
+		}
+	},
+
 	saveStandIntro: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
 			return fail(httpStatus.forbidden, { csrfError });
@@ -300,4 +361,17 @@ function getProfileErrorMessage(error: unknown): string {
 		return 'Das Passwort entspricht nicht den Anforderungen.';
 	}
 	return 'Das Passwort konnte nicht geändert werden. Bitte versuche es erneut.';
+}
+
+/**
+ * Map account-import failures to a safe user-facing message.
+ *
+ * @param {unknown} error - The thrown value.
+ * @returns {string} A safe user-facing message.
+ */
+function getImportErrorMessage(error: unknown): string {
+	if (error instanceof Error && error.message.includes('export archive')) {
+		return 'Das ZIP-Archiv ist ungültig oder beschädigt.';
+	}
+	return 'Der Import konnte nicht verarbeitet werden. Bitte prüfe die ZIP-Datei.';
 }

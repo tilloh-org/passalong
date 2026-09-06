@@ -25,6 +25,24 @@ UI; deviations need an explicit decision (e.g. in the PR description).
 - Secondary/tinted action buttons in the item action row follow the Marktbude scheme:
   red = destructive, blue = edit/media, amber = reservation.
 
+## Header
+
+- The global header row is a single flex line: the brand sits on the left, the navigation and
+  the action buttons (theme toggle, profile avatar) form **one flush group at the right edge** —
+  there is no empty space between the last navigation button and the action buttons.
+- The navigation is only rendered inline when it fits; when it overflows it collapses into the
+  right-side drawer behind the burger button, which then appears left of the theme toggle. The
+  action buttons stay pinned to the right edge in both states.
+- The drawer is an overlay: it slides in above the page, dims the background with the
+  theme-aware scrim token (`--scrim`), and carries a soft shadow toward the content side
+  (`--shadow-drawer`) so it reads as an elevated layer. The scrim, drawer, and shadow colors
+  are theme tokens — never hard-coded — because a dark scrim on a dark page is invisible.
+  The header action buttons (burger/close, theme toggle, profile) stay above the drawer
+  (higher z-index) and remain clickable; the burger icon morphs into a close icon.
+  Tapping the scrim or pressing Escape closes the drawer; keyboard focus moves into the
+  drawer on open and back to the burger on close.
+- Navigation buttons never run off the right edge of the viewport.
+
 ## Modals
 
 - Native `<dialog>` elements with a dimmed backdrop.

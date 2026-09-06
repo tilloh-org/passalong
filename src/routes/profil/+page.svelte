@@ -7,12 +7,22 @@
 
 	let avatarFile: File | undefined = $state();
 	let restoreFile: File | undefined = $state();
+	let importFile: File | undefined = $state();
 	let standIntroDraft = $state('');
 	let standIntroBaseline = $state('');
+	let deleteAccountDraft = $state('');
+	let deleteAccountDialog = $state<HTMLDialogElement | null>(null);
 
 	$effect(() => {
 		standIntroBaseline = data.activeCollection?.standIntro ?? '';
 		standIntroDraft = data.activeCollection?.standIntro ?? '';
+		deleteAccountDraft = '';
+	});
+
+	$effect(() => {
+		if (form && 'importAccountSuccess' in form && form.importAccountSuccess) {
+			importFile = undefined;
+		}
 	});
 
 	/**
@@ -37,9 +47,32 @@
 		restoreFile = input.files?.[0];
 	}
 
+	/**
+	 * Bind the import file input to the prerequisite state.
+	 *
+	 * @param {Event} event - The change event from the file input.
+	 * @returns {void}
+	 */
+	function onImportFileChange(event: Event): void {
+		const input = event.currentTarget as HTMLInputElement;
+		importFile = input.files?.[0];
+	}
+
 	const avatarReady = $derived(Boolean(avatarFile));
 	const restoreReady = $derived(Boolean(restoreFile));
+	const importReady = $derived(Boolean(importFile));
 	const standIntroChanged = $derived(standIntroDraft !== standIntroBaseline);
+	const deleteAccountReady = $derived(deleteAccountDraft.trim().toLowerCase() === data.profile.username);
+
+	function openDeleteAccountDialog(): void {
+		deleteAccountDraft = '';
+		if (!deleteAccountDialog?.open) {
+			deleteAccountDialog?.showModal();
+			queueMicrotask(() => {
+				deleteAccountDialog?.querySelector<HTMLInputElement>('[data-testid="delete-account-input"]')?.focus();
+			});
+		}
+	}
 
 	async function copyStandLink(): Promise<void> {
 		await navigator.clipboard.writeText(standUrl);
@@ -96,7 +129,7 @@
 						required
 						onchange={onAvatarFileChange}
 					/>
-					<label class="file-button" for="avatar-file">🖼 Bild auswählen</label>
+					<label class="file-button" for="avatar-file">{avatarFile ? `🖼 ${avatarFile.name}` : '🖼 Bild auswählen'}</label>
 					<button type="submit" disabled={!avatarReady} aria-disabled={!avatarReady}>Avatar speichern</button>
 				</form>
 				{#if data.profile.avatarStorageKey}
@@ -193,6 +226,35 @@
 					<button type="submit" data-testid="save-password">Passwort speichern</button>
 				</form>
 
+				<section class="panel import-panel" aria-labelledby="import-title" data-testid="import-panel">
+					<h2 id="import-title">Daten importieren</h2>
+					<p class="import-hint">
+						Ein ZIP-Export wird in dein aktuelles Konto hinzugefügt. Bestehende Daten bleiben erhalten.
+					</p>
+					{#if form && 'importAccountSuccess' in form && form.importAccountSuccess}
+						<p class="import-success" role="status">
+							Import abgeschlossen: {form.importAccountSuccess.collectionsImported} Sammlungen, {form.importAccountSuccess.itemsImported} Artikel und {form.importAccountSuccess.imagesImported} Bilder hinzugefügt.
+						</p>
+					{/if}
+					{#if form && 'importAccountError' in form && form.importAccountError}
+						<p class="form-error" role="alert">{form.importAccountError}</p>
+					{/if}
+					<form method="POST" action="?/importAccountData" enctype="multipart/form-data" data-testid="import-form">
+						<input
+							name="accountArchive"
+							id="account-archive-file"
+							type="file"
+							accept=".zip,application/zip"
+							data-testid="import-input"
+							class="visually-hidden-input"
+							required
+							onchange={onImportFileChange}
+						/>
+						<label class="file-button" for="account-archive-file">{importFile ? `📦 ${importFile.name}` : '📦 ZIP-Archiv auswählen'}</label>
+						<button type="submit" data-testid="import-submit" disabled={!importReady} aria-disabled={!importReady}>Import ausführen</button>
+					</form>
+				</section>
+
 				{#if data.isInstanceAdmin}
 					<section class="panel backup-panel" aria-labelledby="backup-title" data-testid="backup-panel">
 						<h2 id="backup-title">Backup &amp; Restore</h2>
@@ -219,7 +281,7 @@
 										class="visually-hidden-input"
 										required
 									/>
-									<label class="file-button" for="backup-file">📦 Backup-Datei auswählen</label>
+									<label class="file-button" for="backup-file">{restoreFile ? `📦 ${restoreFile.name}` : '📦 Backup-Datei auswählen'}</label>
 									{#if form?.backupError}
 										<p class="form-error" role="alert">{form.backupError}</p>
 									{/if}
@@ -229,6 +291,58 @@
 						</div>
 					</section>
 				{/if}
+				<section class="panel delete-account-panel" aria-labelledby="delete-account-title" data-testid="delete-account-panel">
+					<h2 id="delete-account-title">Konto löschen</h2>
+					<p class="delete-account-hint">
+						Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Die Bestätigung öffnet sich erst nach Klick auf den Lösch-Button.
+					</p>
+					<button type="button" class="danger delete-account-trigger" data-testid="delete-account-trigger" onclick={() => openDeleteAccountDialog()}>
+						Konto löschen
+					</button>
+				</section>
+
+				<dialog
+					bind:this={deleteAccountDialog}
+					class="delete-account-dialog"
+					aria-labelledby="delete-account-dialog-title"
+					data-testid="delete-account-dialog"
+				>
+					<div class="dialog-head">
+						<h3 id="delete-account-dialog-title">Konto löschen bestätigen</h3>
+						<button type="button" class="secondary" onclick={() => deleteAccountDialog?.close()}>Schließen</button>
+					</div>
+					<p class="dialog-hint">
+						Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Zum Bestätigen gib bitte deinen Benutzernamen ein.
+					</p>
+					<div class="delete-account-warning" role="note" aria-label="Warnhinweis zur Konto-Löschung">
+						<span aria-hidden="true">⚠️</span>
+						<span>Mit der Bestätigung werden deine Account-Daten unwiederbringlich gelöscht.</span>
+					</div>
+					<div class="delete-account-export">
+						<p class="delete-account-export-hint">Wenn du die Daten behalten willst, lade sie jetzt als ZIP herunter.</p>
+						<a class="secondary delete-account-export-link" href="/profil/export" download data-testid="export-account-archive">ZIP-Export herunterladen</a>
+					</div>
+					<form method="POST" action="?/deleteAccount" class="delete-account-form" data-testid="delete-account-form">
+						<label>
+							<span>Benutzername bestätigen</span>
+							<input
+								name="confirmUsername"
+								autocomplete="username"
+								autocapitalize="off"
+								autocorrect="off"
+								spellcheck="false"
+								placeholder={data.profile.username}
+								bind:value={deleteAccountDraft}
+								data-testid="delete-account-input"
+								required
+							/>
+						</label>
+						{#if form?.deleteAccountError}
+							<p class="form-error" role="alert">{form.deleteAccountError}</p>
+						{/if}
+						<button type="submit" class="danger" data-testid="delete-account-submit" disabled={!deleteAccountReady} aria-disabled={!deleteAccountReady}>Konto endgültig löschen</button>
+					</form>
+				</dialog>
 			</div>
 		</div>
 
@@ -499,8 +613,145 @@
 		transform: none;
 	}
 
-	.stand-panel {
-		display: block;
+	.delete-account-panel {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.delete-account-panel .delete-account-trigger {
+		justify-self: end;
+	}
+
+	.delete-account-dialog {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		max-width: min(32rem, 92vw);
+		padding: 1.25rem;
+		width: 32rem;
+	}
+
+	.delete-account-dialog::backdrop {
+		background: rgba(10, 20, 28, 0.6);
+	}
+
+	.dialog-head {
+		align-items: center;
+		display: flex;
+		gap: 0.75rem;
+		justify-content: space-between;
+	}
+
+	.dialog-head h3 {
+		font-size: 1.05rem;
+		margin: 0;
+	}
+
+	.dialog-head button.secondary {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		box-shadow: none;
+		color: var(--color-accent);
+		font-size: 0.85rem;
+		padding: 0.5rem 0.9rem;
+	}
+
+	.dialog-head button.secondary:hover {
+		background: var(--color-accent-soft);
+		transform: none;
+	}
+
+	.dialog-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0.25rem 0 0.75rem;
+	}
+
+	.delete-account-warning {
+		align-items: center;
+		background: var(--color-danger-soft);
+		border: 1px solid var(--color-danger);
+		border-radius: var(--radius-control);
+		color: var(--color-danger);
+		display: flex;
+		gap: 0.5rem;
+		font-size: 0.85rem;
+		font-weight: 800;
+		line-height: 1.4;
+		margin-bottom: 0.85rem;
+		padding: 0.75rem 0.9rem;
+	}
+
+	.delete-account-warning span:last-child {
+		color: var(--color-danger);
+	}
+
+	.delete-account-form {
+		display: grid;
+		gap: var(--gap-action-row);
+	}
+
+	.import-panel {
+		display: grid;
+		gap: 0.75rem;
+	}
+
+	.import-panel h2 {
+		font-size: 1.05rem;
+		margin: 0;
+	}
+
+	.import-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	.import-success {
+		background: var(--color-accent-soft);
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius-control);
+		color: var(--color-text);
+		margin: 0;
+		padding: 0.65rem 0.8rem;
+	}
+
+	.import-panel form {
+		display: grid;
+		gap: var(--gap-action-row);
+	}
+
+	.delete-account-export {
+		display: grid;
+		gap: 0.35rem;
+	}
+
+	.delete-account-export-hint {
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+		line-height: 1.4;
+		margin: 0;
+	}
+
+	.delete-account-export-link {
+		align-items: center;
+		border: 1px solid var(--color-accent);
+		border-radius: var(--radius-control);
+		box-shadow: none;
+		color: var(--color-accent);
+		display: inline-flex;
+		font-size: 0.85rem;
+		font-weight: 700;
+		justify-content: center;
+		padding: 0.5rem 0.9rem;
+		text-decoration: none;
+	}
+
+	.delete-account-export-link:hover {
+		background: var(--color-accent-soft);
+		transform: none;
 	}
 
 	.stand-panel h2 {
