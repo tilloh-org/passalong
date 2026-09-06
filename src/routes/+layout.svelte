@@ -20,6 +20,10 @@
 			if (!navElement || !headerElement) {
 				return;
 			}
+			if (window.matchMedia('(max-width: 880px)').matches) {
+				navOverflow = true;
+				return;
+			}
 			// Hysteresis: switch to the drawer as soon as the header row overflows. Switch back to
 			// inline only when the whole row (brand + actions + nav) genuinely fits again — measured
 			// on the drawer-mode header, where brand and actions still occupy their inline widths.
@@ -91,6 +95,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="description" content="Manage the things you no longer need — and give them a second home." />
 </svelte:head>
 
@@ -109,6 +114,9 @@
 					onclick={() => setMenuOpen(false)}
 				>
 					+ Neu
+				</a>
+				<a href="/scannen" onclick={() => setMenuOpen(false)}>
+					Scannen
 				</a>
 				<hr class="nav-divider" />
 				{#if data.header?.isInstanceAdmin}
@@ -451,6 +459,60 @@
 	.masthead.nav-overflow .nav-logout {
 		margin-left: 0;
 		margin-top: 24px;
+	}
+	@media (max-width: 880px) {
+		.masthead .burger {
+			display: flex;
+		}
+
+		.masthead .header-actions {
+			margin-left: auto;
+			position: relative;
+			z-index: 87;
+		}
+
+		.masthead nav {
+			background: var(--color-surface);
+			border-left: 1px solid var(--color-border);
+			border-top-left-radius: 16px;
+			box-shadow: var(--shadow-drawer);
+			flex-direction: column;
+			height: 100vh;
+			height: 100dvh;
+			overflow-y: auto;
+			padding: 70px 18px 20px;
+			position: fixed;
+			right: 0;
+			top: 0;
+			transform: translateX(105%);
+			transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
+			width: min(80vw, 300px);
+			z-index: 85;
+		}
+
+		.masthead nav.open {
+			transform: translateX(0);
+		}
+
+		.masthead nav a,
+		.masthead nav form button {
+			height: 44px;
+			width: 100%;
+		}
+
+		.masthead .nav-backdrop {
+			display: block;
+		}
+
+		.masthead .nav-divider {
+			display: block;
+			width: auto;
+		}
+
+		.masthead .nav-logout {
+			margin-left: 0;
+			margin-top: 24px;
+		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.masthead.nav-overflow nav,

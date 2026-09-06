@@ -83,6 +83,14 @@ test.describe('Core collection', () => {
 
 		// assume
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Scannen' })).toBeVisible();
+
+		// act — open the seller scan page and return to the portfolio
+		await page.getByRole('link', { name: 'Scannen' }).click();
+		await expect(page).toHaveURL(/\/scannen/);
+		await expect(page.getByRole('heading', { name: 'Artikel scannen' })).toBeVisible();
+		await page.getByRole('link', { name: 'Zurück zum Portfolio' }).click();
+		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 
 		// act
 		await page.getByLabel('Name der Sammlung').fill('Wohnzimmer-Ausmisten');
