@@ -243,6 +243,44 @@ test.describe('Core collection', () => {
 		const currentMonth = new Date().toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
 		await expect(page.getByTestId('sale-statistics-months')).toContainText(currentMonth);
 
+		// act — create a second collection and keep filtering inside it
+		await page.evaluate(async (collectionName) => {
+			await fetch('/?/createCollection', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: new URLSearchParams({ collectionName })
+			});
+		}, 'Arbeitszimmer');
+		await page.goto('/');
+		await expect(page.getByTestId('collection-switcher')).toBeVisible();
+		await page.getByTestId('collection-switcher').getByRole('link', { name: 'Arbeitszimmer' }).click();
+		await expect(page).toHaveURL(/collection=/);
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+
+		// act
+		const secondCollectionItemForm = page.locator('form[action="?/addItem"]');
+		await secondCollectionItemForm.getByLabel('Artikelname').fill('Schreibtisch');
+		await secondCollectionItemForm.getByLabel('Preis (€)').fill('80,00');
+		await secondCollectionItemForm.getByLabel('Kategorie').selectOption('furniture');
+		await secondCollectionItemForm.getByLabel('Zustand').selectOption('fair');
+		await secondCollectionItemForm.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Großer Arbeitstisch mit Schublade.');
+		await secondCollectionItemForm.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Nur per Abholung anbieten.');
+		await page.getByTestId('item-complete-checkbox').check();
+		await page.getByTestId('item-functional-checkbox').check();
+		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
+
+		// assume
+		await expect(page.getByRole('heading', { name: 'Schreibtisch' })).toBeVisible();
+
+		// act — filter the second collection and keep the collection in the URL
+		await page.getByTestId('filter-search-input').fill('Schreibtisch');
+		await page.getByTestId('filter-apply').click();
+
+		// assume — the filter stays scoped to the selected collection
+		await expect(page).toHaveURL(/collection=.*q=Schreibtisch/);
+		await expect(page.getByTestId('item-card')).toHaveCount(1);
+		await expect(page.getByRole('heading', { name: 'Schreibtisch' })).toBeVisible();
+
 		// act — open the profile page via the header avatar and change the display name
 		const protectedUrl = page.url();
 		await page.getByTestId('profile-avatar-link').click();

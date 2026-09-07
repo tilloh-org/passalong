@@ -329,8 +329,11 @@
 					{#if data.collection}
 						<a class="stand-link" data-testid="stand-page-link" href={`/stand/${data.collection.id}`}>Standseite öffnen</a>
 					{/if}
-				</div>
-				<form class="item-filters" method="GET" action="/" data-testid="item-filter-form">
+					</div>
+					<form class="item-filters" method="GET" action="/" data-testid="item-filter-form">
+					{#if data.collection}
+						<input type="hidden" name="collection" value={data.collection.id} />
+					{/if}
 					<label class="filter-search">
 						<span>Suche</span>
 						<input

@@ -81,6 +81,22 @@ export const emptyItemFilters: ItemFilters = {
 	status: null
 };
 
+const ITEM_SELECT_COLUMNS = [
+	'items.id',
+	'items.collection_id',
+	'items.title',
+	'items.price_cents',
+	'items.category',
+	'items.condition',
+	'items.internal_notes',
+	'items.external_description',
+	'items.is_complete',
+	'items.is_functional',
+	'items.sale_channel',
+	'items.sold_at',
+	'items.sale_proceeds_cents'
+].join(', ');
+
 export interface SaleMonthProceeds {
 	month: string;
 	soldItemCount: number;
@@ -983,7 +999,7 @@ export function createCollectionRepository(
 		listItemsForOwner(collectionId, scope) {
 			return database
 				.prepare(
-					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes, items.external_description, items.is_complete, items.is_functional, items.sale_channel, items.sold_at, items.sale_proceeds_cents
+					`SELECT ${ITEM_SELECT_COLUMNS}
 					 FROM items
 					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
@@ -1022,7 +1038,7 @@ export function createCollectionRepository(
 			}
 			return database
 				.prepare(
-					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes, items.external_description, items.is_complete, items.is_functional, items.sale_channel, items.sold_at, items.sale_proceeds_cents
+					`SELECT ${ITEM_SELECT_COLUMNS}
 					 FROM items
 					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
