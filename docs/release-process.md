@@ -34,6 +34,19 @@ that token do not trigger the CI workflow.
 The token needs repository contents and pull request write access. Store it only
 as a GitHub Actions repository secret.
 
+## Security gates and release coupling
+
+- The CI workflow runs `pnpm audit` (first job) and Trivy container/filesystem
+  scans (`docker-scan`, after `build`) as separate jobs. A green `build` does
+  **not** imply a green security scan.
+- The `develop` pipeline (`.github/workflows/release-pr.yml`) opens/updates the
+  release candidate and publishes the `develop-<sha7>` / `develop` images. It
+  does not depend on the separate CI workflow; treat the published revision as
+  release-worthy only when the CI run for that exact commit is fully green,
+  including `docker-scan`.
+- Before merging a release candidate to `main`, verify the CI run for its head
+  commit: all jobs green, including `audit` and `docker-scan`.
+
 ## Release sequence
 
 ![Release process diagram](./release-process.png)

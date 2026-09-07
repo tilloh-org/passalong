@@ -37,5 +37,6 @@ Out of scope:
   default)
 - Put passalong behind a reverse proxy with HTTPS (e.g. Caddy, Traefik,
   nginx)
-- Keep `PASSALONG_PUBLIC_URL` aligned with your actual public URL
+- Keep `PASSALONG_ORIGIN` aligned with your actual public URL (it is passed
+  to the container as `ORIGIN`; see `docker-compose.yml`)
 - Protect the data volume — it contains the SQLite database and uploads
