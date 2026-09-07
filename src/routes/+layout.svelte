@@ -133,6 +133,7 @@
 					</a>
 				{/if}
 			</nav>
+			<span class="header-divider" aria-hidden="true"></span>
 			<div class="header-actions">
 				<button
 					class="burger"
@@ -241,6 +242,13 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+	}
+	.header-divider {
+		align-self: stretch;
+		background: var(--color-border);
+		display: block;
+		margin: 0 14px;
+		width: 1px;
 	}
 	.profile-avatar {
 		align-items: center;
@@ -400,6 +408,9 @@
 	.masthead.nav-overflow .burger {
 		display: flex;
 	}
+	.masthead.nav-overflow .header-divider {
+		display: none;
+	}
 	.masthead.nav-overflow .header-actions {
 		margin-left: auto;
 		position: relative;
@@ -440,6 +451,10 @@
 	@media (max-width: 880px) {
 		.masthead .burger {
 			display: flex;
+		}
+
+		.masthead .header-divider {
+			display: none;
 		}
 
 		.masthead .header-actions {

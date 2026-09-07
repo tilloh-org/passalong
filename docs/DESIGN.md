@@ -28,8 +28,9 @@ UI; deviations need an explicit decision (e.g. in the PR description).
 ## Header
 
 - The global header row is a single flex line: the brand sits on the left, the navigation and
-  the action buttons (theme toggle, profile avatar) form **one flush group at the right edge** —
-  there is no empty space between the last navigation button and the action buttons.
+  the action buttons (theme toggle, profile avatar) form **one group at the right edge**.
+  A vertical divider (`--color-border`) separates the navigation from the action buttons,
+  with balanced spacing on both sides of the divider.
 - The navigation is only rendered inline when it fits; when it overflows it collapses into the
   right-side drawer behind the burger button, which then appears left of the theme toggle. The
   action buttons stay pinned to the right edge in both states.
