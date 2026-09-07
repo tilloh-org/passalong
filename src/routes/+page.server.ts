@@ -2,10 +2,13 @@ import { fail, redirect, type Cookies } from '@sveltejs/kit';
 import {
 	itemCategories,
 	itemConditions,
+	emptyItemFilters,
 	type Item,
 	type ItemCategory,
 	type ItemCondition,
+	type ItemFilters,
 	type ItemImage,
+	type ItemStatusFilter,
 	type SaleChannel,
 	type SessionScope
 } from '$lib/server/collection-repository';
@@ -53,6 +56,38 @@ interface ItemWithImages extends Item {
 	coverImageKey: string | null;
 }
 
+const itemStatusFilters: ItemStatusFilter[] = ['open', 'reserved', 'sold'];
+
+/**
+ * Parse portfolio filter values from the URL search parameters.
+ *
+ * Unknown or malformed values are ignored so the page still renders with the
+ * remaining filters and never fails on hand-edited URLs.
+ *
+ * @param {URLSearchParams} searchParams - The current request search parameters.
+ * @returns {ItemFilters} Normalized active filters (query trims blank to null).
+ */
+function parseItemFilters(searchParams: URLSearchParams): ItemFilters {
+	const query = searchParams.get('q')?.trim() || null;
+	const categoryParam = searchParams.get('category');
+	const conditionParam = searchParams.get('condition');
+	const statusParam = searchParams.get('status');
+	const category = categoryParam && (itemCategories as readonly string[]).includes(categoryParam) ? (categoryParam as ItemCategory) : null;
+	const condition = conditionParam && (itemConditions as readonly string[]).includes(conditionParam) ? (conditionParam as ItemCondition) : null;
+	const status = statusParam && (itemStatusFilters as readonly string[]).includes(statusParam) ? (statusParam as ItemStatusFilter) : null;
+	return { ...emptyItemFilters, query, category, condition, status };
+}
+
+/**
+ * Determine whether at least one portfolio filter is active.
+ *
+ * @param {ItemFilters} filters - The parsed filter state.
+ * @returns {boolean} True when any filter restricts the item list.
+ */
+function hasActiveFilters(filters: ItemFilters): boolean {
+	return Boolean(filters.query || filters.category || filters.condition || filters.status);
+}
+
 /**
  * Load account-aware and tenant-scoped collection data.
  *
@@ -67,13 +102,20 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	const requestedCollectionId = url.searchParams.get('collection');
 	const collectionId = requestedCollectionId ?? collections[firstCollectionIndex]?.id;
 	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
-	const items = collection && scope ? repository.listItemsForOwner(collection.id, scope).map(enrichItemWithImages(scope)) : [];
+	const appliedFilters = parseItemFilters(url.searchParams);
+	const items =
+		collection && scope
+			? hasActiveFilters(appliedFilters)
+				? repository.searchItemsForOwner(collection.id, appliedFilters, scope).map(enrichItemWithImages(scope))
+				: repository.listItemsForOwner(collection.id, scope).map(enrichItemWithImages(scope))
+			: [];
 	const profile = scope ? repository.getProfile(scope) : null;
 
 	return {
 		collection,
 		collections,
 		items,
+		appliedFilters,
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
 		profile,

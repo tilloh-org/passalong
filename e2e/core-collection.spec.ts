@@ -106,12 +106,13 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// act
-		await page.getByLabel('Artikelname').fill('Leselampe');
-		await page.getByLabel('Preis (€)').fill('12,00');
-		await page.getByLabel('Kategorie').selectOption('home');
-		await page.getByLabel('Zustand').selectOption('good');
-		await page.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Warme Leselampe mit flexiblem Arm.');
-		await page.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Vor dem Inserieren die Glühbirne austauschen.');
+		const addItemForm = page.locator('form[action="?/addItem"]');
+		await addItemForm.getByLabel('Artikelname').fill('Leselampe');
+		await addItemForm.getByLabel('Preis (€)').fill('12,00');
+		await addItemForm.getByLabel('Kategorie').selectOption('home');
+		await addItemForm.getByLabel('Zustand').selectOption('good');
+		await addItemForm.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Warme Leselampe mit flexiblem Arm.');
+		await addItemForm.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Vor dem Inserieren die Glühbirne austauschen.');
 		await page.getByTestId('item-complete-checkbox').check();
 		await page.getByTestId('item-functional-checkbox').check();
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
@@ -125,6 +126,31 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(itemCard.locator('.kat')).toContainText('Haushalt');
 		await expect(itemCard.locator('.badge.open')).toBeVisible();
+
+		// act — filter the portfolio by search query
+		await page.getByTestId('filter-search-input').fill('Leselampe');
+		await page.getByTestId('filter-apply').click();
+
+		// assume — the matching card stays visible
+		await expect(page).toHaveURL(/q=Leselampe/);
+		await expect(page.getByTestId('item-card')).toHaveCount(1);
+		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
+
+		// act — narrow by category with no matches
+		await page.getByTestId('filter-category-select').selectOption('books');
+		await page.getByTestId('filter-apply').click();
+
+		// assume — the filter empty state appears
+		await expect(page).toHaveURL(/category=books/);
+		await expect(page.getByTestId('filter-empty-state')).toBeVisible();
+
+		// act — reset all filters
+		await page.getByTestId('filter-reset').click();
+
+		// assume — the card is visible again
+		await expect(page.getByTestId('filter-empty-state')).toHaveCount(0);
+		await expect(page.getByTestId('item-card')).toHaveCount(1);
+		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 
 		// act — open the detail page from the tile
 		await itemCard.click();

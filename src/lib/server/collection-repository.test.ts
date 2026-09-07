@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCollectionRepository } from './collection-repository';
+import { createCollectionRepository, emptyItemFilters } from './collection-repository';
 
 const temporaryDirectories: string[] = [];
 
@@ -275,6 +275,170 @@ describe('collection repository', () => {
 			isFunctional: false
 			})
 		]);
+	});
+
+	it('filters items by search query across title, notes and description', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const admin = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Living room clear-out' }, admin);
+		const lamp = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Reading lamp',
+				priceCents: 1200,
+				category: 'home',
+				condition: 'good',
+				internalNotes: 'Replace the bulb before listing.',
+				externalDescription: 'Warm light with flexible arm.',
+				isComplete: false,
+				isFunctional: false
+			},
+			admin
+		);
+		repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Bookshelf',
+				priceCents: 4500,
+				category: 'furniture',
+				condition: 'fair',
+				internalNotes: 'Scratches on the side.',
+				externalDescription: 'Solid oak shelf.',
+				isComplete: true,
+				isFunctional: true
+			},
+			admin
+		);
+
+		// act — search by title
+		const byTitle = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'lamp' }, admin);
+		// act — search by internal note
+		const byNote = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'bulb' }, admin);
+		// act — search by external description
+		const byDescription = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'oak' }, admin);
+		// act — search without matches
+		const noMatch = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'missing-item' }, admin);
+
+		// assume
+		expect(byTitle.map((item) => item.id)).toEqual([lamp.id]);
+		expect(byNote.map((item) => item.id)).toEqual([lamp.id]);
+		expect(byDescription.map((item) => item.id)).toEqual([expect.any(String)]);
+		expect(byDescription[0]?.title).toBe('Bookshelf');
+		expect(noMatch).toEqual([]);
+	});
+
+	it('filters items by category, condition and status', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const admin = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Clear-out' }, admin);
+		const lamp = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Reading lamp',
+				priceCents: 1200,
+				category: 'home',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			admin
+		);
+		const novel = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Novel',
+				priceCents: 400,
+				category: 'books',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: true,
+				isFunctional: true
+			},
+			admin
+		);
+		const chair = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Chair',
+				priceCents: 900,
+				category: 'furniture',
+				condition: 'poor',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: true,
+				isFunctional: false
+			},
+			admin
+		);
+
+		// act — reserve the chair and sell the novel
+		repository.setItemReservation(chair.id, true, admin);
+		repository.markItemSold(novel.id, { channel: 'flea-market', soldAt: '2026-09-01T10:00:00.000Z', proceedsCents: 350 }, admin);
+
+		// act
+		const byCategory = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, category: 'home' }, admin);
+		const byCondition = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, condition: 'good' }, admin);
+		const openItems = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, status: 'open' }, admin);
+		const reservedItems = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, status: 'reserved' }, admin);
+		const soldItems = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, status: 'sold' }, admin);
+		const combined = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, category: 'furniture', condition: 'poor', status: 'reserved' },
+			admin
+		);
+
+		// assume
+		expect(byCategory.map((item) => item.id)).toEqual([lamp.id]);
+		expect(byCondition.map((item) => item.id)).toEqual(expect.arrayContaining([lamp.id, novel.id]));
+		expect(openItems.map((item) => item.id)).toEqual([lamp.id]);
+		expect(reservedItems.map((item) => item.id)).toEqual([chair.id]);
+		expect(soldItems.map((item) => item.id)).toEqual([novel.id]);
+		expect(combined.map((item) => item.id)).toEqual([chair.id]);
+	});
+
+	it('keeps item search scoped to the authenticated owner', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const admin = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Books' }, admin);
+		repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Novel',
+				priceCents: 400,
+				category: 'books',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			admin
+		);
+		const foreignScope = { userId: 'another-user', tenantId: admin.tenantId };
+
+		// act
+		const foreignResults = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'Novel' }, foreignScope);
+
+		// assume
+		expect(foreignResults).toEqual([]);
 	});
 
 	it('scopes collection and item access to the authenticated owner and tenant', () => {

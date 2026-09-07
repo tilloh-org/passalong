@@ -5,6 +5,17 @@
 
 	let { data, form } = $props();
 
+	const statusFilterLabels: Record<string, string> = {
+		open: 'Offen',
+		reserved: 'Reserviert',
+		sold: 'Verkauft'
+	};
+
+	const appliedFilters = $derived(data.appliedFilters);
+	const hasActiveFilters = $derived(
+		Boolean(appliedFilters.query || appliedFilters.category || appliedFilters.condition || appliedFilters.status)
+	);
+
 
 
 
@@ -319,6 +330,51 @@
 						<a class="stand-link" data-testid="stand-page-link" href={`/stand/${data.collection.id}`}>Standseite öffnen</a>
 					{/if}
 				</div>
+				<form class="item-filters" method="GET" action="/" data-testid="item-filter-form">
+					<label class="filter-search">
+						<span>Suche</span>
+						<input
+							name="q"
+							type="search"
+							value={appliedFilters.query ?? ''}
+							placeholder="Titel, Notizen, Beschreibung …"
+							data-testid="filter-search-input"
+						/>
+					</label>
+					<label>
+						<span>Kategorie</span>
+						<select name="category" data-testid="filter-category-select">
+							<option value="">Alle</option>
+							{#each data.categoryOptions as category}
+								<option value={category} selected={appliedFilters.category === category}>{categoryLabels[category]}</option>
+							{/each}
+						</select>
+					</label>
+					<label>
+						<span>Zustand</span>
+						<select name="condition" data-testid="filter-condition-select">
+							<option value="">Alle</option>
+							{#each data.conditionOptions as condition}
+								<option value={condition} selected={appliedFilters.condition === condition}>{conditionLabels[condition]}</option>
+							{/each}
+						</select>
+					</label>
+					<label>
+						<span>Status</span>
+						<select name="status" data-testid="filter-status-select">
+							<option value="">Alle</option>
+							{#each ['open', 'reserved', 'sold'] as status}
+								<option value={status} selected={appliedFilters.status === status}>{statusFilterLabels[status]}</option>
+							{/each}
+						</select>
+					</label>
+					<div class="filter-actions">
+						<button type="submit" class="filter-apply" data-testid="filter-apply">Filtern</button>
+						{#if hasActiveFilters}
+							<a class="filter-reset" href={data.collection ? `/?collection=${encodeURIComponent(data.collection.id)}` : '/'} data-testid="filter-reset">Zurücksetzen</a>
+						{/if}
+					</div>
+				</form>
 				{#if data.items.length}
 				<div class="item-grid">
 					{#each data.items as item (item.id)}
@@ -362,9 +418,11 @@
 						</article>
 					{/each}
 				</div>
+			{:else if hasActiveFilters}
+				<p class="empty" data-testid="filter-empty-state">Keine Artikel passen auf deine Filter.</p>
 			{:else}
-					<p class="empty">Deine Sammlung wartet auf ihren ersten Artikel.</p>
-				{/if}
+				<p class="empty">Deine Sammlung wartet auf ihren ersten Artikel.</p>
+			{/if}
 			</section>
 		</div>
 	{/if}
@@ -660,6 +718,98 @@
 	.items {
 		display: grid;
 		gap: 1.25rem;
+	}
+
+	.item-filters {
+		align-items: end;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-tile);
+		display: grid;
+		gap: 1rem;
+		grid-template-columns: minmax(12rem, 1.6fr) repeat(3, minmax(0, 1fr)) auto;
+		padding: 1.1rem 1.2rem;
+	}
+
+	.item-filters label {
+		display: grid;
+		gap: 0.3rem;
+	}
+
+	.item-filters label > span {
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.item-filters input,
+	.item-filters select {
+		background: var(--color-input);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-text);
+		font: inherit;
+		font-size: 0.9rem;
+		padding: 0.6rem 0.75rem;
+		width: 100%;
+	}
+
+	.item-filters input:focus,
+	.item-filters select:focus {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
+	}
+
+	.filter-actions {
+		align-items: center;
+		display: flex;
+		gap: 0.6rem;
+		justify-content: flex-end;
+	}
+
+	.filter-apply {
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		border: 0;
+		border-radius: var(--radius-control);
+		box-shadow: var(--shadow-cta);
+		color: #fff;
+		font-size: 0.9rem;
+		font-weight: 700;
+		padding: 0.6rem 1.1rem;
+	}
+
+	.filter-reset {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		font-size: 0.85rem;
+		font-weight: 700;
+		padding: 0.55rem 0.9rem;
+		text-decoration: none;
+	}
+
+	.filter-reset:hover {
+		background: var(--color-accent-soft);
+	}
+
+	@media (max-width: 56rem) {
+		.item-filters {
+			grid-template-columns: 1fr 1fr;
+		}
+
+		.filter-actions {
+			grid-column: 1 / -1;
+		}
+	}
+
+	@media (max-width: 34rem) {
+		.item-filters {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.item-grid {
