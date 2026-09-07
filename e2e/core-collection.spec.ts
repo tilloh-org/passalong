@@ -71,6 +71,8 @@ test.describe('Core collection', () => {
 		await page.getByTestId('profile-avatar-link').click();
 		await expect(page).toHaveURL(/\/profil/);
 		await expect(page.getByTestId('profile-logout')).toBeVisible();
+		await expect(page.getByTestId('logout-panel')).toBeVisible();
+		await expect(page.getByTestId('delete-account-panel')).toBeVisible();
 		await page.getByTestId('profile-logout').click();
 		await loginForm.getByLabel('Benutzername').fill(losingAccount.username);
 		await loginForm.getByLabel('Passwort').fill(losingAccount.password);
