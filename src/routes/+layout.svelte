@@ -118,8 +118,8 @@
 				<a href="/scannen" onclick={() => setMenuOpen(false)}>
 					Scannen
 				</a>
-				<hr class="nav-divider" />
 				{#if data.header?.isInstanceAdmin}
+					<hr class="nav-divider" />
 					<a
 						class="instance-admin-link"
 						href="/"
@@ -132,10 +132,6 @@
 						Instanzverwaltung
 					</a>
 				{/if}
-				<hr class="nav-divider" />
-				<form class="nav-logout" method="POST" action="/abmelden?/logout">
-					<button type="submit" onclick={() => setMenuOpen(false)}>Abmelden</button>
-				</form>
 			</nav>
 			<div class="header-actions">
 				<button
@@ -361,8 +357,7 @@
 		gap: var(--gap-action-row, 0.6rem);
 		margin-left: auto;
 	}
-	nav a,
-	nav form button {
+	nav a {
 		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
@@ -385,8 +380,7 @@
 		background: var(--color-accent-soft);
 		transform: translateY(-1px);
 	}
-	nav a:focus-visible,
-	nav form button:focus-visible {
+	nav a:focus-visible {
 		outline: 2px solid var(--focus-ring);
 		outline-offset: 2px;
 	}
@@ -395,18 +389,6 @@
 		box-shadow: var(--shadow-cta);
 		color: #fff;
 		font-weight: 700;
-	}
-	nav form button {
-		color: var(--color-danger);
-	}
-	nav form button:hover {
-		background: var(--color-danger-soft);
-		transform: translateY(-1px);
-	}
-	.nav-logout {
-		display: block;
-		margin-left: 8px;
-		padding: 0;
 	}
 	.nav-divider {
 		background: var(--color-border);
@@ -444,8 +426,7 @@
 	.masthead.nav-overflow nav.open {
 		transform: translateX(0);
 	}
-	.masthead.nav-overflow nav a,
-	.masthead.nav-overflow nav form button {
+	.masthead.nav-overflow nav a {
 		height: 44px;
 		width: 100%;
 	}
@@ -455,10 +436,6 @@
 	.masthead.nav-overflow .nav-divider {
 		display: block;
 		width: auto;
-	}
-	.masthead.nav-overflow .nav-logout {
-		margin-left: 0;
-		margin-top: 24px;
 	}
 	@media (max-width: 880px) {
 		.masthead .burger {
@@ -494,8 +471,7 @@
 			transform: translateX(0);
 		}
 
-		.masthead nav a,
-		.masthead nav form button {
+		.masthead nav a {
 			height: 44px;
 			width: 100%;
 		}
@@ -507,11 +483,6 @@
 		.masthead .nav-divider {
 			display: block;
 			width: auto;
-		}
-
-		.masthead .nav-logout {
-			margin-left: 0;
-			margin-top: 24px;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {

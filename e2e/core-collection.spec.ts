@@ -67,7 +67,11 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 
 		// act
-		await page.getByRole('button', { name: 'Abmelden' }).click();
+		await expect(page.getByRole('button', { name: 'Abmelden' })).toHaveCount(0);
+		await page.getByTestId('profile-avatar-link').click();
+		await expect(page).toHaveURL(/\/profil/);
+		await expect(page.getByTestId('profile-logout')).toBeVisible();
+		await page.getByTestId('profile-logout').click();
 		await loginForm.getByLabel('Benutzername').fill(losingAccount.username);
 		await loginForm.getByLabel('Passwort').fill(losingAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
