@@ -67,7 +67,13 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 
 		// act
-		await page.getByRole('button', { name: 'Abmelden' }).click();
+		await expect(page.getByRole('button', { name: 'Abmelden' })).toHaveCount(0);
+		await page.getByTestId('profile-avatar-link').click();
+		await expect(page).toHaveURL(/\/profil/);
+		await expect(page.getByTestId('profile-logout')).toBeVisible();
+		await expect(page.getByTestId('logout-panel')).toBeVisible();
+		await expect(page.getByTestId('delete-account-panel')).toBeVisible();
+		await page.getByTestId('profile-logout').click();
 		await loginForm.getByLabel('Benutzername').fill(losingAccount.username);
 		await loginForm.getByLabel('Passwort').fill(losingAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
@@ -82,6 +88,14 @@ test.describe('Core collection', () => {
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 
 		// assume
+		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Scannen' })).toBeVisible();
+
+		// act — open the seller scan page and return to the portfolio
+		await page.getByRole('link', { name: 'Scannen' }).click();
+		await expect(page).toHaveURL(/\/scannen/);
+		await expect(page.getByRole('heading', { name: 'Artikel scannen' })).toBeVisible();
+		await page.getByRole('link', { name: 'Zurück zum Portfolio' }).click();
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 
 		// act

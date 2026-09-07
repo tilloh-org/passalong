@@ -91,9 +91,6 @@
 		</a>
 		<div class="masthead-actions">
 			<a class="back-link" href="/">← Zurück zum Portfolio</a>
-			<form method="POST" action="?/logout" class="logout-form">
-				<button type="submit" class="logout-btn" data-testid="profile-logout">Abmelden</button>
-			</form>
 		</div>
 	</header>
 
@@ -291,7 +288,15 @@
 						</div>
 					</section>
 				{/if}
-				<section class="panel delete-account-panel" aria-labelledby="delete-account-title" data-testid="delete-account-panel">
+				<section class="panel logout-panel" aria-labelledby="logout-title" data-testid="logout-panel">
+					<h2 id="logout-title">Sitzung</h2>
+					<p class="logout-hint">Beendet deine aktuelle Sitzung und leitet dich zur Startseite zurück.</p>
+					<form method="POST" action="?/logout" class="logout-form">
+						<button type="submit" class="danger logout-btn" data-testid="profile-logout">Abmelden</button>
+					</form>
+				</section>
+
+			<section class="panel delete-account-panel" aria-labelledby="delete-account-title" data-testid="delete-account-panel">
 					<h2 id="delete-account-title">Konto löschen</h2>
 					<p class="delete-account-hint">
 						Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Die Bestätigung öffnet sich erst nach Klick auf den Lösch-Button.
@@ -382,6 +387,27 @@
 		align-items: center;
 		display: flex;
 		gap: 0.9rem;
+	}
+
+	.logout-form {
+		display: grid;
+		gap: var(--gap-action-row);
+	}
+
+	.logout-panel {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.logout-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	.logout-panel .logout-btn {
+		justify-self: end;
 	}
 
 	.logout-btn {

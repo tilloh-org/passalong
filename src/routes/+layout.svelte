@@ -20,6 +20,10 @@
 			if (!navElement || !headerElement) {
 				return;
 			}
+			if (window.matchMedia('(max-width: 880px)').matches) {
+				navOverflow = true;
+				return;
+			}
 			// Hysteresis: switch to the drawer as soon as the header row overflows. Switch back to
 			// inline only when the whole row (brand + actions + nav) genuinely fits again — measured
 			// on the drawer-mode header, where brand and actions still occupy their inline widths.
@@ -91,6 +95,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<meta name="description" content="Manage the things you no longer need — and give them a second home." />
 </svelte:head>
 
@@ -110,8 +115,11 @@
 				>
 					+ Neu
 				</a>
-				<hr class="nav-divider" />
+				<a href="/scannen" onclick={() => setMenuOpen(false)}>
+					Scannen
+				</a>
 				{#if data.header?.isInstanceAdmin}
+					<hr class="nav-divider" />
 					<a
 						class="instance-admin-link"
 						href="/"
@@ -124,11 +132,8 @@
 						Instanzverwaltung
 					</a>
 				{/if}
-				<hr class="nav-divider" />
-				<form class="nav-logout" method="POST" action="/abmelden?/logout">
-					<button type="submit" onclick={() => setMenuOpen(false)}>Abmelden</button>
-				</form>
 			</nav>
+			<span class="header-divider" aria-hidden="true"></span>
 			<div class="header-actions">
 				<button
 					class="burger"
@@ -237,6 +242,13 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+	}
+	.header-divider {
+		align-self: stretch;
+		background: var(--color-border);
+		display: block;
+		margin: 0 14px;
+		width: 1px;
 	}
 	.profile-avatar {
 		align-items: center;
@@ -353,8 +365,7 @@
 		gap: var(--gap-action-row, 0.6rem);
 		margin-left: auto;
 	}
-	nav a,
-	nav form button {
+	nav a {
 		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
@@ -377,8 +388,7 @@
 		background: var(--color-accent-soft);
 		transform: translateY(-1px);
 	}
-	nav a:focus-visible,
-	nav form button:focus-visible {
+	nav a:focus-visible {
 		outline: 2px solid var(--focus-ring);
 		outline-offset: 2px;
 	}
@@ -387,18 +397,6 @@
 		box-shadow: var(--shadow-cta);
 		color: #fff;
 		font-weight: 700;
-	}
-	nav form button {
-		color: var(--color-danger);
-	}
-	nav form button:hover {
-		background: var(--color-danger-soft);
-		transform: translateY(-1px);
-	}
-	.nav-logout {
-		display: block;
-		margin-left: 8px;
-		padding: 0;
 	}
 	.nav-divider {
 		background: var(--color-border);
@@ -409,6 +407,9 @@
 	}
 	.masthead.nav-overflow .burger {
 		display: flex;
+	}
+	.masthead.nav-overflow .header-divider {
+		display: none;
 	}
 	.masthead.nav-overflow .header-actions {
 		margin-left: auto;
@@ -436,8 +437,7 @@
 	.masthead.nav-overflow nav.open {
 		transform: translateX(0);
 	}
-	.masthead.nav-overflow nav a,
-	.masthead.nav-overflow nav form button {
+	.masthead.nav-overflow nav a {
 		height: 44px;
 		width: 100%;
 	}
@@ -448,9 +448,57 @@
 		display: block;
 		width: auto;
 	}
-	.masthead.nav-overflow .nav-logout {
-		margin-left: 0;
-		margin-top: 24px;
+	@media (max-width: 880px) {
+		.masthead .burger {
+			display: flex;
+		}
+
+		.masthead .header-divider {
+			display: none;
+		}
+
+		.masthead .header-actions {
+			margin-left: auto;
+			position: relative;
+			z-index: 87;
+		}
+
+		.masthead nav {
+			background: var(--color-surface);
+			border-left: 1px solid var(--color-border);
+			border-top-left-radius: 16px;
+			box-shadow: var(--shadow-drawer);
+			flex-direction: column;
+			height: 100vh;
+			height: 100dvh;
+			overflow-y: auto;
+			padding: 70px 18px 20px;
+			position: fixed;
+			right: 0;
+			top: 0;
+			transform: translateX(105%);
+			transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.3, 1);
+			width: min(80vw, 300px);
+			z-index: 85;
+		}
+
+		.masthead nav.open {
+			transform: translateX(0);
+		}
+
+		.masthead nav a {
+			height: 44px;
+			width: 100%;
+		}
+
+		.masthead .nav-backdrop {
+			display: block;
+		}
+
+		.masthead .nav-divider {
+			display: block;
+			width: auto;
+		}
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.masthead.nav-overflow nav,
