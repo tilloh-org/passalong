@@ -3,11 +3,7 @@ import { hasSameOrigin } from '$lib/server/csrf';
 import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
 import { getMediaRoot } from '$lib/server/media-root';
 import { saveUploadedImage, removeStoredMedia } from '$lib/server/media-storage';
-import { createInstanceBackup, restoreInstanceBackup } from '$lib/server/backup';
 import { importAccountExport } from '$lib/server/account-transfer';
-import { getDatabasePath } from '$lib/server/repository';
-import { writeFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
 import { hashPassword, validatePassword, verifyPassword } from '$lib/server/password';
 import { getCollectionRepository } from '$lib/server/repository';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
@@ -235,42 +231,6 @@ export const actions: Actions = {
 		} catch (error) {
 			return fail(httpStatus.badRequest, { changePasswordError: getProfileErrorMessage(error) });
 		}
-		redirect(httpStatus.seeOther, '/profil');
-	},
-
-	restoreBackup: async ({ cookies, request, url }) => {
-		if (!hasSameOrigin(request, url)) {
-			return fail(httpStatus.forbidden, { csrfError });
-		}
-		if (!getSessionScope(cookies.get(sessionCookieName)) || !getCollectionRepository().isInstanceAdmin(getSessionScope(cookies.get(sessionCookieName))!)) {
-			return fail(httpStatus.notFound, { backupError: 'Backup nicht gefunden.' });
-		}
-		const scope = getSessionScope(cookies.get(sessionCookieName));
-		if (!scope) {
-			return fail(httpStatus.unauthorized, { backupError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
-		}
-
-		const formData = await request.formData();
-		const upload = formData.get('backupArchive');
-		if (!(upload instanceof File) || upload.size === 0) {
-			return fail(httpStatus.badRequest, { backupError: 'Bitte wähle eine Backup-Datei aus.' });
-		}
-
-		const stagingPath = join(getMediaRoot(), '..', `restore-upload-${Date.now()}.zip`);
-		writeFileSync(stagingPath, Buffer.from(await upload.arrayBuffer()));
-		try {
-			const outcome = await restoreInstanceBackup({
-				archivePath: stagingPath,
-				databasePath: getDatabasePath(),
-				mediaRoot: getMediaRoot()
-			});
-			if (!outcome.restored) {
-				return fail(httpStatus.badRequest, { backupError: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.' });
-			}
-		} finally {
-			rmSync(stagingPath, { force: true });
-		}
-
 		redirect(httpStatus.seeOther, '/profil');
 	},
 

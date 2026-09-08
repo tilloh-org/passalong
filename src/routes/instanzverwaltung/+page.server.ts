@@ -1,7 +1,13 @@
 import { fail, redirect } from '@sveltejs/kit';
 import { hasSameOrigin } from '$lib/server/csrf';
 import { getCollectionRepository } from '$lib/server/repository';
+import { getDatabasePath } from '$lib/server/repository';
+import { getMediaRoot } from '$lib/server/media-root';
+import { restoreInstanceBackup } from '$lib/server/backup';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
+import { writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { Buffer } from 'node:buffer';
 import type { SessionScope } from '$lib/server/collection-repository';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -75,6 +81,42 @@ export const actions: Actions = {
 		} catch (error) {
 			return fail(httpStatus.badRequest, { passwordResetIssueError: getErrorMessage(error) });
 		}
+	},
+
+	restoreBackup: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { backupError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+		}
+		if (!getCollectionRepository().isInstanceAdmin(scope)) {
+			return fail(httpStatus.notFound, { backupError: 'Backup nicht gefunden.' });
+		}
+
+		const formData = await request.formData();
+		const upload = formData.get('backupArchive');
+		if (!(upload instanceof File) || upload.size === 0) {
+			return fail(httpStatus.badRequest, { backupError: 'Bitte wähle eine Backup-Datei aus.' });
+		}
+
+		const stagingPath = join(getMediaRoot(), '..', `restore-upload-${Date.now()}.zip`);
+		writeFileSync(stagingPath, Buffer.from(await upload.arrayBuffer()));
+		try {
+			const outcome = await restoreInstanceBackup({
+				archivePath: stagingPath,
+				databasePath: getDatabasePath(),
+				mediaRoot: getMediaRoot()
+			});
+			if (!outcome.restored) {
+				return fail(httpStatus.badRequest, { backupError: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.' });
+			}
+		} finally {
+			rmSync(stagingPath, { force: true });
+		}
+
+		redirect(httpStatus.seeOther, '/instanzverwaltung');
 	}
 };
 

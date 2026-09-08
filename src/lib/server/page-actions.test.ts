@@ -45,6 +45,7 @@ interface ActionFixture {
 	loadActions: () => Promise<PageServerActions>;
 	loadDetailActions: () => Promise<PageServerActions>;
 	loadProfileActions: () => Promise<PageServerActions>;
+	loadInstanceAdminActions: () => Promise<PageServerActions>;
 	loadPage: () => Promise<(input: unknown) => unknown>;
 }
 
@@ -78,6 +79,7 @@ function createActionFixtureWithOwner(): ActionFixture {
 		loadActions: async () => (await import('../../routes/+page.server')).actions as unknown as PageServerActions,
 		loadDetailActions: async () => (await import('../../routes/artikel/[id]/+page.server')).actions as unknown as PageServerActions,
 		loadProfileActions: async () => (await import('../../routes/profil/+page.server')).actions as unknown as PageServerActions,
+		loadInstanceAdminActions: async () => (await import('../../routes/instanzverwaltung/+page.server')).actions as unknown as PageServerActions,
 		loadPage: async () => (await import('../../routes/+page.server')).load as unknown as (input: unknown) => unknown
 	};
 }
@@ -485,8 +487,8 @@ describe('instance-admin actions', () => {
 
 	it('restores an instance backup as instance admin and rejects non-admins with 404', async () => {
 		// arrange
-		const { repository, databasePath, loadProfileActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
-		const actions = await loadProfileActions();
+		const { repository, databasePath, loadInstanceAdminActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const actions = await loadInstanceAdminActions();
 		const url = new URL('http://localhost/');
 		repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const { createInstanceBackup } = await import('$lib/server/backup');
@@ -511,14 +513,14 @@ describe('instance-admin actions', () => {
 		// assume — the restore succeeded and swapped the database file (the running connection keeps
 		// serving the pre-restore state until the instance restarts, which the swap ensures via the
 		// rollback copy and session invalidation on next start).
-		expect(adminOutcome).toMatchObject({ status: 303, location: '/profil' });
+		expect(adminOutcome).toMatchObject({ status: 303, location: '/instanzverwaltung' });
 		expect(existsSync(`${databasePath}.pre-restore`)).toBe(true);
 	});
 
 	it('rejects a corrupted backup archive with a 400 and an unchanged instance', async () => {
 		// arrange
-		const { repository, databasePath, loadProfileActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
-		const actions = await loadProfileActions();
+		const { repository, databasePath, loadInstanceAdminActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const actions = await loadInstanceAdminActions();
 		const url = new URL('http://localhost/');
 		const { createInstanceBackup } = await import('$lib/server/backup');
 		const archive = await createInstanceBackup({ databasePath: databasePath, mediaRoot });

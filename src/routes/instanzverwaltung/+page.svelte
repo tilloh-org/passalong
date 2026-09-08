@@ -2,6 +2,21 @@
 	import { page } from '$app/state';
 
 	let { data, form } = $props();
+
+	let restoreFile: File | undefined = $state();
+
+	/**
+	 * Bind the restore file input to the prerequisite state.
+	 *
+	 * @param {Event} event - The change event from the file input.
+	 * @returns {void}
+	 */
+	function onRestoreFileChange(event: Event): void {
+		const input = event.currentTarget as HTMLInputElement;
+		restoreFile = input.files?.[0];
+	}
+
+	const restoreReady = $derived(Boolean(restoreFile));
 </script>
 
 <svelte:head>
@@ -10,10 +25,6 @@
 
 <main class="instance-admin">
 	<header class="masthead">
-		<a class="brand" href="/">
-			<img class="header-logo" src="/passalong-icon.svg" alt="" />
-			passalong
-		</a>
 		<div class="masthead-actions">
 			<a class="back-link" href="/profil">← Zurück zum Profil</a>
 		</div>
@@ -48,6 +59,42 @@
 				</section>
 			{/if}
 		</div>
+
+		<div class="password-help backup-administration" data-testid="backup-panel">
+			<h2>Backup &amp; Restore</h2>
+			<div class="backup-grid">
+				<div class="backup-block">
+					<h3>Vollständiges Backup</h3>
+					<p class="backup-hint">Lädt eine ZIP-Datei mit Datenbank, Medien und Prüfsummen-Manifest herunter.</p>
+					<a class="backup-download" href="/profil/backup" download data-testid="download-backup">
+						⬇ Backup herunterladen
+					</a>
+				</div>
+				<div class="backup-block">
+					<h3>Restore</h3>
+					<p class="backup-hint">
+						Das Hochladen ersetzt die gesamte Instanz (Datenbank und Medien) durch das Backup. Die Sitzung wird beendet.
+					</p>
+					<form method="POST" action="?/restoreBackup" enctype="multipart/form-data" data-testid="restore-form">
+						<input
+							name="backupArchive"
+							id="backup-file"
+							type="file"
+							accept=".zip,application/zip"
+							data-testid="restore-input"
+							class="visually-hidden-input"
+							required
+							onchange={onRestoreFileChange}
+						/>
+						<label class="file-button" for="backup-file">{restoreFile ? `📦 ${restoreFile.name}` : '📦 Backup-Datei auswählen'}</label>
+						{#if form?.backupError}
+							<p class="form-error" role="alert">{form.backupError}</p>
+						{/if}
+						<button type="submit" class="danger" data-testid="restore-submit" disabled={!restoreReady} aria-disabled={!restoreReady}>Restore ausführen</button>
+					</form>
+				</div>
+			</div>
+		</div>
 	</section>
 </main>
 
@@ -63,21 +110,6 @@
 		display: flex;
 		gap: 1rem;
 		justify-content: space-between;
-	}
-
-	.brand {
-		align-items: center;
-		color: var(--color-accent-strong);
-		display: flex;
-		font-size: 1.1rem;
-		font-weight: 800;
-		gap: 0.5rem;
-		text-decoration: none;
-	}
-
-	.header-logo {
-		height: 1.6rem;
-		width: 1.6rem;
 	}
 
 	.masthead-actions {
@@ -215,5 +247,112 @@
 		color: var(--color-text-muted);
 		font-size: 0.8rem;
 		margin: 0;
+	}
+
+	.backup-administration {
+		margin-top: 1.25rem;
+	}
+
+	.backup-grid {
+		display: grid;
+		gap: 1.25rem;
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.backup-block {
+		align-content: start;
+		display: grid;
+		gap: 0.4rem;
+	}
+
+	.backup-block h3 {
+		font-size: 0.95rem;
+		margin: 0 0 0.4rem;
+	}
+
+	.backup-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0 0 0.6rem;
+	}
+
+	.backup-download {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		display: inline-block;
+		font-size: 0.9rem;
+		font-weight: 700;
+		justify-self: end;
+		padding: 0.7rem 1.1rem;
+		text-decoration: none;
+		transition: background 0.2s ease;
+	}
+
+	.backup-download:hover {
+		background: var(--color-accent-soft);
+	}
+
+	.backup-block form {
+		display: grid;
+		gap: var(--gap-action-row);
+	}
+
+	.backup-block button.danger {
+		justify-self: end;
+	}
+
+	.backup-block .file-button {
+		justify-self: end;
+	}
+
+	.visually-hidden-input {
+		height: 1px;
+		opacity: 0;
+		position: absolute;
+		width: 1px;
+	}
+
+	.file-button {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-block;
+		font-size: 0.9rem;
+		font-weight: 700;
+		justify-self: start;
+		padding: 0.7rem 1.1rem;
+		transition: background 0.2s ease;
+	}
+
+	.file-button:hover {
+		background: var(--color-accent-soft);
+	}
+
+	button.danger {
+		background: transparent;
+		border: 1px solid var(--color-danger);
+		border-radius: var(--radius-control);
+		box-shadow: none;
+		color: var(--color-danger);
+		font-size: 0.9rem;
+		font-weight: 700;
+		padding: 0.6rem 1.1rem;
+	}
+
+	button.danger:hover:not(:disabled) {
+		background: var(--color-danger-soft);
+		box-shadow: none;
+		transform: none;
+	}
+
+	@media (max-width: 48rem) {
+		.backup-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

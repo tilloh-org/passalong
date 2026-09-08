@@ -380,7 +380,9 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(page).toHaveURL(/\/profil/);
 
-		// act — the admin sees the backup panel and downloads a full instance backup
+		// act — the admin opens the admin area and sees the backup panel, then downloads a full instance backup
+		await page.getByTestId('instance-admin-link').click();
+		await expect(page).toHaveURL(/\/instanzverwaltung/);
 		await expect(page.getByTestId('backup-panel')).toBeVisible();
 		// assume — the restore action is disabled until a backup file is selected
 		await expect(page.getByTestId('restore-submit')).toBeDisabled();
@@ -390,7 +392,8 @@ test.describe('Core collection', () => {
 		const backupBody = await backupResponse.body();
 		expect(backupBody.length).toBeGreaterThan(1000);
 
-		// act — delete the account after confirming the username
+		// act — return to the profile page and delete the account after confirming the username
+		await page.goto('/profil');
 		await expect(page.getByTestId('delete-account-panel')).toBeVisible();
 		await expect(page.getByTestId('delete-account-dialog')).toBeHidden();
 		await page.getByTestId('delete-account-trigger').click();

@@ -6,7 +6,6 @@
 	const standUrl = $derived(data.activeCollection ? `${page.url.origin}/stand/${encodeURIComponent(data.activeCollection.id)}` : '');
 
 	let avatarFile: File | undefined = $state();
-	let restoreFile: File | undefined = $state();
 	let importFile: File | undefined = $state();
 	let standIntroDraft = $state('');
 	let standIntroBaseline = $state('');
@@ -37,17 +36,6 @@
 	}
 
 	/**
-	 * Bind the restore file input to the prerequisite state.
-	 *
-	 * @param {Event} event - The change event from the file input.
-	 * @returns {void}
-	 */
-	function onRestoreFileChange(event: Event): void {
-		const input = event.currentTarget as HTMLInputElement;
-		restoreFile = input.files?.[0];
-	}
-
-	/**
 	 * Bind the import file input to the prerequisite state.
 	 *
 	 * @param {Event} event - The change event from the file input.
@@ -59,7 +47,6 @@
 	}
 
 	const avatarReady = $derived(Boolean(avatarFile));
-	const restoreReady = $derived(Boolean(restoreFile));
 	const importReady = $derived(Boolean(importFile));
 	const standIntroChanged = $derived(standIntroDraft !== standIntroBaseline);
 	const deleteAccountReady = $derived(deleteAccountDraft.trim().toLowerCase() === data.profile.username);
@@ -85,10 +72,6 @@
 
 <main class="profile">
 	<header class="masthead">
-		<a class="brand" href="/">
-			<img class="header-logo" src="/passalong-icon.svg" alt="" />
-			passalong
-		</a>
 		<div class="masthead-actions">
 			<a class="back-link" href="/">← Zurück zum Portfolio</a>
 		</div>
@@ -252,49 +235,6 @@
 					</form>
 				</section>
 
-				{#if data.isInstanceAdmin}
-					<section class="panel instance-admin-panel" aria-labelledby="instance-admin-title" data-testid="instance-admin-panel">
-						<h2 id="instance-admin-title">Instanzverwaltung</h2>
-						<p class="instance-admin-hint">Technische Verwaltung der Instanz: Passwort-Reset-Codes erzeugen, Backups und Restore.</p>
-						<a class="instance-admin-link" href="/instanzverwaltung" data-testid="instance-admin-link">
-							Instanzverwaltung öffnen
-						</a>
-					</section>
-					<section class="panel backup-panel" aria-labelledby="backup-title" data-testid="backup-panel">
-						<h2 id="backup-title">Backup &amp; Restore</h2>
-						<div class="backup-grid">
-							<div class="backup-block">
-								<h3>Vollständiges Backup</h3>
-								<p class="backup-hint">Lädt eine ZIP-Datei mit Datenbank, Medien und Prüfsummen-Manifest herunter.</p>
-								<a class="backup-download" href="/profil/backup" download data-testid="download-backup">
-									⬇ Backup herunterladen
-								</a>
-							</div>
-							<div class="backup-block">
-								<h3>Restore</h3>
-								<p class="backup-hint">
-									Das Hochladen ersetzt die gesamte Instanz (Datenbank und Medien) durch das Backup. Die Sitzung wird beendet.
-								</p>
-								<form method="POST" action="?/restoreBackup" enctype="multipart/form-data" data-testid="restore-form">
-									<input
-										name="backupArchive"
-										id="backup-file"
-										type="file"
-										accept=".zip,application/zip"
-										data-testid="restore-input"
-										class="visually-hidden-input"
-										required
-									/>
-									<label class="file-button" for="backup-file">{restoreFile ? `📦 ${restoreFile.name}` : '📦 Backup-Datei auswählen'}</label>
-									{#if form?.backupError}
-										<p class="form-error" role="alert">{form.backupError}</p>
-									{/if}
-									<button type="submit" class="danger" data-testid="restore-submit" disabled={!restoreReady} aria-disabled={!restoreReady}>Restore ausführen</button>
-								</form>
-							</div>
-						</div>
-					</section>
-				{/if}
 				<section class="panel logout-panel" aria-labelledby="logout-title" data-testid="logout-panel">
 					<h2 id="logout-title">Sitzung</h2>
 					<p class="logout-hint">Beendet deine aktuelle Sitzung und leitet dich zur Startseite zurück.</p>
@@ -358,6 +298,17 @@
 			</div>
 		</div>
 
+		{#if data.isInstanceAdmin}
+			<hr class="admin-divider" />
+			<section class="panel admin-area-panel" aria-labelledby="admin-area-title" data-testid="admin-area-panel">
+				<h2 id="admin-area-title">🔒 Admin Bereich</h2>
+				<p class="admin-area-hint">Technische Verwaltung der Instanz: Passwort-Reset-Codes, Backups und Restore.</p>
+				<a class="admin-area-link" href="/instanzverwaltung" data-testid="instance-admin-link">
+					Admin Funktionen öffnen
+				</a>
+			</section>
+		{/if}
+
 	</section>
 </main>
 
@@ -373,21 +324,6 @@
 		display: flex;
 		gap: 1rem;
 		justify-content: space-between;
-	}
-
-	.brand {
-		align-items: center;
-		color: var(--color-accent-strong);
-		display: flex;
-		font-size: 1.1rem;
-		font-weight: 800;
-		gap: 0.5rem;
-		text-decoration: none;
-	}
-
-	.header-logo {
-		height: 1.6rem;
-		width: 1.6rem;
 	}
 
 	.masthead-actions {
@@ -862,23 +798,25 @@
 		outline: none;
 	}
 
-	.backup-panel {
-		display: block;
+	.admin-divider {
+		border: 0;
+		border-top: 1px solid var(--color-border);
+		margin: 2rem 0 1.5rem;
 	}
 
-	.instance-admin-panel {
+	.admin-area-panel {
 		display: grid;
 		gap: 0.85rem;
 	}
 
-	.instance-admin-hint {
+	.admin-area-hint {
 		color: var(--color-text-muted);
 		font-size: 0.82rem;
 		line-height: 1.5;
 		margin: 0;
 	}
 
-	.instance-admin-link {
+	.admin-area-link {
 		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border-radius: var(--radius-control);
@@ -891,72 +829,8 @@
 		text-decoration: none;
 	}
 
-	.instance-admin-link:hover {
+	.admin-area-link:hover {
 		filter: brightness(1.08);
-	}
-
-	.backup-panel h2 {
-		font-size: 1.05rem;
-		margin: 0 0 0.75rem;
-	}
-
-	.backup-grid {
-		display: grid;
-		gap: 1.25rem;
-		grid-template-columns: 1fr 1fr;
-	}
-
-	.backup-block {
-		display: grid;
-		gap: 0.4rem;
-		align-content: start;
-	}
-
-	.backup-block h3 {
-		font-size: 0.95rem;
-		margin: 0 0 0.4rem;
-	}
-
-	.backup-hint {
-		color: var(--color-text-muted);
-		font-size: 0.82rem;
-		line-height: 1.5;
-		margin: 0 0 0.6rem;
-	}
-
-	.backup-download {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-control);
-		color: var(--color-accent);
-		display: inline-block;
-		font-size: 0.9rem;
-		font-weight: 700;
-		justify-self: end;
-		padding: 0.7rem 1.1rem;
-		text-decoration: none;
-		transition: background 0.2s ease;
-	}
-
-	.backup-download:hover {
-		background: var(--color-accent-soft);
-	}
-
-	.backup-block form {
-		display: grid;
-		gap: var(--gap-action-row);
-	}
-
-	.backup-block button.danger {
-		justify-self: end;
-	}
-
-	.backup-download {
-		justify-self: end;
-	}
-
-	.backup-block .file-button {
-		justify-self: end;
 	}
 
 	@media (max-width: 48rem) {
@@ -977,10 +851,6 @@
 		.avatar-form,
 		.avatar-remove-form {
 			grid-column: 2;
-		}
-
-		.backup-grid {
-			grid-template-columns: 1fr;
 		}
 	}
 </style>
