@@ -177,7 +177,7 @@ export const load: PageServerLoad = async ({ cookies, params, url }) => {
 	if (!item) {
 		throw error(httpStatus.notFound, 'Artikel nicht gefunden');
 	}
-	const itemUrl = new URL(`/artikel/${encodeURIComponent(item.id)}`, url.origin).toString();
+	const itemUrl = new URL(`/items/${encodeURIComponent(item.id)}`, url.origin).toString();
 	const qrCodeDataUrl = await QRCode.toDataURL(itemUrl, { width: qrCodeImageSizePixels, margin: 1 });
 	return {
 		item,
@@ -219,7 +219,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { uploadImageError: imageActionError(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
+		redirect(httpStatus.seeOther, `/items/${encodeURIComponent(itemId)}`);
 	},
 
 	removeItemImage: async ({ cookies, request, url }) => {
@@ -239,7 +239,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { removeImageError: imageActionError(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
+		redirect(httpStatus.seeOther, `/items/${encodeURIComponent(itemId)}`);
 	},
 
 	markItemSold: async ({ cookies, request, url }) => {
@@ -267,7 +267,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { saleStatusError: saleStatusError(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
+		redirect(httpStatus.seeOther, `/items/${encodeURIComponent(itemId)}`);
 	},
 
 	unmarkItemSold: async ({ cookies, request, url }) => {
@@ -287,7 +287,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { saleStatusError: saleStatusError(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
+		redirect(httpStatus.seeOther, `/items/${encodeURIComponent(itemId)}`);
 	},
 	setItemCover: async ({ cookies, request, url, params }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -306,7 +306,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { coverError: imageActionError(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
+		redirect(httpStatus.seeOther, `/items/${encodeURIComponent(itemId)}`);
 	},
 
 	deleteItem: async ({ cookies, request, url }) => {
@@ -358,7 +358,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { updateItemError: itemActionError(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
+		redirect(httpStatus.seeOther, `/items/${encodeURIComponent(itemId)}`);
 	},
 
 	setItemReservation: async ({ cookies, request, url }) => {
@@ -383,6 +383,6 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { reservationError: itemActionError(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/artikel/${encodeURIComponent(itemId)}`);
+		redirect(httpStatus.seeOther, `/items/${encodeURIComponent(itemId)}`);
 	}
 };

@@ -69,7 +69,7 @@ test.describe('Core collection', () => {
 		// act
 		await expect(page.getByRole('button', { name: 'Abmelden' })).toHaveCount(0);
 		await page.getByTestId('profile-avatar-link').click();
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 		await expect(page.getByTestId('profile-logout')).toBeVisible();
 		await expect(page.getByTestId('logout-panel')).toBeVisible();
 		await expect(page.getByTestId('delete-account-panel')).toBeVisible();
@@ -93,7 +93,7 @@ test.describe('Core collection', () => {
 
 		// act — open the seller scan page and return to the portfolio via the header
 		await page.getByRole('link', { name: 'Scannen' }).click();
-		await expect(page).toHaveURL(/\/scannen/);
+		await expect(page).toHaveURL(/\/scan/);
 		await expect(page.getByRole('heading', { name: 'Artikel scannen' })).toBeVisible();
 		await page.getByRole('link', { name: '+ Neu' }).click();
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
@@ -120,7 +120,7 @@ test.describe('Core collection', () => {
 		// assume — the item appears and the manage-images link is offered after creation
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 		await expect(page.getByTestId('manage-images-link')).toBeVisible();
-		await expect(page.getByTestId('manage-images-link')).toHaveAttribute('href', /\/artikel\//);
+		await expect(page.getByTestId('manage-images-link')).toHaveAttribute('href', /\/items\//);
 
 		// act
 		const itemCard = page.getByTestId('item-card');
@@ -158,7 +158,7 @@ test.describe('Core collection', () => {
 		await itemCard.click();
 
 		// assume
-		await expect(page).toHaveURL(/\/artikel\//);
+		await expect(page).toHaveURL(/\/items\//);
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 		await expect(page.getByTestId('item-sale-section')).toBeVisible();
 		await expect(page.getByTestId('item-flag-pills')).toContainText('Haushalt');
@@ -286,7 +286,7 @@ test.describe('Core collection', () => {
 		// act — open the profile page via the header avatar and change the display name
 		const protectedUrl = page.url();
 		await page.getByTestId('profile-avatar-link').click();
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 		await expect(page.getByTestId('profile-avatar')).toBeVisible();
 		// assume — the avatar save button is disabled until an image file is selected
 		await expect(page.getByRole('button', { name: 'Avatar speichern' })).toBeDisabled();
@@ -303,7 +303,7 @@ test.describe('Core collection', () => {
 		await page.getByTestId('stand-intro-input').fill('Alles muss raus — von Deko bis Technik.');
 		await expect(page.getByTestId('save-stand-intro')).toBeEnabled();
 		await page.getByTestId('save-stand-intro').click();
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 		const standHref = await page.getByTestId('open-stand-link').getAttribute('href');
 		const standPage = await page.context().newPage();
 		await standPage.goto(`http://localhost:4173${standHref}`);
@@ -316,7 +316,7 @@ test.describe('Core collection', () => {
 			page.waitForResponse((response) => response.url().includes('changePassword')),
 			page.getByTestId('save-password').click()
 		]);
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 
 		// assume — the session survives the password change via the re-issued cookie
 		await expect(page.getByTestId('profile-avatar')).toBeVisible();
@@ -328,7 +328,7 @@ test.describe('Core collection', () => {
 			page.waitForResponse((response) => response.url().includes('changePassword')),
 			page.getByTestId('save-password').click()
 		]);
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 		await expect(page.getByTestId('profile-avatar')).toBeVisible();
 
 
@@ -345,9 +345,9 @@ test.describe('Core collection', () => {
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 		await page.getByTestId('profile-avatar-link').click();
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 		await page.getByTestId('instance-admin-link').click();
-		await expect(page).toHaveURL(/\/instanzverwaltung/);
+		await expect(page).toHaveURL(/\/admin/);
 		const instanceAdministrationForm = page.locator('form[action="?/createPasswordReset"]');
 		await instanceAdministrationForm.getByLabel('Benutzername des Kontos').fill(winningAccount.username);
 		await instanceAdministrationForm.getByRole('button', { name: 'Zurücksetzungscode erzeugen' }).click();
@@ -380,22 +380,22 @@ test.describe('Core collection', () => {
 		]);
 
 		// assume
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 
 		// act — the admin opens the admin area and sees the backup panel, then downloads a full instance backup
 		await page.getByTestId('instance-admin-link').click();
-		await expect(page).toHaveURL(/\/instanzverwaltung/);
+		await expect(page).toHaveURL(/\/admin/);
 		await expect(page.getByTestId('backup-panel')).toBeVisible();
 		// assume — the restore action is disabled until a backup file is selected
 		await expect(page.getByTestId('restore-submit')).toBeDisabled();
-		const backupResponse = await page.request.get('/profil/backup');
+		const backupResponse = await page.request.get('/profile/backup');
 		expect(backupResponse.status()).toBe(200);
 		expect(backupResponse.headers()['content-type']).toContain('application/zip');
 		const backupBody = await backupResponse.body();
 		expect(backupBody.length).toBeGreaterThan(1000);
 
 		// act — return to the profile page and delete the account after confirming the username
-		await page.goto('/profil');
+		await page.goto('/profile');
 		await expect(page.getByTestId('delete-account-panel')).toBeVisible();
 		await expect(page.getByTestId('delete-account-dialog')).toBeHidden();
 		await page.getByTestId('delete-account-trigger').click();

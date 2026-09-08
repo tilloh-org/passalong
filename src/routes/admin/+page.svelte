@@ -60,7 +60,7 @@
 				<div class="backup-block">
 					<h3>Vollständiges Backup</h3>
 					<p class="backup-hint">Lädt eine ZIP-Datei mit Datenbank, Medien und Prüfsummen-Manifest herunter.</p>
-					<a class="backup-download" href="/profil/backup" download data-testid="download-backup">
+					<a class="backup-download" href="/profile/backup" download data-testid="download-backup">
 						⬇ Backup herunterladen
 					</a>
 				</div>

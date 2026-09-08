@@ -205,7 +205,7 @@
 				<input
 					type="text"
 					bind:value={manualValue}
-					placeholder="https://…/artikel/123"
+					placeholder="https://…/items/123"
 					autocomplete="off"
 					autocapitalize="off"
 					autocorrect="off"

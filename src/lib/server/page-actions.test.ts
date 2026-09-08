@@ -77,9 +77,9 @@ function createActionFixtureWithOwner(): ActionFixture {
 		rawSessionToken,
 		scope,
 		loadActions: async () => (await import('../../routes/+page.server')).actions as unknown as PageServerActions,
-		loadDetailActions: async () => (await import('../../routes/artikel/[id]/+page.server')).actions as unknown as PageServerActions,
-		loadProfileActions: async () => (await import('../../routes/profil/+page.server')).actions as unknown as PageServerActions,
-		loadInstanceAdminActions: async () => (await import('../../routes/instanzverwaltung/+page.server')).actions as unknown as PageServerActions,
+		loadDetailActions: async () => (await import('../../routes/items/[id]/+page.server')).actions as unknown as PageServerActions,
+		loadProfileActions: async () => (await import('../../routes/profile/+page.server')).actions as unknown as PageServerActions,
+		loadInstanceAdminActions: async () => (await import('../../routes/admin/+page.server')).actions as unknown as PageServerActions,
 		loadPage: async () => (await import('../../routes/+page.server')).load as unknown as (input: unknown) => unknown
 	};
 }
@@ -141,7 +141,7 @@ describe('instance-admin actions', () => {
 		const storedImages = repository.listItemImages(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: `/artikel/${encodeURIComponent(item.id)}` });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: `/items/${encodeURIComponent(item.id)}` });
 		expect(storedImages).toHaveLength(1);
 		expect(storedImages[0]).toMatchObject({ isCover: true, position: 0 });
 		expect(existsSync(join(mediaRoot, storedImages[0].storageKey))).toBe(true);
@@ -182,7 +182,7 @@ describe('instance-admin actions', () => {
 		const storedImages = repository.listItemImages(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: `/artikel/${encodeURIComponent(item.id)}` });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: `/items/${encodeURIComponent(item.id)}` });
 		expect(storedImages).toHaveLength(2);
 		expect(storedImages.map((image) => image.position)).toEqual([0, 1]);
 		expect(storedImages.filter((image) => image.isCover)).toHaveLength(1);
@@ -244,7 +244,7 @@ describe('instance-admin actions', () => {
 		const reopenedItem = repository.unmarkItemSold(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: `/artikel/${encodeURIComponent(item.id)}` });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: `/items/${encodeURIComponent(item.id)}` });
 		expect(anonymousOutcome).toMatchObject({ status: 401, data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
 		expect(itemAfterSale).toMatchObject({
 			saleChannel: 'flea-market',
@@ -367,7 +367,7 @@ describe('instance-admin actions', () => {
 		} as never);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profil' });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profile' });
 		expect(repository.getProfile(scope)).toMatchObject({ displayName: 'Avery Updated' });
 		expect(anonymousOutcome).toMatchObject({ status: 401, data: { updateProfileError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
 	});
@@ -394,7 +394,7 @@ describe('instance-admin actions', () => {
 		const withAvatar = repository.getProfile(scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profil' });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profile' });
 		expect(withAvatar?.avatarStorageKey).toBeTruthy();
 		expect(existsSync(join(mediaRoot, withAvatar?.avatarStorageKey ?? 'missing'))).toBe(true);
 
@@ -411,7 +411,7 @@ describe('instance-admin actions', () => {
 		}
 
 		// assume
-		expect(removeOutcome).toMatchObject({ status: 303, location: '/profil' });
+		expect(removeOutcome).toMatchObject({ status: 303, location: '/profile' });
 		expect(repository.getProfile(scope)?.avatarStorageKey).toBeNull();
 		expect(existsSync(join(mediaRoot, withAvatar?.avatarStorageKey ?? 'missing'))).toBe(false);
 	});
@@ -513,7 +513,7 @@ describe('instance-admin actions', () => {
 		// assume — the restore succeeded and swapped the database file (the running connection keeps
 		// serving the pre-restore state until the instance restarts, which the swap ensures via the
 		// rollback copy and session invalidation on next start).
-		expect(adminOutcome).toMatchObject({ status: 303, location: '/instanzverwaltung' });
+		expect(adminOutcome).toMatchObject({ status: 303, location: '/admin' });
 		expect(existsSync(`${databasePath}.pre-restore`)).toBe(true);
 	});
 
@@ -579,6 +579,6 @@ describe('instance-admin actions', () => {
 		}
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profil' });
+		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profile' });
 	});
 });

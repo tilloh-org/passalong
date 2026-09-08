@@ -114,7 +114,7 @@
 				>
 					+ Neu
 				</a>
-				<a href="/scannen" onclick={() => setMenuOpen(false)}>
+				<a href="/scan" onclick={() => setMenuOpen(false)}>
 					Scannen
 				</a>
 				{#if data.header?.standPath}
@@ -148,7 +148,7 @@
 				</button>
 				<a
 					class="profile-avatar"
-					href="/profil"
+					href="/profile"
 					aria-label="Profil öffnen"
 					title="Profil"
 					data-testid="profile-avatar-link"

@@ -1,4 +1,4 @@
-const articleRoutePrefix = '/artikel/';
+const itemRoutePrefix = '/items/';
 
 /**
  * Normalize a scanned value to a seller-facing article detail route.
@@ -15,24 +15,24 @@ export function resolveArticleDetailPath(rawValue: string, origin: string): stri
 		return null;
 	}
 
-	if (trimmedValue.startsWith(articleRoutePrefix)) {
-		return normalizeArticlePath(trimmedValue);
+	if (trimmedValue.startsWith(itemRoutePrefix)) {
+		return normalizeItemPath(trimmedValue);
 	}
-	if (trimmedValue.startsWith('artikel/')) {
-		return normalizeArticlePath(`/${trimmedValue}`);
+	if (trimmedValue.startsWith('items/')) {
+		return normalizeItemPath(`/${trimmedValue}`);
 	}
 
 	try {
 		const url = new URL(trimmedValue, origin);
-		if (url.pathname.startsWith(articleRoutePrefix)) {
-			return normalizeArticlePath(url.pathname);
+		if (url.pathname.startsWith(itemRoutePrefix)) {
+			return normalizeItemPath(url.pathname);
 		}
 	} catch {
 		// Ignore invalid URLs and fall back to a bare article ID.
 	}
 
 	if (looksLikeArticleId(trimmedValue)) {
-		return `${articleRoutePrefix}${encodeURIComponent(trimmedValue)}`;
+		return `${itemRoutePrefix}${encodeURIComponent(trimmedValue)}`;
 	}
 
 	return null;
@@ -41,16 +41,16 @@ export function resolveArticleDetailPath(rawValue: string, origin: string): stri
 /**
  * Remove a trailing slash from a valid article path while preserving the item ID.
  *
- * @param {string} pathname - A path that starts with `/artikel/`.
+ * @param {string} pathname - A path that starts with `/items/`.
  * @returns {string | null} Normalized route path or null when the path does not include an ID.
  */
-function normalizeArticlePath(pathname: string): string | null {
+function normalizeItemPath(pathname: string): string | null {
 	const normalizedPath = pathname.replace(/\/+$/, '');
-	const articleId = normalizedPath.slice(articleRoutePrefix.length);
+	const articleId = normalizedPath.slice(itemRoutePrefix.length);
 	if (!articleId) {
 		return null;
 	}
-	return `${articleRoutePrefix}${articleId}`;
+	return `${itemRoutePrefix}${articleId}`;
 }
 
 /**

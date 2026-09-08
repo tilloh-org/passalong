@@ -116,7 +116,7 @@ export const actions: Actions = {
 			rmSync(stagingPath, { force: true });
 		}
 
-		redirect(httpStatus.seeOther, '/instanzverwaltung');
+		redirect(httpStatus.seeOther, '/admin');
 	}
 };
 

@@ -260,7 +260,7 @@
 					{/if}
 					<button type="submit">Artikel hinzufügen</button>
 					{#if data.createdItemId}
-						<a class="manage-images-link" href={`/artikel/${encodeURIComponent(data.createdItemId)}`} data-testid="manage-images-link">
+						<a class="manage-images-link" href={`/items/${encodeURIComponent(data.createdItemId)}`} data-testid="manage-images-link">
 							🖼 Bilder verwalten
 						</a>
 					{/if}
@@ -358,10 +358,10 @@
 							data-testid="item-card"
 							class="tile-link"
 							tabindex="0"
-							onclick={() => goto(`/artikel/${encodeURIComponent(item.id)}`)}
+							onclick={() => goto(`/items/${encodeURIComponent(item.id)}`)}
 							onkeydown={(event) => {
 								if (event.key === 'Enter' || event.key === ' ') {
-									goto(`/artikel/${encodeURIComponent(item.id)}`);
+									goto(`/items/${encodeURIComponent(item.id)}`);
 								}
 							}}
 						>

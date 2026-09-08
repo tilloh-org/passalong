@@ -115,7 +115,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { updateProfileError: profileActionError(error) });
 		}
 
-		redirect(httpStatus.seeOther, '/profil');
+		redirect(httpStatus.seeOther, '/profile');
 	},
 
 	uploadAvatar: async ({ cookies, request, url }) => {
@@ -151,7 +151,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { avatarError: profileActionError(error) });
 		}
 
-		redirect(httpStatus.seeOther, '/profil');
+		redirect(httpStatus.seeOther, '/profile');
 	},
 
 	removeAvatar: async ({ cookies, request, url }) => {
@@ -173,7 +173,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { avatarError: profileActionError(error) });
 		}
 
-		redirect(httpStatus.seeOther, '/profil');
+		redirect(httpStatus.seeOther, '/profile');
 	},
 
 	deleteAccount: async ({ cookies, request, url }) => {
@@ -231,7 +231,7 @@ export const actions: Actions = {
 		} catch (error) {
 			return fail(httpStatus.badRequest, { changePasswordError: getProfileErrorMessage(error) });
 		}
-		redirect(httpStatus.seeOther, '/profil');
+		redirect(httpStatus.seeOther, '/profile');
 	},
 
 	importAccountData: async ({ cookies, request, url }) => {
@@ -278,7 +278,7 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { standIntroError: 'Die Einleitung konnte nicht gespeichert werden.' });
 		}
 
-		redirect(httpStatus.seeOther, '/profil');
+		redirect(httpStatus.seeOther, '/profile');
 	},
 
 	logout: ({ cookies, request, url }) => {

@@ -266,7 +266,7 @@
 					</div>
 					<div class="delete-account-export">
 						<p class="delete-account-export-hint">Wenn du die Daten behalten willst, lade sie jetzt als ZIP herunter.</p>
-						<a class="secondary delete-account-export-link" href="/profil/export" download data-testid="export-account-archive">ZIP-Export herunterladen</a>
+						<a class="secondary delete-account-export-link" href="/profile/export" download data-testid="export-account-archive">ZIP-Export herunterladen</a>
 					</div>
 					<form method="POST" action="?/deleteAccount" class="delete-account-form" data-testid="delete-account-form">
 						<label>
@@ -297,7 +297,7 @@
 			<section class="panel admin-area-panel" aria-labelledby="admin-area-title" data-testid="admin-area-panel">
 				<h2 id="admin-area-title">🔒 Admin Bereich</h2>
 				<p class="admin-area-hint">Technische Verwaltung der Instanz: Passwort-Reset-Codes, Backups und Restore.</p>
-				<a class="admin-area-link" href="/instanzverwaltung" data-testid="instance-admin-link">
+				<a class="admin-area-link" href="/admin" data-testid="instance-admin-link">
 					Zur Instanzverwaltung
 				</a>
 			</section>
