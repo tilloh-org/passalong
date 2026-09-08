@@ -203,7 +203,8 @@
 		{/if}
 
 		<div class="workspace">
-			<section class="item-form" aria-labelledby="add-item-title">
+			<div class="item-form-column">
+				<section class="item-form" aria-labelledby="add-item-title">
 				<div>
 					<p class="eyebrow">Neu in der Sammlung</p>
 					<h2 id="add-item-title">Artikel erfassen</h2>
@@ -265,7 +266,9 @@
 					{/if}
 				</form>
 			</section>
+			</div>
 
+			<div class="items-column">
 			{#if data.saleStatistics && data.saleStatistics.soldItemCount > 0}
 				<section class="sale-statistics" aria-labelledby="sale-statistics-title" data-testid="sale-statistics">
 					<p class="eyebrow">Verkaufsstatistik</p>
@@ -396,6 +399,7 @@
 				<p class="empty">Deine Sammlung wartet auf ihren ersten Artikel.</p>
 			{/if}
 			</section>
+			</div>
 		</div>
 	{/if}
 </main>
@@ -661,14 +665,24 @@
 	}
 
 	.workspace {
+		align-items: start;
 		display: grid;
 		gap: 2rem;
 		grid-template-columns: minmax(16rem, 0.75fr) minmax(0, 1.75fr);
 		padding-top: 2rem;
 	}
 
+	.item-form-column {
+		display: grid;
+		gap: 1.5rem;
+	}
+
+	.items-column {
+		display: grid;
+		gap: 1.5rem;
+	}
+
 	.item-form {
-		align-self: start;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-card);
@@ -676,23 +690,6 @@
 		display: grid;
 		gap: 1.25rem;
 		padding: 1.4rem;
-	}
-
-	.sale-statistics {
-		grid-column: 1;
-	}
-
-	.item-filters {
-		align-self: start;
-		grid-column: 2;
-		grid-row: 1;
-	}
-
-	.items {
-		display: grid;
-		gap: 1.25rem;
-		grid-column: 2;
-		grid-row: 2;
 	}
 
 	.form-grid {
@@ -1030,13 +1027,6 @@
 
 		.workspace {
 			grid-template-columns: 1fr;
-		}
-
-		.item-filters,
-		.items,
-		.sale-statistics {
-			grid-column: 1;
-			grid-row: auto;
 		}
 	}
 </style>
