@@ -192,55 +192,6 @@
 			<p>({data.items.length})</p>
 		</section>
 
-		<form class="item-filters" method="GET" action="/" data-testid="item-filter-form">
-			{#if data.collection}
-				<input type="hidden" name="collection" value={data.collection.id} />
-			{/if}
-			<label class="filter-search">
-				<span>Suche</span>
-				<input
-					name="q"
-					type="search"
-					value={appliedFilters.query ?? ''}
-					placeholder="Titel, Notizen, Beschreibung …"
-					data-testid="filter-search-input"
-				/>
-			</label>
-			<label>
-				<span>Kategorie</span>
-				<select name="category" data-testid="filter-category-select">
-					<option value="">Alle</option>
-					{#each data.categoryOptions as category}
-						<option value={category} selected={appliedFilters.category === category}>{categoryLabels[category]}</option>
-					{/each}
-				</select>
-			</label>
-			<label>
-				<span>Zustand</span>
-				<select name="condition" data-testid="filter-condition-select">
-					<option value="">Alle</option>
-					{#each data.conditionOptions as condition}
-						<option value={condition} selected={appliedFilters.condition === condition}>{conditionLabels[condition]}</option>
-					{/each}
-				</select>
-			</label>
-			<label>
-				<span>Status</span>
-				<select name="status" data-testid="filter-status-select">
-					<option value="">Alle</option>
-					{#each ['open', 'reserved', 'sold'] as status}
-						<option value={status} selected={appliedFilters.status === status}>{statusFilterLabels[status]}</option>
-					{/each}
-				</select>
-			</label>
-			<div class="filter-actions">
-				<button type="submit" class="filter-apply" data-testid="filter-apply">Filtern</button>
-				{#if hasActiveFilters}
-					<a class="filter-reset" href={data.collection ? `/?collection=${encodeURIComponent(data.collection.id)}` : '/'} data-testid="filter-reset">Zurücksetzen</a>
-				{/if}
-			</div>
-		</form>
-
 		{#if data.collections.length > 1}
 			<nav class="collection-switcher" aria-label="Sammlungswechsel" data-testid="collection-switcher">
 				{#each data.collections as collection (collection.id)}
@@ -307,6 +258,11 @@
 						<p class="form-error" role="alert">{form.addItemError}</p>
 					{/if}
 					<button type="submit">Artikel hinzufügen</button>
+					{#if data.createdItemId}
+						<a class="manage-images-link" href={`/artikel/${encodeURIComponent(data.createdItemId)}`} data-testid="manage-images-link">
+							🖼 Bilder verwalten
+						</a>
+					{/if}
 				</form>
 			</section>
 
@@ -342,6 +298,54 @@
 					</div>
 				</section>
 			{/if}
+			<form class="item-filters" method="GET" action="/" data-testid="item-filter-form">
+				{#if data.collection}
+					<input type="hidden" name="collection" value={data.collection.id} />
+				{/if}
+				<label class="filter-search">
+					<span>Suche</span>
+					<input
+						name="q"
+						type="search"
+						value={appliedFilters.query ?? ''}
+						placeholder="Titel, Notizen, Beschreibung …"
+						data-testid="filter-search-input"
+					/>
+				</label>
+				<label>
+					<span>Kategorie</span>
+					<select name="category" data-testid="filter-category-select">
+						<option value="">Alle</option>
+						{#each data.categoryOptions as category}
+							<option value={category} selected={appliedFilters.category === category}>{categoryLabels[category]}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					<span>Zustand</span>
+					<select name="condition" data-testid="filter-condition-select">
+						<option value="">Alle</option>
+						{#each data.conditionOptions as condition}
+							<option value={condition} selected={appliedFilters.condition === condition}>{conditionLabels[condition]}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					<span>Status</span>
+					<select name="status" data-testid="filter-status-select">
+						<option value="">Alle</option>
+						{#each ['open', 'reserved', 'sold'] as status}
+							<option value={status} selected={appliedFilters.status === status}>{statusFilterLabels[status]}</option>
+						{/each}
+					</select>
+				</label>
+				<div class="filter-actions">
+					<button type="submit" class="filter-apply" data-testid="filter-apply">Filtern</button>
+					{#if hasActiveFilters}
+						<a class="filter-reset" href={data.collection ? `/?collection=${encodeURIComponent(data.collection.id)}` : '/'} data-testid="filter-reset">Zurücksetzen</a>
+					{/if}
+				</div>
+			</form>
 			<section class="items" aria-labelledby="items-title">
 				{#if data.items.length}
 				<div class="item-grid">
@@ -674,14 +678,44 @@
 		padding: 1.4rem;
 	}
 
-	.form-grid {
-		display: grid;
-		gap: 1rem;
+	.sale-statistics {
+		grid-column: 1;
+	}
+
+	.item-filters {
+		align-self: start;
+		grid-column: 2;
+		grid-row: 1;
 	}
 
 	.items {
 		display: grid;
 		gap: 1.25rem;
+		grid-column: 2;
+		grid-row: 2;
+	}
+
+	.form-grid {
+		display: grid;
+		gap: 1rem;
+	}
+
+	.manage-images-link {
+		align-items: center;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		display: flex;
+		font-size: 0.9rem;
+		font-weight: 700;
+		gap: 0.4rem;
+		justify-content: center;
+		padding: 0.6rem 1.1rem;
+		text-decoration: none;
+	}
+
+	.manage-images-link:hover {
+		background: var(--color-accent-soft);
 	}
 
 	.item-filters {
@@ -775,6 +809,7 @@
 	.item-grid {
 		display: grid;
 		gap: 1rem;
+		grid-auto-rows: 1fr;
 		grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
 	}
 
@@ -785,6 +820,7 @@
 		box-shadow: var(--shadow-tile);
 		display: flex;
 		flex-direction: column;
+		height: 100%;
 		overflow: hidden;
 		transition:
 			transform 0.3s cubic-bezier(0.2, 0.7, 0.3, 1),
@@ -994,6 +1030,13 @@
 
 		.workspace {
 			grid-template-columns: 1fr;
+		}
+
+		.item-filters,
+		.items,
+		.sale-statistics {
+			grid-column: 1;
+			grid-row: auto;
 		}
 	}
 </style>

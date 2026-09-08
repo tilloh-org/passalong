@@ -216,7 +216,6 @@
 				<button type="button" class="primary" onclick={() => void openManualTarget()}>
 					Artikel öffnen
 				</button>
-				<a class="secondary-link" href="/">Zurück zum Portfolio</a>
 			</div>
 		</aside>
 	</section>
@@ -282,8 +281,7 @@
 		justify-content: flex-end;
 	}
 
-	button,
-	.secondary-link {
+	button {
 		align-items: center;
 		border-radius: 999px;
 		display: inline-flex;
@@ -303,14 +301,12 @@
 		cursor: pointer;
 	}
 
-	button:hover,
-	.secondary-link:hover {
+	button:hover {
 		filter: brightness(1.08);
 		transform: translateY(-1px);
 	}
 
 	button:focus-visible,
-	.secondary-link:focus-visible,
 	input:focus-visible {
 		outline: 2px solid var(--focus-ring);
 		outline-offset: 2px;
@@ -323,8 +319,7 @@
 		color: #fff;
 	}
 
-	button.secondary,
-	.secondary-link {
+	button.secondary {
 		background: var(--color-surface-strong);
 		border: 1px solid var(--color-border);
 		color: var(--color-accent);
@@ -441,10 +436,6 @@
 		flex-wrap: wrap;
 		gap: 0.65rem;
 		margin-top: 1rem;
-	}
-
-	.secondary-link {
-		color: var(--color-accent);
 	}
 
 	@media (max-width: 880px) {

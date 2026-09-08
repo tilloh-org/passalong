@@ -46,12 +46,6 @@
 </svelte:head>
 
 <main class="detail">
-	<header class="masthead">
-		<a class="back-link" href="/">
-			← Zurück zum Portfolio
-		</a>
-	</header>
-
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
 	{/if}
@@ -324,23 +318,6 @@
 		margin: 0 auto;
 		max-width: 64rem;
 		padding: 0 1.5rem 4rem;
-	}
-
-	.masthead {
-		align-items: center;
-		display: flex;
-		padding: 1.25rem 0;
-	}
-
-	.back-link {
-		color: var(--color-accent);
-		font-size: 0.9rem;
-		font-weight: 700;
-		text-decoration: none;
-	}
-
-	.back-link:hover {
-		text-decoration: underline;
 	}
 
 	.detail-card {

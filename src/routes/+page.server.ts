@@ -120,6 +120,7 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 		isAuthenticated: Boolean(scope),
 		isInitialSetup: !repository.hasAccounts(),
 		isInstanceAdmin,
+		createdItemId: url.searchParams.get('created'),
 		saleStatistics: scope ? repository.getSaleStatistics(scope) : undefined
 	};
 };
@@ -261,8 +262,9 @@ export const actions: Actions = {
 			return fail(httpStatus.notFound, { addItemError: 'Die Sammlung wurde nicht gefunden.' });
 		}
 
+		let createdItemId: string;
 		try {
-			repository.createItem(
+			const item = repository.createItem(
 				{
 					collectionId,
 					title: getFormText(formData, 'title'),
@@ -276,12 +278,13 @@ export const actions: Actions = {
 				},
 				scope
 			);
+			createdItemId = item.id;
 		} catch (error) {
 			return fail(httpStatus.badRequest, { addItemError: getErrorMessage(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collectionId)}`);
-	},
+		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collectionId)}&created=${encodeURIComponent(createdItemId)}`);
+		},
 
 	quickSellItem: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {

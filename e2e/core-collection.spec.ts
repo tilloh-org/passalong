@@ -91,11 +91,11 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Scannen' })).toBeVisible();
 
-		// act — open the seller scan page and return to the portfolio
+		// act — open the seller scan page and return to the portfolio via the header
 		await page.getByRole('link', { name: 'Scannen' }).click();
 		await expect(page).toHaveURL(/\/scannen/);
 		await expect(page.getByRole('heading', { name: 'Artikel scannen' })).toBeVisible();
-		await page.getByRole('link', { name: 'Zurück zum Portfolio' }).click();
+		await page.getByRole('link', { name: '+ Neu' }).click();
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 
 		// act
@@ -117,8 +117,10 @@ test.describe('Core collection', () => {
 		await page.getByTestId('item-functional-checkbox').check();
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
 
-		// assume
+		// assume — the item appears and the manage-images link is offered after creation
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
+		await expect(page.getByTestId('manage-images-link')).toBeVisible();
+		await expect(page.getByTestId('manage-images-link')).toHaveAttribute('href', /\/artikel\//);
 
 		// act
 		const itemCard = page.getByTestId('item-card');
@@ -230,8 +232,8 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(page.getByRole('heading', { name: 'Leselampe (gebraucht)' })).toBeVisible();
 
-		// act — go back to the portfolio and quick-sell from the card
-		await page.getByRole('link', { name: '← Zurück zum Portfolio' }).click();
+		// act — go back to the portfolio via the header and quick-sell from the card
+		await page.getByRole('link', { name: '+ Neu' }).click();
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 		await page.getByTestId('item-card').first().getByTestId('quick-sell-item').click();
 

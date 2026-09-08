@@ -24,12 +24,6 @@
 </svelte:head>
 
 <main class="instance-admin">
-	<header class="masthead">
-		<div class="masthead-actions">
-			<a class="back-link" href="/profil">← Zurück zum Profil</a>
-		</div>
-	</header>
-
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
 	{/if}
@@ -103,30 +97,6 @@
 		margin: 0 auto;
 		max-width: 44rem;
 		padding: 0 1.5rem 4rem;
-	}
-
-	.masthead {
-		align-items: center;
-		display: flex;
-		gap: 1rem;
-		justify-content: space-between;
-	}
-
-	.masthead-actions {
-		align-items: center;
-		display: flex;
-		gap: 0.9rem;
-	}
-
-	.back-link {
-		color: var(--color-accent);
-		font-size: 0.9rem;
-		font-weight: 700;
-		text-decoration: none;
-	}
-
-	.back-link:hover {
-		text-decoration: underline;
 	}
 
 	.admin-card {

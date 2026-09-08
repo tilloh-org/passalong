@@ -71,12 +71,6 @@
 </svelte:head>
 
 <main class="profile">
-	<header class="masthead">
-		<div class="masthead-actions">
-			<a class="back-link" href="/">← Zurück zum Portfolio</a>
-		</div>
-	</header>
-
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
 	{/if}
@@ -304,7 +298,7 @@
 				<h2 id="admin-area-title">🔒 Admin Bereich</h2>
 				<p class="admin-area-hint">Technische Verwaltung der Instanz: Passwort-Reset-Codes, Backups und Restore.</p>
 				<a class="admin-area-link" href="/instanzverwaltung" data-testid="instance-admin-link">
-					Admin Funktionen öffnen
+					Zur Instanzverwaltung
 				</a>
 			</section>
 		{/if}
@@ -317,19 +311,6 @@
 		margin: 0 auto;
 		max-width: 56rem;
 		padding: 0 1.5rem 4rem;
-	}
-
-	.masthead {
-		align-items: center;
-		display: flex;
-		gap: 1rem;
-		justify-content: space-between;
-	}
-
-	.masthead-actions {
-		align-items: center;
-		display: flex;
-		gap: 0.9rem;
 	}
 
 	.logout-form {
@@ -366,17 +347,6 @@
 		background: var(--color-danger-soft);
 		box-shadow: none;
 		transform: none;
-	}
-
-	.back-link {
-		color: var(--color-accent);
-		font-size: 0.9rem;
-		font-weight: 700;
-		text-decoration: none;
-	}
-
-	.back-link:hover {
-		text-decoration: underline;
 	}
 
 	.profile-card {
