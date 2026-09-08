@@ -62,7 +62,7 @@ test.describe('Public stand page', () => {
 			await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
 		}
 		await page.waitForSelector('[data-testid=item-card]');
-		const standLink = page.getByTestId('stand-page-link');
+		const standLink = page.getByTestId('nav-stand-link');
 		await expect(standLink).toBeVisible();
 
 		// act

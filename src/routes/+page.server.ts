@@ -28,7 +28,6 @@ const millisecondsPerSecond = 1000;
 const secondsPerMinute = 60;
 const minutesPerHour = 60;
 const hoursPerDay = 24;
-const passwordResetLifetimeHours = 1;
 const sessionLifetimeDays = 30;
 const firstCollectionIndex = 0;
 const maximumPriceCents = 10_000_000;
@@ -41,7 +40,6 @@ const httpStatus = {
 	conflict: 409,
 	tooManyRequests: 429
 } as const;
-const passwordResetLifetimeMilliseconds = passwordResetLifetimeHours * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
 const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
@@ -199,35 +197,6 @@ export const actions: Actions = {
 		}
 		cookies.delete(sessionCookieName, { path: '/' });
 		redirect(httpStatus.seeOther, '/');
-	},
-
-	createPasswordReset: async ({ cookies, request, url }) => {
-		if (!hasSameOrigin(request, url)) {
-			return fail(httpStatus.forbidden, { csrfError });
-		}
-		const scope = getSessionScope(cookies.get(sessionCookieName));
-		if (!scope) {
-			return fail(httpStatus.unauthorized, { passwordResetIssueError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
-		}
-		const repository = getCollectionRepository();
-		if (!repository.isInstanceAdmin(scope)) {
-			return fail(httpStatus.forbidden, { passwordResetIssueError: 'Du bist nicht für die Instanzverwaltung berechtigt.' });
-		}
-
-		try {
-			const resetSecret = createSessionToken();
-			const resetCreated = repository.createPasswordResetForUsername(
-				getFormText(await request.formData(), 'username'),
-				hashSessionToken(resetSecret),
-				new Date(Date.now() + passwordResetLifetimeMilliseconds).toISOString()
-			);
-			if (!resetCreated) {
-				return fail(httpStatus.notFound, { passwordResetIssueError: 'Das angegebene Konto wurde nicht gefunden.' });
-			}
-			return { passwordResetSecret: resetSecret };
-		} catch (error) {
-			return fail(httpStatus.badRequest, { passwordResetIssueError: getErrorMessage(error) });
-		}
 	},
 
 	resetPassword: async ({ cookies, request, url }) => {

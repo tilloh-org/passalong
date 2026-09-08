@@ -91,33 +91,6 @@
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
 	{/if}
-	{#if form && 'passwordResetSecret' in form && form.passwordResetSecret}
-		<section class="issued-reset-secret" aria-labelledby="issued-reset-secret-title">
-			<h2 id="issued-reset-secret-title">Einmaliger Zurücksetzungscode</h2>
-			<code class="reset-secret" data-testid="issued-password-reset-secret">{form.passwordResetSecret}</code>
-			<p>Den Code jetzt über einen privaten Kanal weitergeben. Er wird nicht erneut angezeigt.</p>
-		</section>
-	{/if}
-
-
-	{#if data.isAuthenticated && data.isInstanceAdmin}
-		<section class="settings-panel" id="instanzverwaltung" aria-label="Instanzverwaltung">
-			<div class="password-help instance-administration">
-				<h2>Instanzverwaltung</h2>
-				<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
-				<form method="POST" action="?/createPasswordReset">
-					<label>
-						<span>Benutzername des Kontos</span>
-						<input name="username" autocomplete="username" required />
-					</label>
-					{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
-						<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
-					{/if}
-					<button type="submit">Zurücksetzungscode erzeugen</button>
-				</form>
-			</div>
-		</section>
-	{/if}
 
 	{#if !data.isAuthenticated}
 		<section class="onboarding" aria-labelledby="onboarding-title">
@@ -326,11 +299,8 @@
 						<p class="eyebrow">Dein Bestand</p>
 						<h2 id="items-title">Artikel</h2>
 					</div>
-					{#if data.collection}
-						<a class="stand-link" data-testid="stand-page-link" href={`/stand/${data.collection.id}`}>Standseite öffnen</a>
-					{/if}
-					</div>
-					<form class="item-filters" method="GET" action="/" data-testid="item-filter-form">
+				</div>
+				<form class="item-filters" method="GET" action="/" data-testid="item-filter-form">
 					{#if data.collection}
 						<input type="hidden" name="collection" value={data.collection.id} />
 					{/if}
@@ -725,14 +695,10 @@
 
 	.item-filters {
 		align-items: end;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-tile);
 		display: grid;
 		gap: 1rem;
 		grid-template-columns: minmax(12rem, 1.6fr) repeat(3, minmax(0, 1fr)) auto;
-		padding: 1.1rem 1.2rem;
+		margin-bottom: 0.25rem;
 	}
 
 	.item-filters label {
@@ -992,18 +958,6 @@
 		white-space: nowrap;
 	}
 
-	.stand-link {
-		align-self: center;
-		color: var(--color-accent);
-		font-size: 0.85rem;
-		font-weight: 700;
-		text-decoration: none;
-	}
-
-	.stand-link:hover {
-		text-decoration: underline;
-	}
-
 	.collection-switcher {
 		display: flex;
 		flex-wrap: wrap;
@@ -1034,10 +988,6 @@
 		border-color: var(--color-accent-strong);
 		box-shadow: var(--shadow-cta);
 		color: #fff;
-	}
-
-	.settings-panel {
-		margin: 0 0 1.5rem;
 	}
 
 	.password-help {

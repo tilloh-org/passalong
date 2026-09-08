@@ -342,7 +342,10 @@ test.describe('Core collection', () => {
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-		await page.locator('.instance-admin-link').click();
+		await page.getByTestId('profile-avatar-link').click();
+		await expect(page).toHaveURL(/\/profil/);
+		await page.getByTestId('instance-admin-link').click();
+		await expect(page).toHaveURL(/\/instanzverwaltung/);
 		const instanceAdministrationForm = page.locator('form[action="?/createPasswordReset"]');
 		await instanceAdministrationForm.getByLabel('Benutzername des Kontos').fill(winningAccount.username);
 		await instanceAdministrationForm.getByRole('button', { name: 'Zurücksetzungscode erzeugen' }).click();
@@ -351,7 +354,9 @@ test.describe('Core collection', () => {
 		// assume
 		expect(resetSecret).toMatch(/^[A-Za-z0-9_-]+$/);
 
-		// act
+		// act — the reset revoked the own session; use the code on the anonymous login page
+		await page.goto('/');
+		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
 		await page.locator('.reset-toggle').click();
 		const resetForm = page.locator('form[action="?/resetPassword"]');
 		await resetForm.getByLabel('Benutzername').fill(winningAccount.username);

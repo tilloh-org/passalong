@@ -253,6 +253,13 @@
 				</section>
 
 				{#if data.isInstanceAdmin}
+					<section class="panel instance-admin-panel" aria-labelledby="instance-admin-title" data-testid="instance-admin-panel">
+						<h2 id="instance-admin-title">Instanzverwaltung</h2>
+						<p class="instance-admin-hint">Technische Verwaltung der Instanz: Passwort-Reset-Codes erzeugen, Backups und Restore.</p>
+						<a class="instance-admin-link" href="/instanzverwaltung" data-testid="instance-admin-link">
+							Instanzverwaltung öffnen
+						</a>
+					</section>
 					<section class="panel backup-panel" aria-labelledby="backup-title" data-testid="backup-panel">
 						<h2 id="backup-title">Backup &amp; Restore</h2>
 						<div class="backup-grid">
@@ -857,6 +864,35 @@
 
 	.backup-panel {
 		display: block;
+	}
+
+	.instance-admin-panel {
+		display: grid;
+		gap: 0.85rem;
+	}
+
+	.instance-admin-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	.instance-admin-link {
+		align-items: center;
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		border-radius: var(--radius-control);
+		box-shadow: var(--shadow-btn);
+		color: white;
+		font-size: 0.9rem;
+		font-weight: 700;
+		justify-self: end;
+		padding: 0.6rem 1.1rem;
+		text-decoration: none;
+	}
+
+	.instance-admin-link:hover {
+		filter: brightness(1.08);
 	}
 
 	.backup-panel h2 {
