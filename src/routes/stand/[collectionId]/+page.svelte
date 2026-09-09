@@ -86,10 +86,23 @@
 		<div class="stand-grid" data-testid="stand-items">
 			{#each data.stand.items as item (item.id)}
 				<div class="tile" class:reserved={item.reservedAt} data-testid="stand-item">
-					<div class="img" aria-hidden="true">
-						{item.title.slice(0, 1).toUpperCase()}
+					<div class="img" class:has-photo={item.images.some((image) => image.isCover)}>
+						{#each item.images.filter((image) => image.isCover) as cover (cover.storageKey)}
+							<img src={`/media/${encodeURIComponent(cover.storageKey)}`} alt={item.title} loading="lazy" />
+						{/each}
+						{#if !item.images.some((image) => image.isCover)}
+							{item.title.slice(0, 1).toUpperCase()}
+						{/if}
 						{#if item.reservedAt}
 							<span class="reserved-tag" data-testid="stand-item-reserved">{t('item.reserved')}</span>
+						{/if}
+						{#if item.images.length > 1}
+							<span class="photo-count" data-testid="stand-item-photo-count">
+								<svg class="icon" aria-hidden="true" focusable="false">
+									<use href="#icon-photo" />
+								</svg>
+								{item.images.length}
+							</span>
 						{/if}
 						<button
 							class="favorite-toggle"
@@ -292,7 +305,47 @@
 		font-size: 2.4rem;
 		font-weight: 800;
 		justify-content: center;
+		overflow: hidden;
 		position: relative;
+	}
+
+	.tile .img.has-photo {
+		color: inherit;
+	}
+
+	.tile .img img {
+		display: block;
+		height: 100%;
+		inset: 0;
+		object-fit: cover;
+		position: absolute;
+		width: 100%;
+	}
+
+	.tile .img .reserved-tag,
+	.tile .img .photo-count {
+		z-index: 2;
+	}
+
+	.photo-count {
+		align-items: center;
+		background: var(--scrim);
+		border-radius: 999px;
+		bottom: 0.6rem;
+		color: #fff;
+		display: inline-flex;
+		font-size: 0.62rem;
+		font-weight: 800;
+		gap: 4px;
+		left: 0.6rem;
+		padding: 3px 9px;
+		position: absolute;
+		z-index: 2;
+	}
+
+	.photo-count .icon {
+		height: 0.85rem;
+		width: 0.85rem;
 	}
 
 	.favorite-toggle {

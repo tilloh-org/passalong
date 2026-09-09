@@ -118,6 +118,12 @@ export interface PublicStandItem {
 	condition: ItemCondition;
 	externalDescription: string;
 	reservedAt: string | null;
+	images: PublicItemImage[];
+}
+
+export interface PublicItemImage {
+	storageKey: string;
+	isCover: boolean;
 }
 
 export interface PublicStandView {
@@ -253,6 +259,7 @@ export interface CollectionRepository {
 	setItemReservation(itemId: string, reserved: boolean, scope: SessionScope): Item;
 	findImageMetadataForTenant(storageKey: string, scope: SessionScope): ItemImage | null;
 	findProfileAvatarForTenant(storageKey: string, scope: SessionScope): boolean;
+	findPublicItemImage(storageKey: string): { storageKey: string; isCover: boolean } | null;
 	updateStandIntro(collectionId: string, intro: string, scope: SessionScope): Collection;
 }
 
@@ -995,7 +1002,8 @@ export function createCollectionRepository(
 					category: row.category,
 					condition: row.condition,
 					externalDescription: row.external_description,
-					reservedAt: row.reserved_at
+					reservedAt: row.reserved_at,
+					images: listPublicItemImages(database, row.id)
 					}));
 			return { collectionId, collectionName: collection.name, intro: collection.stand_intro, items };
 		},
@@ -1016,7 +1024,8 @@ export function createCollectionRepository(
 				category: item.category,
 				condition: item.condition,
 				externalDescription: item.external_description,
-				reservedAt: item.reserved_at
+				reservedAt: item.reserved_at,
+				images: listPublicItemImages(database, item.id)
 			};
 		},
 
@@ -1250,6 +1259,19 @@ export function createCollectionRepository(
 			return Boolean(row);
 		},
 
+		findPublicItemImage(storageKey) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare(
+					`SELECT item_images.storage_key, item_images.is_cover
+					 FROM item_images
+					 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+					 WHERE item_images.storage_key = ? AND items.sold_at IS NULL`
+				)
+				.get(validatedStorageKey) as { storage_key: string; is_cover: number } | undefined;
+			return row ? { storageKey: row.storage_key, isCover: Boolean(row.is_cover) } : null;
+		},
+
 		updateStandIntro(collectionId, intro, scope) {
 			const normalizedIntro = typeof intro === 'string' ? intro.trim() : '';
 			const result = database
@@ -1417,6 +1439,24 @@ function mapImageRow(row: ImageRow): ItemImage {
 		position: row.position,
 		isCover: row.is_cover === sqliteTrue
 	};
+}
+
+/**
+ * List the public buyer-facing images of one item, cover image first.
+ *
+ * Only storage keys and the cover flag are exposed; no internal metadata.
+ *
+ * @param {Database} database - The tenant's database handle.
+ * @param {string} itemId - Public item identifier.
+ * @returns {PublicItemImage[]} Images in cover-first, position order.
+ */
+function listPublicItemImages(database: Database.Database, itemId: string): PublicItemImage[] {
+	const rows = database
+		.prepare(
+			'SELECT storage_key, is_cover FROM item_images WHERE item_id = ? ORDER BY is_cover DESC, position ASC'
+		)
+		.all(itemId) as { storage_key: string; is_cover: number }[];
+	return rows.map((row) => ({ storageKey: row.storage_key, isCover: Boolean(row.is_cover) }));
 }
 
 /**

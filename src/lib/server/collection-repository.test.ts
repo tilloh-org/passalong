@@ -1451,8 +1451,8 @@ describe('collection repository', () => {
 			collectionName: 'Flohmarkt',
 			intro: '',
 			items: expect.arrayContaining([
-				expect.objectContaining({ id: privateNotesItem.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair', reservedAt: expect.any(String) }),
-				expect.objectContaining({ id: secondAvailableItem.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', reservedAt: null })
+				expect.objectContaining({ id: privateNotesItem.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair', reservedAt: expect.any(String), images: [] }),
+				expect.objectContaining({ id: secondAvailableItem.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', reservedAt: null, images: [] })
 			])
 		});
 		for (const entry of publicView?.items ?? []) {
@@ -1514,7 +1514,8 @@ describe('collection repository', () => {
 			category: 'decor',
 			condition: 'good',
 			externalDescription: 'Handgefertigte Keramikvase.',
-			reservedAt: null
+			reservedAt: null,
+			images: []
 		});
 		expect(publicReserved?.reservedAt).toEqual(expect.any(String));
 		expect(soldResult).toBeNull();
@@ -1523,5 +1524,60 @@ describe('collection repository', () => {
 			expect(entry).not.toHaveProperty('internalNotes');
 			expect(entry).not.toHaveProperty('soldAt');
 		}
+	});
+
+	it('exposes public item images cover-first and stops listing images of sold items', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const item = repository.createItem(
+			{ collectionId: standCollection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
+			owner
+		);
+		repository.addItemImage(item.id, 'hash-second.webp', owner);
+		repository.addItemImage(item.id, 'hash-cover.png', owner);
+		repository.setItemCover(item.id, repository.listItemImages(item.id, owner).find((image) => image.storageKey === 'hash-cover.png')!.id, owner);
+		// note: the first added image ('hash-second.webp') was the automatic cover before the explicit set
+		const unknownKey = 'unknown-hash.png';
+		let publicViewAfterSale: ReturnType<typeof repository.getPublicStandView>;
+
+		// act
+		const publicView = repository.getPublicStandView(standCollection.id);
+		const publicItem = repository.getPublicStandItem(standCollection.id, item.id);
+		const publicImage = repository.findPublicItemImage('hash-second.webp');
+		const unknownImage = repository.findPublicItemImage(unknownKey);
+
+		// assume — images are listed cover-first with only safe fields
+		expect(publicView?.items[0]).toEqual(
+			expect.objectContaining({
+				images: [
+					{ storageKey: 'hash-cover.png', isCover: true },
+					{ storageKey: 'hash-second.webp', isCover: false }
+				]
+			})
+		);
+		expect(publicItem?.images).toEqual([
+			{ storageKey: 'hash-cover.png', isCover: true },
+			{ storageKey: 'hash-second.webp', isCover: false }
+		]);
+		expect(publicImage).toEqual({ storageKey: 'hash-second.webp', isCover: false });
+		expect(unknownImage).toBeNull();
+
+		// act — after the sale, the images disappear from the public view entirely
+		repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, owner);
+		publicViewAfterSale = repository.getPublicStandView(standCollection.id);
+
+		// assume
+		expect(publicViewAfterSale?.items).toHaveLength(0);
+		expect(repository.findPublicItemImage('hash-second.webp')).toBeNull();
+		expect(repository.findPublicItemImage('hash-cover.png')).toBeNull();
 	});
 });

@@ -123,6 +123,12 @@ test.describe('Public stand page', () => {
 
 		// assume — unknown collection/item ids stay 404 on the public detail page
 		expect(itemNotFound.status()).toBe(404);
+
+		// act — anonymous access to an unknown media key
+		const unknownMediaResponse = await anonymousPage.request.get('/media/not-a-real-key.png');
+
+		// assume — unknown keys stay 404 even without a session
+		expect(unknownMediaResponse.status()).toBe(404);
 		anonymousContext.close?.();
 	});
 });

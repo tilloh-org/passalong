@@ -16,7 +16,22 @@
 	</a>
 
 	<section class="detail-card" aria-labelledby="stand-item-title">
-		<div class="placeholder" aria-hidden="true">{data.item.title.slice(0, 1).toUpperCase()}</div>
+		{#if data.item.images.length}
+			<div class="media-column">
+				{#each data.item.images.filter((image) => image.isCover) as cover (cover.storageKey)}
+					<img class="cover" src={`/media/${encodeURIComponent(cover.storageKey)}`} alt={data.item.title} />
+				{/each}
+				{#if data.item.images.length > 1}
+					<div class="gallery" data-testid="stand-item-gallery">
+						{#each data.item.images.filter((image) => !image.isCover) as image (image.storageKey)}
+							<img class="thumb" src={`/media/${encodeURIComponent(image.storageKey)}`} alt={data.item.title} loading="lazy" />
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<div class="placeholder" aria-hidden="true">{data.item.title.slice(0, 1).toUpperCase()}</div>
+		{/if}
 		<div class="info">
 			<ItemInfoBlock item={data.item} variant="public" />
 			<p class="hint" data-testid="stand-item-hint">
@@ -72,6 +87,34 @@
 		font-size: 3rem;
 		font-weight: 800;
 		justify-content: center;
+	}
+
+	.media-column {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+	}
+
+	.cover {
+		aspect-ratio: 16 / 9;
+		border-radius: var(--radius-card);
+		display: block;
+		object-fit: cover;
+		width: 100%;
+	}
+
+	.gallery {
+		display: flex;
+		gap: 0.6rem;
+		overflow-x: auto;
+	}
+
+	.thumb {
+		border-radius: var(--radius-card);
+		flex: 0 0 auto;
+		height: 4.5rem;
+		object-fit: cover;
+		width: 4.5rem;
 	}
 
 	.hint {
