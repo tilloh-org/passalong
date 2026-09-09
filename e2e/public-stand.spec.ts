@@ -83,14 +83,28 @@ test.describe('Public stand page', () => {
 
 		// act — favorite the first card, verify persistence across reload, then toggle off
 		const firstCard = anonymousPage.getByTestId('stand-item').first();
+		const firstCardTitle = await firstCard.locator('.name').textContent();
 		const heart = firstCard.getByTestId('favorite-toggle');
 		await expect(heart).toHaveAttribute('aria-pressed', 'false');
 		await heart.click();
 		await expect(heart).toHaveAttribute('aria-pressed', 'true');
+		await expect(anonymousPage.getByTestId('favorites-badge')).toHaveText('1');
+
+		// assume — the favorites dialog lists the marked item with name and price
+		await anonymousPage.getByTestId('favorites-bar-trigger').click();
+		await expect(anonymousPage.getByTestId('favorites-dialog')).toBeVisible();
+		await expect(anonymousPage.getByTestId('favorites-item')).toHaveCount(1);
+		await expect(anonymousPage.getByTestId('favorites-item').first()).toContainText(firstCardTitle!);
+		await anonymousPage.keyboard.press('Escape');
+
+		// act — reload the page
 		await anonymousPage.reload();
 		await expect(anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle')).toHaveAttribute('aria-pressed', 'true');
+		await expect(anonymousPage.getByTestId('favorites-badge')).toHaveText('1');
 		await anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle').click();
 		await expect(anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle')).toHaveAttribute('aria-pressed', 'false');
+		await expect(anonymousPage.getByTestId('favorites-bar-trigger')).toBeVisible();
+		await expect(anonymousPage.getByTestId('favorites-badge')).toHaveCount(0);
 
 		// act
 		const unknownResponse = await anonymousPage.request.get('/stand/00000000-0000-0000-0000-000000000000');

@@ -52,6 +52,17 @@
 		toggleFavorite(data.stand.collectionId, itemId);
 		favoriteIds = getFavorites(data.stand.collectionId);
 	}
+
+	/**
+	 * Favorite item cards in insertion order (first favorited first).
+	 */
+	const favoriteItems = $derived(
+		favoriteIds
+			.map((itemId) => data.stand.items.find((item) => item.id === itemId))
+			.filter((item) => item !== undefined)
+	);
+
+	let favoritesDialog: HTMLDialogElement | undefined = $state();
 </script>
 
 <svelte:head>
@@ -112,6 +123,54 @@
 		<p>{t('stand.footer')}</p>
 	</footer>
 </main>
+
+<dialog
+	class="favorites-dialog"
+	bind:this={favoritesDialog}
+	aria-label={t('stand.favoritesTitle')}
+	data-testid="favorites-dialog"
+>
+	<div class="dialog-head">
+		<h3>{t('stand.favoritesTitle')}</h3>
+		<button type="button" class="dialog-close" onclick={() => favoritesDialog?.close()}>
+			{t('stand.favoritesClose')}
+		</button>
+	</div>
+	{#if favoriteItems.length}
+		<div class="favorites-grid" data-testid="favorites-grid">
+			{#each favoriteItems as item (item.id)}
+				<div class="favorites-item" data-testid="favorites-item">
+					<div class="img" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
+					<div class="body">
+						<div class="name">{item.title}</div>
+						<div class="price">{formatPrice(item.priceCents)}</div>
+					</div>
+				</div>
+			{/each}
+		</div>
+	{:else}
+		<p class="favorites-empty" data-testid="favorites-empty">{t('stand.favoritesEmpty')}</p>
+	{/if}
+</dialog>
+
+{#if data.stand.items.length}
+	<div class="favorites-bar" data-testid="favorites-bar">
+		<button
+			type="button"
+			onclick={() => favoritesDialog?.showModal()}
+			aria-label={t('stand.favoritesOpen')}
+			data-testid="favorites-bar-trigger"
+		>
+			<svg class="icon" aria-hidden="true" focusable="false">
+				<use href={favoriteIds.length ? '#icon-heart-filled' : '#icon-heart-outline'} />
+			</svg>
+			{t('stand.favoritesTitle')}
+			{#if favoriteIds.length}
+				<span class="favorites-badge" data-testid="favorites-badge">{favoriteIds.length}</span>
+			{/if}
+		</button>
+	</div>
+{/if}
 
 <style>
 	.stand {
@@ -313,5 +372,158 @@
 
 	.footer p {
 		margin: 0;
+	}
+
+	.favorites-bar {
+		bottom: 1rem;
+		left: 50%;
+		position: fixed;
+		transform: translateX(-50%);
+		z-index: 80;
+	}
+
+	.favorites-bar button {
+		align-items: center;
+		background: var(--glass);
+		backdrop-filter: blur(14px) saturate(1.4);
+		-webkit-backdrop-filter: blur(14px) saturate(1.4);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		box-shadow: var(--shadow-tile);
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-flex;
+		font: inherit;
+		font-size: 0.9rem;
+		font-weight: 700;
+		gap: 8px;
+		padding: 10px 18px;
+		transition: all 0.25s ease;
+	}
+
+	.favorites-bar button:hover {
+		background: var(--color-accent-soft);
+		box-shadow: var(--shadow-btn-hover);
+		transform: translateY(-1px);
+	}
+
+	.favorites-bar button:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.favorites-bar .icon {
+		height: 1.15rem;
+		width: 1.15rem;
+	}
+
+	.favorites-badge {
+		align-items: center;
+		background: var(--color-accent);
+		border-radius: 999px;
+		color: #fff;
+		display: inline-flex;
+		font-size: 0.72rem;
+		font-weight: 800;
+		justify-content: center;
+		min-width: 1.25rem;
+		padding: 0 6px;
+	}
+
+	.favorites-dialog {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		max-width: min(34rem, 92vw);
+		padding: 1.25rem;
+		width: 34rem;
+	}
+
+	.favorites-dialog::backdrop {
+		background: var(--scrim);
+	}
+
+	.favorites-dialog .dialog-head {
+		align-items: center;
+		display: flex;
+		justify-content: space-between;
+		margin-bottom: 0.75rem;
+	}
+
+	.favorites-dialog .dialog-head h3 {
+		color: var(--color-accent-strong);
+		font-size: 1.1rem;
+		margin: 0;
+	}
+
+	.favorites-dialog .dialog-close {
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		color: var(--color-accent);
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.85rem;
+		font-weight: 600;
+		padding: 6px 14px;
+		transition: all 0.25s ease;
+	}
+
+	.favorites-dialog .dialog-close:hover {
+		background: var(--color-accent-soft);
+	}
+
+	.favorites-dialog .dialog-close:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.favorites-grid {
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+		max-height: 60vh;
+		overflow-y: auto;
+	}
+
+	.favorites-item {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		overflow: hidden;
+	}
+
+	.favorites-item .img {
+		align-items: center;
+		aspect-ratio: 1;
+		background: linear-gradient(135deg, var(--color-surface-strong), var(--fog));
+		color: var(--color-accent);
+		display: flex;
+		font-size: 1.6rem;
+		font-weight: 800;
+		justify-content: center;
+	}
+
+	.favorites-item .body {
+		padding: 0.6rem 0.7rem;
+	}
+
+	.favorites-item .name {
+		font-size: 0.85rem;
+		font-weight: 700;
+		line-height: 1.3;
+	}
+
+	.favorites-item .price {
+		color: var(--color-accent);
+		font-size: 0.95rem;
+		font-weight: 800;
+		margin-top: 2px;
+	}
+
+	.favorites-empty {
+		color: var(--color-text-muted);
+		padding: 2rem 1rem;
+		text-align: center;
 	}
 </style>
