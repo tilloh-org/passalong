@@ -93,6 +93,7 @@ test.describe('Public stand page', () => {
 		// assume — the favorites dialog lists the marked item with name and price
 		await anonymousPage.getByTestId('favorites-bar-trigger').click();
 		await expect(anonymousPage.getByTestId('favorites-dialog')).toBeVisible();
+		await expect(anonymousPage.getByTestId('favorites-stand-name')).toContainText('Flohmarkt-Stand');
 		await expect(anonymousPage.getByTestId('favorites-item')).toHaveCount(1);
 		await expect(anonymousPage.getByTestId('favorites-item').first()).toContainText(firstCardTitle!);
 		await anonymousPage.keyboard.press('Escape');

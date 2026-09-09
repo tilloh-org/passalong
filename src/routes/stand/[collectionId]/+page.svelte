@@ -131,7 +131,17 @@
 	data-testid="favorites-dialog"
 >
 	<div class="dialog-head">
-		<h3>{t('stand.favoritesTitle')}</h3>
+		<div class="dialog-brand">
+			<div class="brand-avatar" aria-hidden="true">
+				{data.stand.collectionName.slice(0, 1).toUpperCase()}
+			</div>
+			<div>
+				<h3>{t('stand.favoritesTitle')}</h3>
+				<p class="brand-stand" data-testid="favorites-stand-name">
+					{t('stand.favoritesStandSubtitle', { name: data.stand.collectionName })}
+				</p>
+			</div>
+		</div>
 		<button type="button" class="dialog-close" onclick={() => favoritesDialog?.close()}>
 			{t('stand.favoritesClose')}
 		</button>
@@ -450,10 +460,36 @@
 		margin-bottom: 0.75rem;
 	}
 
+	.favorites-dialog .dialog-brand {
+		align-items: center;
+		display: flex;
+		gap: 10px;
+	}
+
+	.favorites-dialog .brand-avatar {
+		align-items: center;
+		background: var(--color-surface);
+		border: 3px solid var(--color-border);
+		border-radius: 999px;
+		color: var(--color-accent);
+		display: flex;
+		font-size: 1.05rem;
+		font-weight: 800;
+		height: 44px;
+		justify-content: center;
+		width: 44px;
+	}
+
 	.favorites-dialog .dialog-head h3 {
 		color: var(--color-accent-strong);
 		font-size: 1.1rem;
 		margin: 0;
+	}
+
+	.favorites-dialog .brand-stand {
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+		margin: 2px 0 0;
 	}
 
 	.favorites-dialog .dialog-close {
