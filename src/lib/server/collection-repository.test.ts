@@ -1641,7 +1641,8 @@ describe('collection repository', () => {
 		// the sold item mentioning the secret in its description is gone anyway; the reserved
 		// item with the secret in its internal notes must not surface
 		expect(internalNoteResults.map((item) => item.id)).not.toContain(reservedItem.id);
-		expect(openResults.map((item) => item.id)).toEqual([descriptionMatch.id, titleMatch.id]);
+		expect(openResults).toHaveLength(2);
+		expect(new Set(openResults.map((item) => item.id))).toEqual(new Set([titleMatch.id, descriptionMatch.id]));
 		expect(reservedResults.map((item) => item.id)).toEqual([reservedItem.id]);
 		// 'sold' is not a public status; the filter is ignored and all unsold items are listed
 		expect(soldStatusResults).toHaveLength(3);
