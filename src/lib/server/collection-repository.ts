@@ -118,6 +118,8 @@ export interface PublicStandItem {
 	condition: ItemCondition;
 	externalDescription: string;
 	reservedAt: string | null;
+	isComplete: boolean;
+	isFunctional: boolean;
 	images: PublicItemImage[];
 }
 
@@ -250,6 +252,7 @@ export interface CollectionRepository {
 	getSaleStatistics(scope: SessionScope): SaleStatistics;
 	getPublicStandView(collectionId: string): PublicStandView | null;
 	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
+	searchPublicStandItems(collectionId: string, filters: ItemFilters): PublicStandItem[];
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
 	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
 	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
@@ -992,9 +995,9 @@ export function createCollectionRepository(
 			const items = (
 				database
 					.prepare(
-						'SELECT id, title, price_cents, category, condition, external_description, reserved_at FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
+						'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
 						)
-					.all(collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null }[]
+					.all(collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null; is_complete: number; is_functional: number }[]
 					).map((row) => ({
 					id: row.id,
 					title: row.title,
@@ -1003,17 +1006,66 @@ export function createCollectionRepository(
 					condition: row.condition,
 					externalDescription: row.external_description,
 					reservedAt: row.reserved_at,
+					isComplete: Boolean(row.is_complete),
+					isFunctional: Boolean(row.is_functional),
 					images: listPublicItemImages(database, row.id)
 					}));
 			return { collectionId, collectionName: collection.name, intro: collection.stand_intro, items };
 		},
 
+		searchPublicStandItems(collectionId, filters) {
+			const clauses = ['items.collection_id = ?', 'items.sold_at IS NULL'];
+			const parameters: (string | number)[] = [collectionId];
+			if (filters.query && filters.query.trim().length > 0) {
+				const escapedQuery = filters.query.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
+				const pattern = `%${escapedQuery}%`;
+				// Search only buyer-visible fields; matching on internal notes would leak that a
+				// private note matches without revealing its content.
+				clauses.push("(items.title LIKE ? ESCAPE '\\' OR items.external_description LIKE ? ESCAPE '\\')");
+				parameters.push(pattern, pattern);
+			}
+			if (filters.category) {
+				clauses.push('items.category = ?');
+				parameters.push(filters.category);
+			}
+			if (filters.condition) {
+				clauses.push('items.condition = ?');
+				parameters.push(filters.condition);
+			}
+			// Public status semantics: only unsold items are listed, so 'open' vs 'reserved'.
+			if (filters.status === 'reserved') {
+				clauses.push('items.reserved_at IS NOT NULL');
+			} else if (filters.status === 'open') {
+				clauses.push('items.reserved_at IS NULL');
+			}
+			const items = database
+				.prepare(
+					`SELECT id, title, price_cents, category, condition, external_description, reserved_at
+					 FROM items
+					 WHERE ${clauses.join(' AND ')}
+					 ORDER BY items.created_at DESC, items.id DESC`
+				)
+				.all(...parameters) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null; is_complete: number; is_functional: number }[];
+			return items.map((row) => ({
+				id: row.id,
+				title: row.title,
+				priceCents: row.price_cents,
+				category: row.category,
+				condition: row.condition,
+				externalDescription: row.external_description,
+				reservedAt: row.reserved_at,
+				isComplete: Boolean(row.is_complete),
+				isFunctional: Boolean(row.is_functional),
+				images: listPublicItemImages(database, row.id)
+			}));
+		},
+
 		getPublicStandItem(collectionId, itemId) {
 			const item = database
 				.prepare(
-					'SELECT id, title, price_cents, category, condition, external_description, reserved_at FROM items WHERE id = ? AND collection_id = ? AND sold_at IS NULL'
+					'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE id = ? AND collection_id = ? AND sold_at IS NULL'
 					)
-					.get(itemId, collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null } | undefined;
+					.get(itemId, collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null; is_complete: number; is_functional: number } | undefined;
 			if (!item) {
 				return null;
 			}
@@ -1025,6 +1077,8 @@ export function createCollectionRepository(
 				condition: item.condition,
 				externalDescription: item.external_description,
 				reservedAt: item.reserved_at,
+				isComplete: Boolean(item.is_complete),
+				isFunctional: Boolean(item.is_functional),
 				images: listPublicItemImages(database, item.id)
 			};
 		},

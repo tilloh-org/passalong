@@ -1515,6 +1515,8 @@ describe('collection repository', () => {
 			condition: 'good',
 			externalDescription: 'Handgefertigte Keramikvase.',
 			reservedAt: null,
+			isComplete: false,
+			isFunctional: false,
 			images: []
 		});
 		expect(publicReserved?.reservedAt).toEqual(expect.any(String));
@@ -1579,5 +1581,75 @@ describe('collection repository', () => {
 		expect(publicViewAfterSale?.items).toHaveLength(0);
 		expect(repository.findPublicItemImage('hash-second.webp')).toBeNull();
 		expect(repository.findPublicItemImage('hash-cover.png')).toBeNull();
+	});
+
+	it('searches public stand items by buyer-visible fields only and filters by status', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const titleMatch = repository.createItem(
+			{ collectionId: standCollection.id, title: 'Keramikvase blau', priceCents: 800, category: 'decor', condition: 'good', internalNotes: 'GeheimwortXYZ',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
+			owner
+		);
+		const descriptionMatch = repository.createItem(
+			{ collectionId: standCollection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '',
+			externalDescription: 'Deko für das Regal.',
+			isComplete: false,
+			isFunctional: false },
+			owner
+		);
+		const reservedItem = repository.createItem(
+			{ collectionId: standCollection.id, title: 'Reservierte Lampe', priceCents: 1500, category: 'home', condition: 'good', internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false },
+			owner
+		);
+		const soldItem = repository.createItem(
+			{ collectionId: standCollection.id, title: 'Deko-Kerze verkauft', priceCents: 200, category: 'decor', condition: 'good', internalNotes: '',
+			externalDescription: 'Deko mit GeheimwortXYZ',
+			isComplete: false,
+			isFunctional: false },
+			owner
+		);
+		repository.setItemReservation(reservedItem.id, true, owner);
+		repository.markItemSold(soldItem.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, owner);
+		const unknownFilters = { ...emptyItemFilters };
+		let reservedResults: ReturnType<typeof repository.searchPublicStandItems>;
+
+		// act
+		const titleResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, query: 'Keramikvase' });
+		const descriptionResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, query: 'Deko' });
+		const internalNoteResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, query: 'GeheimwortXYZ' });
+		const openResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, status: 'open' });
+		reservedResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, status: 'reserved' });
+		const soldStatusResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, status: 'sold' });
+		const categoryResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, category: 'books' });
+		const conditionResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, condition: 'fair' });
+
+		// assume
+		expect(titleResults.map((item) => item.id)).toEqual([titleMatch.id]);
+		expect(descriptionResults.map((item) => item.id)).toEqual([descriptionMatch.id]);
+		// the sold item mentioning the secret in its description is gone anyway; the reserved
+		// item with the secret in its internal notes must not surface
+		expect(internalNoteResults.map((item) => item.id)).not.toContain(reservedItem.id);
+		expect(openResults.map((item) => item.id)).toEqual([descriptionMatch.id, titleMatch.id]);
+		expect(reservedResults.map((item) => item.id)).toEqual([reservedItem.id]);
+		// 'sold' is not a public status; the filter is ignored and all unsold items are listed
+		expect(soldStatusResults).toHaveLength(3);
+		expect(categoryResults.map((item) => item.id)).toEqual([descriptionMatch.id]);
+		expect(conditionResults.map((item) => item.id)).toEqual([descriptionMatch.id]);
+		for (const entry of [...titleResults, ...reservedResults]) {
+			expect(entry).not.toHaveProperty('internalNotes');
+			expect(entry).not.toHaveProperty('soldAt');
+		}
 	});
 });

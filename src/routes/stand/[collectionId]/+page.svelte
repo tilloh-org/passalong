@@ -2,6 +2,7 @@
 	import { formatPrice } from '$lib/utils/format';
 	import { t } from '$lib/i18n/index.svelte';
 	import { getFavorites, pruneFavorites, toggleFavorite } from '$lib/stand-favorites.svelte';
+	import ItemFilterForm from '$lib/components/item-filter-form.svelte';
 
 	let { data } = $props();
 
@@ -82,6 +83,19 @@
 		<p class="sub">{t('stand.sub')}</p>
 	</section>
 
+	{#if data.stand.items.length || data.hasActiveFilters}
+		<ItemFilterForm
+			action={`/stand/${encodeURIComponent(data.stand.collectionId)}`}
+			appliedFilters={data.appliedFilters}
+			categoryOptions={data.categoryOptions}
+			conditionOptions={data.conditionOptions}
+			statusOptions={['open', 'reserved']}
+			hasActive={data.hasActiveFilters}
+			resetHref={`/stand/${encodeURIComponent(data.stand.collectionId)}`}
+			testIdPrefix="stand-filter"
+		/>
+	{/if}
+
 	{#if data.stand.items.length}
 		<div class="stand-grid" data-testid="stand-items">
 			{#each data.stand.items as item (item.id)}
@@ -123,14 +137,26 @@
 							<div class="name">{item.title}</div>
 							<div class="price">{formatPrice(item.priceCents)}</div>
 							<div class="meta">{categoryLabel(item.category)} · {conditionLabel(item.condition)}</div>
+							{#if item.isComplete || item.isFunctional}
+								<div class="flag-pills" data-testid="stand-item-flags">
+									{#if item.isComplete}
+										<span class="flag-pill complete">{t('item.complete')}</span>
+									{/if}
+									{#if item.isFunctional}
+										<span class="flag-pill functional">{t('item.functional')}</span>
+									{/if}
+								</div>
+							{/if}
 							{#if item.externalDescription}
 								<p class="description" data-testid="stand-item-description">{item.externalDescription}</p>
 							{/if}
 						</div>
 					</a>
-				</div>
-			{/each}
+			</div>
+		{/each}
 		</div>
+	{:else if data.hasActiveFilters}
+		<p class="empty" data-testid="stand-filter-empty-state">{t('portfolio.noItemsForFilters')}</p>
 	{:else}
 		<p class="empty">{t('stand.empty')}</p>
 	{/if}
@@ -443,6 +469,34 @@
 		font-size: 0.78rem;
 		margin-top: 2px;
 	}
+
+	.flag-pills {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-top: 6px;
+	}
+
+	.flag-pill {
+		border-radius: 999px;
+		font-size: 0.68rem;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		padding: 2px 8px;
+	}
+
+	.flag-pill.complete {
+		background: var(--color-ok-soft);
+		border: 1px solid var(--color-ok-border);
+		color: var(--color-ok);
+	}
+
+	.flag-pill.functional {
+		background: var(--color-warn-soft);
+		border: 1px solid var(--color-warn);
+		color: var(--color-warn);
+	}
+
 	.description {
 		color: var(--color-text-muted);
 		font-size: 0.82rem;

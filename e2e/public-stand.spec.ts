@@ -129,6 +129,24 @@ test.describe('Public stand page', () => {
 
 		// assume — unknown keys stay 404 even without a session
 		expect(unknownMediaResponse.status()).toBe(404);
+
+		// act — search on the stand page for a buyer-visible field
+		const standPath = standHref!;
+		await anonymousPage.goto(`${standPath}?q=Vase`);
+		await expect(anonymousPage.getByTestId('stand-item')).toHaveCount(1);
+		await expect(anonymousPage.getByTestId('stand-item').first()).toContainText('Vase');
+
+		// assume — the filter empty state appears for non-matching queries
+		await anonymousPage.goto(`${standPath}?q=Existiertnicht`);
+		await expect(anonymousPage.getByTestId('stand-filter-empty-state')).toBeVisible();
+
+		// assume — the reset link clears the filters
+		await anonymousPage.getByTestId('stand-filter-reset').click();
+		await expect(anonymousPage.getByTestId('stand-item')).toHaveCount(2);
+
+		// assume — category filter restricts the list
+		await anonymousPage.goto(`${standPath}?category=clothing`);
+		await expect(anonymousPage.getByTestId('stand-item')).toHaveCount(2);
 		anonymousContext.close?.();
 	});
 });
