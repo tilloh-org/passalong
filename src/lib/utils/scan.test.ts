@@ -4,24 +4,24 @@ import { resolveArticleDetailPath } from './scan';
 describe('resolveArticleDetailPath', () => {
 	it('normalizes a full article URL', () => {
 		// arrange
-		const scannedValue = 'https://example.com/artikel/abc-123';
+		const scannedValue = 'https://example.com/items/abc-123';
 
 		// act
 		const targetPath = resolveArticleDetailPath(scannedValue, 'https://example.com');
 
 		// assume
-		expect(targetPath).toBe('/artikel/abc-123');
+		expect(targetPath).toBe('/items/abc-123');
 	});
 
 	it('normalizes a relative article path', () => {
 		// arrange
-		const scannedValue = '/artikel/abc-123/';
+		const scannedValue = '/items/abc-123/';
 
 		// act
 		const targetPath = resolveArticleDetailPath(scannedValue, 'https://example.com');
 
 		// assume
-		expect(targetPath).toBe('/artikel/abc-123');
+		expect(targetPath).toBe('/items/abc-123');
 	});
 
 	it('converts a bare article id', () => {
@@ -32,18 +32,18 @@ describe('resolveArticleDetailPath', () => {
 		const targetPath = resolveArticleDetailPath(scannedValue, 'https://example.com');
 
 		// assume
-		expect(targetPath).toBe('/artikel/abc-123');
+		expect(targetPath).toBe('/items/abc-123');
 	});
 
 	it('accepts a shorthand article path without a leading slash', () => {
 		// arrange
-		const scannedValue = 'artikel/abc-123';
+		const scannedValue = 'items/abc-123';
 
 		// act
 		const targetPath = resolveArticleDetailPath(scannedValue, 'https://example.com');
 
 		// assume
-		expect(targetPath).toBe('/artikel/abc-123');
+		expect(targetPath).toBe('/items/abc-123');
 	});
 
 	it('rejects values that do not point to an article', () => {

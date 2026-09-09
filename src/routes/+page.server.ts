@@ -2,10 +2,13 @@ import { fail, redirect, type Cookies } from '@sveltejs/kit';
 import {
 	itemCategories,
 	itemConditions,
+	emptyItemFilters,
 	type Item,
 	type ItemCategory,
 	type ItemCondition,
+	type ItemFilters,
 	type ItemImage,
+	type ItemStatusFilter,
 	type SaleChannel,
 	type SessionScope
 } from '$lib/server/collection-repository';
@@ -25,7 +28,6 @@ const millisecondsPerSecond = 1000;
 const secondsPerMinute = 60;
 const minutesPerHour = 60;
 const hoursPerDay = 24;
-const passwordResetLifetimeHours = 1;
 const sessionLifetimeDays = 30;
 const firstCollectionIndex = 0;
 const maximumPriceCents = 10_000_000;
@@ -38,7 +40,6 @@ const httpStatus = {
 	conflict: 409,
 	tooManyRequests: 429
 } as const;
-const passwordResetLifetimeMilliseconds = passwordResetLifetimeHours * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
 const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
@@ -51,6 +52,38 @@ const webpMimeType = 'image/webp';
 interface ItemWithImages extends Item {
 	images: ItemImage[];
 	coverImageKey: string | null;
+}
+
+const itemStatusFilters: ItemStatusFilter[] = ['open', 'reserved', 'sold'];
+
+/**
+ * Parse portfolio filter values from the URL search parameters.
+ *
+ * Unknown or malformed values are ignored so the page still renders with the
+ * remaining filters and never fails on hand-edited URLs.
+ *
+ * @param {URLSearchParams} searchParams - The current request search parameters.
+ * @returns {ItemFilters} Normalized active filters (query trims blank to null).
+ */
+function parseItemFilters(searchParams: URLSearchParams): ItemFilters {
+	const query = searchParams.get('q')?.trim() || null;
+	const categoryParam = searchParams.get('category');
+	const conditionParam = searchParams.get('condition');
+	const statusParam = searchParams.get('status');
+	const category = categoryParam && (itemCategories as readonly string[]).includes(categoryParam) ? (categoryParam as ItemCategory) : null;
+	const condition = conditionParam && (itemConditions as readonly string[]).includes(conditionParam) ? (conditionParam as ItemCondition) : null;
+	const status = statusParam && (itemStatusFilters as readonly string[]).includes(statusParam) ? (statusParam as ItemStatusFilter) : null;
+	return { ...emptyItemFilters, query, category, condition, status };
+}
+
+/**
+ * Determine whether at least one portfolio filter is active.
+ *
+ * @param {ItemFilters} filters - The parsed filter state.
+ * @returns {boolean} True when any filter restricts the item list.
+ */
+function hasActiveFilters(filters: ItemFilters): boolean {
+	return Boolean(filters.query || filters.category || filters.condition || filters.status);
 }
 
 /**
@@ -67,19 +100,27 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	const requestedCollectionId = url.searchParams.get('collection');
 	const collectionId = requestedCollectionId ?? collections[firstCollectionIndex]?.id;
 	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
-	const items = collection && scope ? repository.listItemsForOwner(collection.id, scope).map(enrichItemWithImages(scope)) : [];
+	const appliedFilters = parseItemFilters(url.searchParams);
+	const items =
+		collection && scope
+			? hasActiveFilters(appliedFilters)
+				? repository.searchItemsForOwner(collection.id, appliedFilters, scope).map(enrichItemWithImages(scope))
+				: repository.listItemsForOwner(collection.id, scope).map(enrichItemWithImages(scope))
+			: [];
 	const profile = scope ? repository.getProfile(scope) : null;
 
 	return {
 		collection,
 		collections,
 		items,
+		appliedFilters,
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
 		profile,
 		isAuthenticated: Boolean(scope),
 		isInitialSetup: !repository.hasAccounts(),
 		isInstanceAdmin,
+		createdItemId: url.searchParams.get('created'),
 		saleStatistics: scope ? repository.getSaleStatistics(scope) : undefined
 	};
 };
@@ -159,35 +200,6 @@ export const actions: Actions = {
 		redirect(httpStatus.seeOther, '/');
 	},
 
-	createPasswordReset: async ({ cookies, request, url }) => {
-		if (!hasSameOrigin(request, url)) {
-			return fail(httpStatus.forbidden, { csrfError });
-		}
-		const scope = getSessionScope(cookies.get(sessionCookieName));
-		if (!scope) {
-			return fail(httpStatus.unauthorized, { passwordResetIssueError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
-		}
-		const repository = getCollectionRepository();
-		if (!repository.isInstanceAdmin(scope)) {
-			return fail(httpStatus.forbidden, { passwordResetIssueError: 'Du bist nicht für die Instanzverwaltung berechtigt.' });
-		}
-
-		try {
-			const resetSecret = createSessionToken();
-			const resetCreated = repository.createPasswordResetForUsername(
-				getFormText(await request.formData(), 'username'),
-				hashSessionToken(resetSecret),
-				new Date(Date.now() + passwordResetLifetimeMilliseconds).toISOString()
-			);
-			if (!resetCreated) {
-				return fail(httpStatus.notFound, { passwordResetIssueError: 'Das angegebene Konto wurde nicht gefunden.' });
-			}
-			return { passwordResetSecret: resetSecret };
-		} catch (error) {
-			return fail(httpStatus.badRequest, { passwordResetIssueError: getErrorMessage(error) });
-		}
-	},
-
 	resetPassword: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
 			return fail(httpStatus.forbidden, { csrfError });
@@ -250,8 +262,9 @@ export const actions: Actions = {
 			return fail(httpStatus.notFound, { addItemError: 'Die Sammlung wurde nicht gefunden.' });
 		}
 
+		let createdItemId: string;
 		try {
-			repository.createItem(
+			const item = repository.createItem(
 				{
 					collectionId,
 					title: getFormText(formData, 'title'),
@@ -265,12 +278,13 @@ export const actions: Actions = {
 				},
 				scope
 			);
+			createdItemId = item.id;
 		} catch (error) {
 			return fail(httpStatus.badRequest, { addItemError: getErrorMessage(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collectionId)}`);
-	},
+		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collectionId)}&created=${encodeURIComponent(createdItemId)}`);
+		},
 
 	quickSellItem: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {

@@ -69,7 +69,7 @@ test.describe('Core collection', () => {
 		// act
 		await expect(page.getByRole('button', { name: 'Abmelden' })).toHaveCount(0);
 		await page.getByTestId('profile-avatar-link').click();
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 		await expect(page.getByTestId('profile-logout')).toBeVisible();
 		await expect(page.getByTestId('logout-panel')).toBeVisible();
 		await expect(page.getByTestId('delete-account-panel')).toBeVisible();
@@ -91,11 +91,11 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Scannen' })).toBeVisible();
 
-		// act — open the seller scan page and return to the portfolio
+		// act — open the seller scan page and return to the portfolio via the header
 		await page.getByRole('link', { name: 'Scannen' }).click();
-		await expect(page).toHaveURL(/\/scannen/);
+		await expect(page).toHaveURL(/\/scan/);
 		await expect(page.getByRole('heading', { name: 'Artikel scannen' })).toBeVisible();
-		await page.getByRole('link', { name: 'Zurück zum Portfolio' }).click();
+		await page.getByRole('link', { name: '+ Neu' }).click();
 		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
 
 		// act
@@ -106,18 +106,21 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// act
-		await page.getByLabel('Artikelname').fill('Leselampe');
-		await page.getByLabel('Preis (€)').fill('12,00');
-		await page.getByLabel('Kategorie').selectOption('home');
-		await page.getByLabel('Zustand').selectOption('good');
-		await page.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Warme Leselampe mit flexiblem Arm.');
-		await page.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Vor dem Inserieren die Glühbirne austauschen.');
+		const addItemForm = page.locator('form[action="?/addItem"]');
+		await addItemForm.getByLabel('Artikelname').fill('Leselampe');
+		await addItemForm.getByLabel('Preis (€)').fill('12,00');
+		await addItemForm.getByLabel('Kategorie').selectOption('home');
+		await addItemForm.getByLabel('Zustand').selectOption('good');
+		await addItemForm.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Warme Leselampe mit flexiblem Arm.');
+		await addItemForm.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Vor dem Inserieren die Glühbirne austauschen.');
 		await page.getByTestId('item-complete-checkbox').check();
 		await page.getByTestId('item-functional-checkbox').check();
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
 
-		// assume
+		// assume — the item appears and the manage-images link is offered after creation
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
+		await expect(page.getByTestId('manage-images-link')).toBeVisible();
+		await expect(page.getByTestId('manage-images-link')).toHaveAttribute('href', /\/items\//);
 
 		// act
 		const itemCard = page.getByTestId('item-card');
@@ -126,11 +129,36 @@ test.describe('Core collection', () => {
 		await expect(itemCard.locator('.kat')).toContainText('Haushalt');
 		await expect(itemCard.locator('.badge.open')).toBeVisible();
 
+		// act — filter the portfolio by search query
+		await page.getByTestId('filter-search-input').fill('Leselampe');
+		await page.getByTestId('filter-apply').click();
+
+		// assume — the matching card stays visible
+		await expect(page).toHaveURL(/q=Leselampe/);
+		await expect(page.getByTestId('item-card')).toHaveCount(1);
+		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
+
+		// act — narrow by category with no matches
+		await page.getByTestId('filter-category-select').selectOption('books');
+		await page.getByTestId('filter-apply').click();
+
+		// assume — the filter empty state appears
+		await expect(page).toHaveURL(/category=books/);
+		await expect(page.getByTestId('filter-empty-state')).toBeVisible();
+
+		// act — reset all filters
+		await page.getByTestId('filter-reset').click();
+
+		// assume — the card is visible again
+		await expect(page.getByTestId('filter-empty-state')).toHaveCount(0);
+		await expect(page.getByTestId('item-card')).toHaveCount(1);
+		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
+
 		// act — open the detail page from the tile
 		await itemCard.click();
 
 		// assume
-		await expect(page).toHaveURL(/\/artikel\//);
+		await expect(page).toHaveURL(/\/items\//);
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 		await expect(page.getByTestId('item-sale-section')).toBeVisible();
 		await expect(page.getByTestId('item-flag-pills')).toContainText('Haushalt');
@@ -204,8 +232,8 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(page.getByRole('heading', { name: 'Leselampe (gebraucht)' })).toBeVisible();
 
-		// act — go back to the portfolio and quick-sell from the card
-		await page.getByRole('link', { name: '← Zurück zum Portfolio' }).click();
+		// act — go back to the portfolio via the header and quick-sell from the card
+		await page.getByRole('link', { name: '+ Neu' }).click();
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 		await page.getByTestId('item-card').first().getByTestId('quick-sell-item').click();
 
@@ -217,10 +245,48 @@ test.describe('Core collection', () => {
 		const currentMonth = new Date().toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
 		await expect(page.getByTestId('sale-statistics-months')).toContainText(currentMonth);
 
+		// act — create a second collection and keep filtering inside it
+		await page.evaluate(async (collectionName) => {
+			await fetch('/?/createCollection', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: new URLSearchParams({ collectionName })
+			});
+		}, 'Arbeitszimmer');
+		await page.goto('/');
+		await expect(page.getByTestId('collection-switcher')).toBeVisible();
+		await page.getByTestId('collection-switcher').getByRole('link', { name: 'Arbeitszimmer' }).click();
+		await expect(page).toHaveURL(/collection=/);
+		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
+
+		// act
+		const secondCollectionItemForm = page.locator('form[action="?/addItem"]');
+		await secondCollectionItemForm.getByLabel('Artikelname').fill('Schreibtisch');
+		await secondCollectionItemForm.getByLabel('Preis (€)').fill('80,00');
+		await secondCollectionItemForm.getByLabel('Kategorie').selectOption('furniture');
+		await secondCollectionItemForm.getByLabel('Zustand').selectOption('fair');
+		await secondCollectionItemForm.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Großer Arbeitstisch mit Schublade.');
+		await secondCollectionItemForm.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Nur per Abholung anbieten.');
+		await page.getByTestId('item-complete-checkbox').check();
+		await page.getByTestId('item-functional-checkbox').check();
+		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
+
+		// assume
+		await expect(page.getByRole('heading', { name: 'Schreibtisch' })).toBeVisible();
+
+		// act — filter the second collection and keep the collection in the URL
+		await page.getByTestId('filter-search-input').fill('Schreibtisch');
+		await page.getByTestId('filter-apply').click();
+
+		// assume — the filter stays scoped to the selected collection
+		await expect(page).toHaveURL(/collection=.*q=Schreibtisch/);
+		await expect(page.getByTestId('item-card')).toHaveCount(1);
+		await expect(page.getByRole('heading', { name: 'Schreibtisch' })).toBeVisible();
+
 		// act — open the profile page via the header avatar and change the display name
 		const protectedUrl = page.url();
 		await page.getByTestId('profile-avatar-link').click();
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 		await expect(page.getByTestId('profile-avatar')).toBeVisible();
 		// assume — the avatar save button is disabled until an image file is selected
 		await expect(page.getByRole('button', { name: 'Avatar speichern' })).toBeDisabled();
@@ -237,7 +303,7 @@ test.describe('Core collection', () => {
 		await page.getByTestId('stand-intro-input').fill('Alles muss raus — von Deko bis Technik.');
 		await expect(page.getByTestId('save-stand-intro')).toBeEnabled();
 		await page.getByTestId('save-stand-intro').click();
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 		const standHref = await page.getByTestId('open-stand-link').getAttribute('href');
 		const standPage = await page.context().newPage();
 		await standPage.goto(`http://localhost:4173${standHref}`);
@@ -250,7 +316,7 @@ test.describe('Core collection', () => {
 			page.waitForResponse((response) => response.url().includes('changePassword')),
 			page.getByTestId('save-password').click()
 		]);
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 
 		// assume — the session survives the password change via the re-issued cookie
 		await expect(page.getByTestId('profile-avatar')).toBeVisible();
@@ -262,7 +328,7 @@ test.describe('Core collection', () => {
 			page.waitForResponse((response) => response.url().includes('changePassword')),
 			page.getByTestId('save-password').click()
 		]);
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 		await expect(page.getByTestId('profile-avatar')).toBeVisible();
 
 
@@ -278,7 +344,10 @@ test.describe('Core collection', () => {
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);
 		await loginForm.getByLabel('Passwort').fill(winningAccount.password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-		await page.locator('.instance-admin-link').click();
+		await page.getByTestId('profile-avatar-link').click();
+		await expect(page).toHaveURL(/\/profile/);
+		await page.getByTestId('instance-admin-link').click();
+		await expect(page).toHaveURL(/\/admin/);
 		const instanceAdministrationForm = page.locator('form[action="?/createPasswordReset"]');
 		await instanceAdministrationForm.getByLabel('Benutzername des Kontos').fill(winningAccount.username);
 		await instanceAdministrationForm.getByRole('button', { name: 'Zurücksetzungscode erzeugen' }).click();
@@ -287,7 +356,9 @@ test.describe('Core collection', () => {
 		// assume
 		expect(resetSecret).toMatch(/^[A-Za-z0-9_-]+$/);
 
-		// act
+		// act — the reset revoked the own session; use the code on the anonymous login page
+		await page.goto('/');
+		await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
 		await page.locator('.reset-toggle').click();
 		const resetForm = page.locator('form[action="?/resetPassword"]');
 		await resetForm.getByLabel('Benutzername').fill(winningAccount.username);
@@ -309,19 +380,22 @@ test.describe('Core collection', () => {
 		]);
 
 		// assume
-		await expect(page).toHaveURL(/\/profil/);
+		await expect(page).toHaveURL(/\/profile/);
 
-		// act — the admin sees the backup panel and downloads a full instance backup
+		// act — the admin opens the admin area and sees the backup panel, then downloads a full instance backup
+		await page.getByTestId('instance-admin-link').click();
+		await expect(page).toHaveURL(/\/admin/);
 		await expect(page.getByTestId('backup-panel')).toBeVisible();
 		// assume — the restore action is disabled until a backup file is selected
 		await expect(page.getByTestId('restore-submit')).toBeDisabled();
-		const backupResponse = await page.request.get('/profil/backup');
+		const backupResponse = await page.request.get('/profile/backup');
 		expect(backupResponse.status()).toBe(200);
 		expect(backupResponse.headers()['content-type']).toContain('application/zip');
 		const backupBody = await backupResponse.body();
 		expect(backupBody.length).toBeGreaterThan(1000);
 
-		// act — delete the account after confirming the username
+		// act — return to the profile page and delete the account after confirming the username
+		await page.goto('/profile');
 		await expect(page.getByTestId('delete-account-panel')).toBeVisible();
 		await expect(page.getByTestId('delete-account-dialog')).toBeHidden();
 		await page.getByTestId('delete-account-trigger').click();

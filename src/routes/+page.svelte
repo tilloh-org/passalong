@@ -5,6 +5,17 @@
 
 	let { data, form } = $props();
 
+	const statusFilterLabels: Record<string, string> = {
+		open: 'Offen',
+		reserved: 'Reserviert',
+		sold: 'Verkauft'
+	};
+
+	const appliedFilters = $derived(data.appliedFilters);
+	const hasActiveFilters = $derived(
+		Boolean(appliedFilters.query || appliedFilters.category || appliedFilters.condition || appliedFilters.status)
+	);
+
 
 
 
@@ -79,33 +90,6 @@
 
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
-	{/if}
-	{#if form && 'passwordResetSecret' in form && form.passwordResetSecret}
-		<section class="issued-reset-secret" aria-labelledby="issued-reset-secret-title">
-			<h2 id="issued-reset-secret-title">Einmaliger Zurücksetzungscode</h2>
-			<code class="reset-secret" data-testid="issued-password-reset-secret">{form.passwordResetSecret}</code>
-			<p>Den Code jetzt über einen privaten Kanal weitergeben. Er wird nicht erneut angezeigt.</p>
-		</section>
-	{/if}
-
-
-	{#if data.isAuthenticated && data.isInstanceAdmin}
-		<section class="settings-panel" id="instanzverwaltung" aria-label="Instanzverwaltung">
-			<div class="password-help instance-administration">
-				<h2>Instanzverwaltung</h2>
-				<p>Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
-				<form method="POST" action="?/createPasswordReset">
-					<label>
-						<span>Benutzername des Kontos</span>
-						<input name="username" autocomplete="username" required />
-					</label>
-					{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
-						<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
-					{/if}
-					<button type="submit">Zurücksetzungscode erzeugen</button>
-				</form>
-			</div>
-		</section>
 	{/if}
 
 	{#if !data.isAuthenticated}
@@ -219,7 +203,8 @@
 		{/if}
 
 		<div class="workspace">
-			<section class="item-form" aria-labelledby="add-item-title">
+			<div class="item-form-column">
+				<section class="item-form" aria-labelledby="add-item-title">
 				<div>
 					<p class="eyebrow">Neu in der Sammlung</p>
 					<h2 id="add-item-title">Artikel erfassen</h2>
@@ -274,9 +259,16 @@
 						<p class="form-error" role="alert">{form.addItemError}</p>
 					{/if}
 					<button type="submit">Artikel hinzufügen</button>
+					{#if data.createdItemId}
+						<a class="manage-images-link" href={`/items/${encodeURIComponent(data.createdItemId)}`} data-testid="manage-images-link">
+							🖼 Bilder verwalten
+						</a>
+					{/if}
 				</form>
 			</section>
+			</div>
 
+			<div class="items-column">
 			{#if data.saleStatistics && data.saleStatistics.soldItemCount > 0}
 				<section class="sale-statistics" aria-labelledby="sale-statistics-title" data-testid="sale-statistics">
 					<p class="eyebrow">Verkaufsstatistik</p>
@@ -309,16 +301,55 @@
 					</div>
 				</section>
 			{/if}
-			<section class="items" aria-labelledby="items-title">
-				<div class="items-heading">
-					<div>
-						<p class="eyebrow">Dein Bestand</p>
-						<h2 id="items-title">Artikel</h2>
-					</div>
-					{#if data.collection}
-						<a class="stand-link" data-testid="stand-page-link" href={`/stand/${data.collection.id}`}>Standseite öffnen</a>
+			<form class="item-filters" method="GET" action="/" data-testid="item-filter-form">
+				{#if data.collection}
+					<input type="hidden" name="collection" value={data.collection.id} />
+				{/if}
+				<label class="filter-search">
+					<span>Suche</span>
+					<input
+						name="q"
+						type="search"
+						value={appliedFilters.query ?? ''}
+						placeholder="Titel, Notizen, Beschreibung …"
+						data-testid="filter-search-input"
+					/>
+				</label>
+				<label>
+					<span>Kategorie</span>
+					<select name="category" data-testid="filter-category-select">
+						<option value="">Alle</option>
+						{#each data.categoryOptions as category}
+							<option value={category} selected={appliedFilters.category === category}>{categoryLabels[category]}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					<span>Zustand</span>
+					<select name="condition" data-testid="filter-condition-select">
+						<option value="">Alle</option>
+						{#each data.conditionOptions as condition}
+							<option value={condition} selected={appliedFilters.condition === condition}>{conditionLabels[condition]}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					<span>Status</span>
+					<select name="status" data-testid="filter-status-select">
+						<option value="">Alle</option>
+						{#each ['open', 'reserved', 'sold'] as status}
+							<option value={status} selected={appliedFilters.status === status}>{statusFilterLabels[status]}</option>
+						{/each}
+					</select>
+				</label>
+				<div class="filter-actions">
+					<button type="submit" class="filter-apply" data-testid="filter-apply">Filtern</button>
+					{#if hasActiveFilters}
+						<a class="filter-reset" href={data.collection ? `/?collection=${encodeURIComponent(data.collection.id)}` : '/'} data-testid="filter-reset">Zurücksetzen</a>
 					{/if}
 				</div>
+			</form>
+			<section class="items" aria-labelledby="items-title">
 				{#if data.items.length}
 				<div class="item-grid">
 					{#each data.items as item (item.id)}
@@ -327,10 +358,10 @@
 							data-testid="item-card"
 							class="tile-link"
 							tabindex="0"
-							onclick={() => goto(`/artikel/${encodeURIComponent(item.id)}`)}
+							onclick={() => goto(`/items/${encodeURIComponent(item.id)}`)}
 							onkeydown={(event) => {
 								if (event.key === 'Enter' || event.key === ' ') {
-									goto(`/artikel/${encodeURIComponent(item.id)}`);
+									goto(`/items/${encodeURIComponent(item.id)}`);
 								}
 							}}
 						>
@@ -362,10 +393,13 @@
 						</article>
 					{/each}
 				</div>
+			{:else if hasActiveFilters}
+				<p class="empty" data-testid="filter-empty-state">Keine Artikel passen auf deine Filter.</p>
 			{:else}
-					<p class="empty">Deine Sammlung wartet auf ihren ersten Artikel.</p>
-				{/if}
+				<p class="empty">Deine Sammlung wartet auf ihren ersten Artikel.</p>
+			{/if}
 			</section>
+			</div>
 		</div>
 	{/if}
 </main>
@@ -612,17 +646,13 @@
 		transform: translateY(-2px);
 	}
 
-	.collection-header,
-	.items-heading {
-		display: flex;
-		align-items: end;
-		justify-content: space-between;
-		gap: 1rem;
-	}
-
 	.collection-header {
+		align-items: end;
 		border-bottom: 1px solid var(--color-border);
-		padding-bottom: 1.5rem;
+		display: flex;
+		gap: 1rem;
+		justify-content: space-between;
+		padding-bottom: 0;
 	}
 
 	.collection-header h1 {
@@ -635,14 +665,24 @@
 	}
 
 	.workspace {
+		align-items: start;
 		display: grid;
 		gap: 2rem;
 		grid-template-columns: minmax(16rem, 0.75fr) minmax(0, 1.75fr);
 		padding-top: 2rem;
 	}
 
+	.item-form-column {
+		display: grid;
+		gap: 1.5rem;
+	}
+
+	.items-column {
+		display: grid;
+		gap: 1.5rem;
+	}
+
 	.item-form {
-		align-self: start;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-card);
@@ -657,14 +697,116 @@
 		gap: 1rem;
 	}
 
-	.items {
+	.manage-images-link {
+		align-items: center;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		display: flex;
+		font-size: 0.9rem;
+		font-weight: 700;
+		gap: 0.4rem;
+		justify-content: center;
+		padding: 0.6rem 1.1rem;
+		text-decoration: none;
+	}
+
+	.manage-images-link:hover {
+		background: var(--color-accent-soft);
+	}
+
+	.item-filters {
+		align-items: end;
 		display: grid;
-		gap: 1.25rem;
+		gap: 1rem;
+		grid-template-columns: minmax(12rem, 1.6fr) repeat(3, minmax(0, 1fr)) auto;
+		margin: 0 0 0.25rem;
+	}
+
+	.item-filters label {
+		display: grid;
+		gap: 0.3rem;
+	}
+
+	.item-filters label > span {
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.item-filters input,
+	.item-filters select {
+		background: var(--color-input);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-text);
+		font: inherit;
+		font-size: 0.9rem;
+		padding: 0.6rem 0.75rem;
+		width: 100%;
+	}
+
+	.item-filters input:focus,
+	.item-filters select:focus {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
+	}
+
+	.filter-actions {
+		align-items: center;
+		display: flex;
+		gap: 0.6rem;
+		justify-content: flex-end;
+	}
+
+	.filter-apply {
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		border: 0;
+		border-radius: var(--radius-control);
+		box-shadow: var(--shadow-cta);
+		color: #fff;
+		font-size: 0.9rem;
+		font-weight: 700;
+		padding: 0.6rem 1.1rem;
+	}
+
+	.filter-reset {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		font-size: 0.85rem;
+		font-weight: 700;
+		padding: 0.55rem 0.9rem;
+		text-decoration: none;
+	}
+
+	.filter-reset:hover {
+		background: var(--color-accent-soft);
+	}
+
+	@media (max-width: 56rem) {
+		.item-filters {
+			grid-template-columns: 1fr 1fr;
+		}
+
+		.filter-actions {
+			grid-column: 1 / -1;
+		}
+	}
+
+	@media (max-width: 34rem) {
+		.item-filters {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.item-grid {
 		display: grid;
 		gap: 1rem;
+		grid-auto-rows: 1fr;
 		grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
 	}
 
@@ -675,6 +817,7 @@
 		box-shadow: var(--shadow-tile);
 		display: flex;
 		flex-direction: column;
+		height: 100%;
 		overflow: hidden;
 		transition:
 			transform 0.3s cubic-bezier(0.2, 0.7, 0.3, 1),
@@ -839,18 +982,6 @@
 		white-space: nowrap;
 	}
 
-	.stand-link {
-		align-self: center;
-		color: var(--color-accent);
-		font-size: 0.85rem;
-		font-weight: 700;
-		text-decoration: none;
-	}
-
-	.stand-link:hover {
-		text-decoration: underline;
-	}
-
 	.collection-switcher {
 		display: flex;
 		flex-wrap: wrap;
@@ -881,10 +1012,6 @@
 		border-color: var(--color-accent-strong);
 		box-shadow: var(--shadow-cta);
 		color: #fff;
-	}
-
-	.settings-panel {
-		margin: 0 0 1.5rem;
 	}
 
 	.password-help {

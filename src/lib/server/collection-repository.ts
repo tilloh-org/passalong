@@ -65,6 +65,38 @@ export interface SaleChannelProceeds {
 	totalProceedsCents: number;
 }
 
+export type ItemStatusFilter = 'open' | 'reserved' | 'sold';
+
+export interface ItemFilters {
+	query: string | null;
+	category: ItemCategory | null;
+	condition: ItemCondition | null;
+	status: ItemStatusFilter | null;
+}
+
+export const emptyItemFilters: ItemFilters = {
+	query: null,
+	category: null,
+	condition: null,
+	status: null
+};
+
+const ITEM_SELECT_COLUMNS = [
+	'items.id',
+	'items.collection_id',
+	'items.title',
+	'items.price_cents',
+	'items.category',
+	'items.condition',
+	'items.internal_notes',
+	'items.external_description',
+	'items.is_complete',
+	'items.is_functional',
+	'items.sale_channel',
+	'items.sold_at',
+	'items.sale_proceeds_cents'
+].join(', ');
+
 export interface SaleMonthProceeds {
 	month: string;
 	soldItemCount: number;
@@ -204,6 +236,7 @@ export interface CollectionRepository {
 	setProfileAvatar(scope: SessionScope, avatarStorageKey: string | null): UserProfile;
 	createItem(input: CreateItemInput, scope: SessionScope): Item;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
+	searchItemsForOwner(collectionId: string, filters: ItemFilters, scope: SessionScope): Item[];
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
 	getSaleStatistics(scope: SessionScope): SaleStatistics;
@@ -966,7 +999,7 @@ export function createCollectionRepository(
 		listItemsForOwner(collectionId, scope) {
 			return database
 				.prepare(
-					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes, items.external_description, items.is_complete, items.is_functional, items.sale_channel, items.sold_at, items.sale_proceeds_cents
+					`SELECT ${ITEM_SELECT_COLUMNS}
 					 FROM items
 					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
@@ -976,6 +1009,45 @@ export function createCollectionRepository(
 				.all(collectionId, scope.userId, scope.tenantId)
 				.map((row) => mapItemRow(row as ItemRow));
 			},
+
+		searchItemsForOwner(collectionId, filters, scope) {
+			const clauses = ['items.collection_id = ?', 'items.owner_id = ?', 'items.tenant_id = ?'];
+			const parameters: (string | number)[] = [collectionId, scope.userId, scope.tenantId];
+			if (filters.query && filters.query.trim().length > 0) {
+				const escapedQuery = filters.query.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
+				const pattern = `%${escapedQuery}%`;
+				clauses.push(
+					"(items.title LIKE ? ESCAPE '\\' OR items.internal_notes LIKE ? ESCAPE '\\' OR items.external_description LIKE ? ESCAPE '\\')"
+				);
+				parameters.push(pattern, pattern, pattern);
+			}
+			if (filters.category) {
+				clauses.push('items.category = ?');
+				parameters.push(filters.category);
+			}
+			if (filters.condition) {
+				clauses.push('items.condition = ?');
+				parameters.push(filters.condition);
+			}
+			if (filters.status === 'sold') {
+				clauses.push('items.sold_at IS NOT NULL');
+			} else if (filters.status === 'reserved') {
+				clauses.push('items.sold_at IS NULL AND items.reserved_at IS NOT NULL');
+			} else if (filters.status === 'open') {
+				clauses.push('items.sold_at IS NULL AND items.reserved_at IS NULL');
+			}
+			return database
+				.prepare(
+					`SELECT ${ITEM_SELECT_COLUMNS}
+					 FROM items
+					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
+					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+					 WHERE ${clauses.join(' AND ')}
+					 ORDER BY items.created_at DESC, items.id DESC`
+				)
+				.all(...parameters)
+				.map((row) => mapItemRow(row as ItemRow));
+		},
 
 		addItemImage(itemId, storageKey, scope) {
 			const validatedStorageKey = requireText(storageKey, 'storageKey');

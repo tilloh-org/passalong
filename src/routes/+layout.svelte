@@ -5,7 +5,6 @@
 	let { children, data } = $props();
 
 	let menuOpen = $state(false);
-	let instanceAdminOpen = $state(false);
 	let theme = $state<'light' | 'dark'>('light');
 	let navOverflow = $state(false);
 	let headerElement: HTMLElement | undefined = $state();
@@ -115,24 +114,15 @@
 				>
 					+ Neu
 				</a>
-				<a href="/scannen" onclick={() => setMenuOpen(false)}>
+				<a href="/scan" onclick={() => setMenuOpen(false)}>
 					Scannen
 				</a>
-				{#if data.header?.isInstanceAdmin}
-					<hr class="nav-divider" />
-					<a
-						class="instance-admin-link"
-						href="/"
-						onclick={(event) => {
-							event.preventDefault();
-							instanceAdminOpen = !instanceAdminOpen;
-							setMenuOpen(false);
-						}}
-					>
-						Instanzverwaltung
+				{#if data.header?.standPath}
+					<a href={data.header.standPath} onclick={() => setMenuOpen(false)} data-testid="nav-stand-link">
+						Mein Stand
 					</a>
 				{/if}
-			</nav>
+				</nav>
 			<span class="header-divider" aria-hidden="true"></span>
 			<div class="header-actions">
 				<button
@@ -158,7 +148,7 @@
 				</button>
 				<a
 					class="profile-avatar"
-					href="/profil"
+					href="/profile"
 					aria-label="Profil öffnen"
 					title="Profil"
 					data-testid="profile-avatar-link"
@@ -398,13 +388,6 @@
 		color: #fff;
 		font-weight: 700;
 	}
-	.nav-divider {
-		background: var(--color-border);
-		border: 0;
-		display: none;
-		height: 1px;
-		margin: 8px 0;
-	}
 	.masthead.nav-overflow .burger {
 		display: flex;
 	}
@@ -443,10 +426,6 @@
 	}
 	.masthead.nav-overflow .nav-backdrop {
 		display: block;
-	}
-	.masthead.nav-overflow .nav-divider {
-		display: block;
-		width: auto;
 	}
 	@media (max-width: 880px) {
 		.masthead .burger {
@@ -493,11 +472,6 @@
 
 		.masthead .nav-backdrop {
 			display: block;
-		}
-
-		.masthead .nav-divider {
-			display: block;
-			width: auto;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
