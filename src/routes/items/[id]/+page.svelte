@@ -1,38 +1,37 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let { data, form } = $props();
 
-	const categoryLabels: Record<string, string> = {
-		clothing: 'Kleidung',
-		books: 'Bücher',
-		electronics: 'Elektronik',
-		home: 'Haushalt',
-		toys: 'Spielzeug',
-		decor: 'Deko',
-		furniture: 'Möbel',
-		tools: 'Werkzeug',
-		hobby: 'Hobby',
-		other: 'Sonstiges'
-	};
+	/**
+	 * Translate a category key in the active locale.
+	 *
+	 * @param {string} category - A category key such as `books`.
+	 * @returns {string} Human-readable category label.
+	 */
+	const categoryLabel = (category: string) => t(`category.${category}`);
 
-	const conditionLabels: Record<string, string> = {
-		new: 'Neu',
-		'like-new': 'Wie neu',
-		good: 'Gut',
-		fair: 'Gebraucht',
-		poor: 'Stark gebraucht'
-	};
+	/**
+	 * Translate a condition key in the active locale.
+	 *
+	 * @param {string} condition - A condition key such as `good`.
+	 * @returns {string} Human-readable condition label.
+	 */
+	const conditionLabel = (condition: string) => t(`condition.${condition}`);
 
-	const saleChannelLabels: Record<string, string> = {
-		'flea-market': 'Flohmarkt',
-		'online-marketplace': 'Online-Marktplatz',
-		shop: 'Laden',
-		'private-sale': 'Privatverkauf',
-		other: 'Sonstiges'
-	};
+	/**
+	 * Translate a sale channel key in the active locale.
+	 *
+	 * @param {string} channel - A sale channel key such as `flea-market`.
+	 * @returns {string} Human-readable channel label.
+	 */
+	const saleChannelLabel = (channel: string) => t(`channel.${channel}`);
 
-	const saleChannelOptions = Object.entries(saleChannelLabels).map(([value, label]) => ({ value, label }));
+	const saleChannelOptions = (['flea-market', 'online-marketplace', 'shop', 'private-sale', 'other'] as const).map((value) => ({
+		value,
+		label: saleChannelLabel(value)
+	}));
 
 	const coverImageKey = $derived(data.images.find((image) => image.isCover)?.storageKey ?? null);
 	const qrCodeDataUrl = $derived(data.qrCodeDataUrl);
@@ -42,7 +41,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.item.title} · Artikel · passalong</title>
+	<title>{data.item.title} · {t('item.titleSuffix')} · passalong</title>
 </svelte:head>
 
 <main class="detail">
@@ -60,65 +59,65 @@
 		</div>
 
 		<div class="info-column">
-			<p class="eyebrow">{categoryLabels[data.item.category]} · {conditionLabels[data.item.condition]}</p>
+			<p class="eyebrow">{categoryLabel(data.item.category)} · {conditionLabel(data.item.condition)}</p>
 			<h1 id="item-title">{data.item.title}</h1>
 			<p class="price">{formatPrice(data.item.priceCents)} €</p>
 			<div class="flag-pills" data-testid="item-flag-pills">
-				<span class="flag-pill category">{categoryLabels[data.item.category]}</span>
+				<span class="flag-pill category">{categoryLabel(data.item.category)}</span>
 				{#if data.item.isComplete}
-					<span class="flag-pill complete">✓ Vollständig</span>
+					<span class="flag-pill complete">{t('item.complete')}</span>
 				{/if}
 				{#if data.item.isFunctional}
-					<span class="flag-pill functional">✓ Funktionsfähig</span>
+					<span class="flag-pill functional">{t('item.functional')}</span>
 				{/if}
 			</div>
 			{#if data.item.reservedAt && !data.item.soldAt}
-				<p class="reserved-badge" data-testid="item-reserved-badge">🔖 Reserviert</p>
+				<p class="reserved-badge" data-testid="item-reserved-badge">{t('item.reserved')}</p>
 			{/if}
 			{#if data.item.soldAt}
 				<p class="sold-badge" data-testid="item-sold-badge">
-					Verkauft · {saleChannelLabels[data.item.saleChannel ?? 'other']}{data.item.saleProceedsCents !== null ? ` · Erlös ${formatPrice(data.item.saleProceedsCents)} €` : ''}
+					{t('item.soldOnChannel', { channel: saleChannelLabel(data.item.saleChannel ?? 'other') })}{data.item.saleProceedsCents !== null ? ` ${t('item.soldWithProceeds', { proceeds: formatPrice(data.item.saleProceedsCents) })}` : ''}
 				</p>
 			{/if}
 			{#if data.item.externalDescription}
 				<div class="description external" data-testid="item-external-description">
-					<strong>Beschreibung:</strong>
+					<strong>{t('item.descriptionLabel')}</strong>
 					<p>{data.item.externalDescription}</p>
 				</div>
 			{/if}
 			{#if data.item.internalNotes}
 				<div class="description internal" data-testid="item-internal-notes">
-					<strong>Anmerkungen (intern):</strong>
+					<strong>{t('item.internalNotesLabel')}</strong>
 					<p>{data.item.internalNotes}</p>
 				</div>
 			{/if}
 
 			<section class="panel" aria-labelledby="photos-title">
-					<h2 id="photos-title">Fotos</h2>
+					<h2 id="photos-title">{t('item.photosTitle')}</h2>
 					{#if data.images.length}
 						<div class="cover-preview">
 							{#if coverImageKey}
 								<img
 									class="cover-thumb"
 									src={`/media/${encodeURIComponent(coverImageKey)}`}
-									alt="Titelbild von {data.item.title}"
+									alt={t('item.coverAlt', { name: data.item.title })}
 								/>
 							{:else}
 								<div class="cover-thumb placeholder" aria-hidden="true">{data.item.title.slice(0, 1).toUpperCase()}</div>
 							{/if}
-							<span class="cover-count" data-testid="item-image-count">{data.images.length} {(data.images.length === 1 ? 'Foto' : 'Fotos')}</span>
+							<span class="cover-count" data-testid="item-image-count">{data.images.length === 1 ? t('item.photoCount', { count: data.images.length }) : t('item.photoCountPlural', { count: data.images.length })}</span>
 						</div>
 					{:else}
-						<p class="empty">Noch keine Fotos vorhanden.</p>
+						<p class="empty">{t('item.noPhotos')}</p>
 					{/if}
 				</section>
 
-				<dialog class="images-dialog" bind:this={imagesDialog} aria-label="Fotos verwalten" data-testid="images-dialog">
+				<dialog class="images-dialog" bind:this={imagesDialog} aria-label={t('item.photosDialogLabel')} data-testid="images-dialog">
 					<div class="dialog-head">
-						<h3>Fotos verwalten</h3>
-						<button type="button" class="secondary" onclick={() => imagesDialog?.close()}>Schließen</button>
+						<h3>{t('item.managePhotos')}</h3>
+						<button type="button" class="secondary" onclick={() => imagesDialog?.close()}>{t('profile.close')}</button>
 					</div>
-					<p class="dialog-hint">Klicke auf „Als Titelbild", um das Vorschaubild des Artikels festzulegen.</p>
+					<p class="dialog-hint">{t('item.setCoverHint')}</p>
 					<form method="POST" action="?/uploadItemImage" enctype="multipart/form-data" class="dialog-upload">
 						<input name="itemId" type="hidden" value={data.item.id} />
 						<input
@@ -132,10 +131,10 @@
 							required
 						/>
 						<label class="file-button" for="item-image-file">
-							🖼 Foto auswählen
+							{t('item.choosePhoto')}
 						</label>
-						<button type="submit">Foto speichern</button>
-					</form>
+						<button type="submit">{t('item.savePhoto')}</button>
+						</form>
 					{#if form?.uploadImageError}
 						<p class="form-error" role="alert">{form.uploadImageError}</p>
 					{/if}
@@ -145,25 +144,25 @@
 								<img
 									class="thumb"
 									src={`/media/${encodeURIComponent(image.storageKey)}`}
-									alt="Foto von {data.item.title}"
+									alt={t('item.photoAlt', { name: data.item.title })}
 									loading="lazy"
 								/>
 								<div class="image-actions">
 									<span class="image-name" data-testid="item-image-key">
-										{image.isCover ? 'Titelbild' : `Bild ${image.position + 1}`}
+										{image.isCover ? t('item.coverImage') : t('item.imageNumber', { number: image.position + 1 })}
 									</span>
 									<div class="image-buttons">
 										{#if !image.isCover}
 											<form method="POST" action="?/setItemCover">
 												<input name="itemId" type="hidden" value={data.item.id} />
 												<input name="imageId" type="hidden" value={image.id} />
-												<button type="submit" class="secondary" data-testid="set-item-cover">Als Titelbild</button>
+												<button type="submit" class="secondary" data-testid="set-item-cover">{t('item.setAsCover')}</button>
 											</form>
 										{/if}
 										<form method="POST" action="?/removeItemImage">
 											<input name="itemId" type="hidden" value={data.item.id} />
 											<input name="imageId" type="hidden" value={image.id} />
-											<button type="submit" class="danger" data-testid="remove-item-image">Entfernen</button>
+											<button type="submit" class="danger" data-testid="remove-item-image">{t('item.remove')}</button>
 										</form>
 									</div>
 								</div>
@@ -173,32 +172,32 @@
 				</dialog>
 
 				<section class="panel" aria-labelledby="sale-title">
-				<h2 id="sale-title">Verkauf</h2>
+				<h2 id="sale-title">{t('item.saleTitle')}</h2>
 				{#if data.item.soldAt}
 					<p class="sold-summary">
-						Verkauft am {new Date(data.item.soldAt).toLocaleDateString('de-DE')} über {saleChannelLabels[data.item.saleChannel ?? 'other']}
+						{t('item.soldSummary', { date: new Date(data.item.soldAt).toLocaleDateString(), channel: saleChannelLabel(data.item.saleChannel ?? 'other') })}
 						{#if data.item.saleProceedsCents !== null}
-							· Erlös {formatPrice(data.item.saleProceedsCents)} €
+							{t('item.proceedsPrefix', { proceeds: formatPrice(data.item.saleProceedsCents) })}
 						{/if}
 					</p>
 					<form method="POST" action="?/unmarkItemSold">
 						<input name="itemId" type="hidden" value={data.item.id} />
-						<button type="submit" class="danger" data-testid="unmark-item-sold">Verkauf zurücknehmen</button>
+						<button type="submit" class="danger" data-testid="unmark-item-sold">{t('item.undoSale')}</button>
 					</form>
 				{:else}
 					<form method="POST" action="?/markItemSold" data-testid="item-sale-section">
 						<input name="itemId" type="hidden" value={data.item.id} />
 						<div class="form-grid">
 							<label>
-								<span>Kanal</span>
-								<select name="channel" aria-label="Verkaufskanal">
+								<span>{t('item.channel')}</span>
+								<select name="channel" aria-label={t('item.channelLabel')}>
 									{#each saleChannelOptions as channel}
 										<option value={channel.value}>{channel.label}</option>
 									{/each}
 								</select>
 							</label>
 							<label>
-								<span>Erlös (€)</span>
+								<span>{t('item.proceeds')}</span>
 								<input
 									name="proceedsEuros"
 									type="text"
@@ -213,101 +212,101 @@
 						{#if form?.saleStatusError}
 							<p class="form-error" role="alert">{form.saleStatusError}</p>
 						{/if}
-						<button type="submit" data-testid="mark-item-sold">Als verkauft erfassen</button>
-					</form>
-				{/if}
-			</section>
-		</div>
-	</section>
+						<button type="submit" data-testid="mark-item-sold">{t('item.markSold')}</button>
+						</form>
+						{/if}
+						</section>
+						</div>
+						</section>
 
-	<section class="actions-row" aria-label="Artikel-Aktionen" data-testid="item-actions">
-		<form method="POST" action="?/deleteItem" class="action-form">
-			<input name="itemId" type="hidden" value={data.item.id} />
-			<button type="submit" class="action-btn danger-btn" data-testid="delete-item">🗑 Artikel löschen</button>
-		</form>
-		<button type="button" class="action-btn blue-btn" onclick={() => imagesDialog?.showModal()} data-testid="images-dialog-trigger">
-			🖼 Bilder ({data.images.length})
-		</button>
-		<button type="button" class="action-btn blue-btn" onclick={() => editDialog?.showModal()} data-testid="edit-dialog-trigger">
-			✎ Bearbeiten
-		</button>
-		<form method="POST" action="?/setItemReservation" class="action-form">
-			<input name="itemId" type="hidden" value={data.item.id} />
-			<button type="submit" class="action-btn amber-btn" data-testid="toggle-item-reservation">
-				{data.item.reservedAt ? '🔖 Reservierung aufheben' : '🔖 Reservieren'}
-			</button>
-		</form>
-	</section>
+						<section class="actions-row" aria-label={t('item.actionsLabel')} data-testid="item-actions">
+						<form method="POST" action="?/deleteItem" class="action-form">
+						<input name="itemId" type="hidden" value={data.item.id} />
+						<button type="submit" class="action-btn danger-btn" data-testid="delete-item">{t('item.deleteItem')}</button>
+						</form>
+						<button type="button" class="action-btn blue-btn" onclick={() => imagesDialog?.showModal()} data-testid="images-dialog-trigger">
+						{t('item.imagesButton', { count: data.images.length })}
+						</button>
+						<button type="button" class="action-btn blue-btn" onclick={() => editDialog?.showModal()} data-testid="edit-dialog-trigger">
+						{t('item.edit')}
+						</button>
+						<form method="POST" action="?/setItemReservation" class="action-form">
+						<input name="itemId" type="hidden" value={data.item.id} />
+						<button type="submit" class="action-btn amber-btn" data-testid="toggle-item-reservation">
+						{data.item.reservedAt ? t('item.removeReservation') : t('item.reserve')}
+						</button>
+						</form>
+						</section>
 
-	<dialog class="edit-dialog" bind:this={editDialog} aria-label="Artikel bearbeiten" data-testid="edit-dialog">
+	<dialog class="edit-dialog" bind:this={editDialog} aria-label={t('item.editDialogLabel')} data-testid="edit-dialog">
 		<div class="dialog-head">
-			<h3>Artikel bearbeiten</h3>
-			<button type="button" class="secondary" onclick={() => editDialog?.close()}>Schließen</button>
+			<h3>{t('item.editDialogTitle')}</h3>
+			<button type="button" class="secondary" onclick={() => editDialog?.close()}>{t('profile.close')}</button>
 		</div>
 		<form method="POST" action="?/updateItem">
 			<input name="itemId" type="hidden" value={data.item.id} />
 			<div class="form-grid">
 				<label>
-					<span>Artikelname</span>
+					<span>{t('portfolio.itemTitle')}</span>
 					<input name="title" type="text" value={data.item.title} required />
 				</label>
 				<label>
-					<span>Preis (€)</span>
+					<span>{t('portfolio.price')}</span>
 					<input name="priceEuros" type="text" inputmode="decimal" value={formatPrice(data.item.priceCents)} required />
 				</label>
 				<label>
-					<span>Kategorie</span>
-					<select name="category" aria-label="Kategorie">
+					<span>{t('portfolio.category')}</span>
+					<select name="category" aria-label={t('portfolio.category')}>
 						{#each data.categoryOptions as category}
-							<option value={category} selected={category === data.item.category}>{categoryLabels[category]}</option>
+							<option value={category} selected={category === data.item.category}>{categoryLabel(category)}</option>
 						{/each}
 					</select>
 				</label>
 				<label>
-					<span>Zustand</span>
-					<select name="condition" aria-label="Zustand">
+					<span>{t('portfolio.condition')}</span>
+					<select name="condition" aria-label={t('portfolio.condition')}>
 						{#each data.conditionOptions as condition}
-							<option value={condition} selected={condition === data.item.condition}>{conditionLabels[condition]}</option>
+							<option value={condition} selected={condition === data.item.condition}>{conditionLabel(condition)}</option>
 						{/each}
 					</select>
 				</label>
 			</div>
 			<label class="dialog-textarea">
-				<span>Externe Beschreibung (für Käufer sichtbar)</span>
+				<span>{t('portfolio.externalDescription')}</span>
 				<textarea name="externalDescription" rows="3">{data.item.externalDescription}</textarea>
 			</label>
 			<label class="dialog-textarea">
-				<span>Interne Notizen (nur für dich sichtbar)</span>
+				<span>{t('portfolio.internalNotes')}</span>
 				<textarea name="internalNotes" rows="3">{data.item.internalNotes}</textarea>
 			</label>
 			<div class="flag-checkboxes">
 				<label class="checkbox">
 					<input name="isComplete" type="checkbox" value="1" checked={data.item.isComplete} />
-					<span>Vollständig</span>
+					<span>{t('portfolio.isComplete')}</span>
 				</label>
 				<label class="checkbox">
 					<input name="isFunctional" type="checkbox" value="1" checked={data.item.isFunctional} />
-					<span>Funktionsfähig</span>
+					<span>{t('portfolio.isFunctional')}</span>
 				</label>
 			</div>
 			{#if form?.updateItemError}
 				<p class="form-error" role="alert">{form.updateItemError}</p>
 			{/if}
-			<button type="submit">Änderungen speichern</button>
+			<button type="submit">{t('profile.saveChanges')}</button>
 		</form>
 	</dialog>
 
 	<section class="qr-panel" aria-labelledby="qr-title" data-testid="item-qr-panel">
-		<h2 id="qr-title">QR-Code <span class="qr-hint">— ausdrucken und an den Gegenstand heften</span></h2>
+		<h2 id="qr-title">{t('item.qrTitle')} <span class="qr-hint">{t('item.qrHint')}</span></h2>
 		<div class="qr-body">
 			<img
 				class="qr-image"
 				src={qrCodeDataUrl}
-				alt="QR-Code mit dem Link zum Artikel"
+				alt={t('item.qrAlt')}
 				data-testid="item-qr-image"
 			/>
 			<a class="qr-download" href={qrCodeDataUrl} download="qr-{data.item.id}.png" data-testid="item-qr-download">
-				⬇ Als Bild herunterladen
+				{t('item.downloadQr')}
 			</a>
 		</div>
 	</section>

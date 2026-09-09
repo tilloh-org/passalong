@@ -1,32 +1,28 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let { data } = $props();
 
-	const categoryLabels: Record<string, string> = {
-		clothing: 'Kleidung',
-		books: 'Bücher',
-		electronics: 'Elektronik',
-		home: 'Haushalt',
-		toys: 'Spielzeug',
-		decor: 'Deko',
-		furniture: 'Möbel',
-		tools: 'Werkzeug',
-		hobby: 'Hobby',
-		other: 'Sonstiges'
-	};
+	/**
+	 * Translate a category key in the active locale.
+	 *
+	 * @param {string} category - A category key such as `books`.
+	 * @returns {string} Human-readable category label.
+	 */
+	const categoryLabel = (category: string) => t(`category.${category}`);
 
-	const conditionLabels: Record<string, string> = {
-		new: 'Neu',
-		'like-new': 'Wie neu',
-		good: 'Gut',
-		fair: 'Gebraucht',
-		poor: 'Stark gebraucht'
-	};
+	/**
+	 * Translate a condition key in the active locale.
+	 *
+	 * @param {string} condition - A condition key such as `good`.
+	 * @returns {string} Human-readable condition label.
+	 */
+	const conditionLabel = (condition: string) => t(`condition.${condition}`);
 </script>
 
 <svelte:head>
-	<title>{data.stand.collectionName} · Standseite · passalong</title>
+	<title>{data.stand.collectionName} · {t('stand.titleSuffix')} · passalong</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -39,7 +35,7 @@
 		{#if data.stand.intro}
 			<p class="intro" data-testid="stand-intro">{data.stand.intro}</p>
 		{/if}
-		<p class="sub">Schau dir die Artikel an — direkt hier oder live am Stand</p>
+		<p class="sub">{t('stand.sub')}</p>
 	</section>
 
 	{#if data.stand.items.length}
@@ -50,7 +46,7 @@
 					<div class="body">
 						<div class="name">{item.title}</div>
 						<div class="price">{formatPrice(item.priceCents)}</div>
-						<div class="meta">{categoryLabels[item.category]} · {conditionLabels[item.condition]}</div>
+						<div class="meta">{categoryLabel(item.category)} · {conditionLabel(item.condition)}</div>
 						{#if item.externalDescription}
 							<p class="description" data-testid="stand-item-description">{item.externalDescription}</p>
 						{/if}
@@ -59,11 +55,11 @@
 			{/each}
 		</div>
 	{:else}
-		<p class="empty">Aktuell sind keine Artikel verfügbar.</p>
+		<p class="empty">{t('stand.empty')}</p>
 	{/if}
 
 	<footer class="footer">
-		<p>passalong · Selbstgemacht für den Flohmarkt</p>
+		<p>{t('stand.footer')}</p>
 	</footer>
 </main>
 

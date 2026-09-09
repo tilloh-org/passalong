@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let { data, form } = $props();
 
@@ -20,7 +21,7 @@
 </script>
 
 <svelte:head>
-	<title>Instanzverwaltung · passalong</title>
+	<title>{t('admin.title')} · passalong</title>
 </svelte:head>
 
 <main class="instance-admin">
@@ -29,45 +30,45 @@
 	{/if}
 
 	<section class="admin-card" aria-labelledby="admin-title">
-		<p class="eyebrow">Technische Verwaltung</p>
-		<h1 id="admin-title">Instanzverwaltung</h1>
-		<p class="intro">Erzeuge einen einmaligen Zurücksetzungscode für ein Konto. Die bestehenden Sitzungen dieses Kontos werden sofort beendet.</p>
+		<p class="eyebrow">{t('admin.eyebrow')}</p>
+		<h1 id="admin-title">{t('admin.title')}</h1>
+		<p class="intro">{t('admin.passwordResetIntro')}</p>
 
 		<div class="password-help instance-administration">
-			<h2>Passwort zurücksetzen</h2>
+			<h2>{t('admin.passwordResetTitle')}</h2>
 			<form method="POST" action="?/createPasswordReset">
 				<label>
-					<span>Benutzername des Kontos</span>
+					<span>{t('admin.usernameOfAccount')}</span>
 					<input name="username" autocomplete="username" required />
 				</label>
 				{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
 					<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
 				{/if}
-				<button type="submit">Zurücksetzungscode erzeugen</button>
+				<button type="submit">{t('admin.createResetCode')}</button>
 			</form>
 			{#if form && 'passwordResetSecret' in form && form.passwordResetSecret}
 				<section class="issued-reset-secret" aria-labelledby="issued-reset-secret-title">
-					<h3 id="issued-reset-secret-title">Einmaliger Zurücksetzungscode</h3>
+					<h3 id="issued-reset-secret-title">{t('admin.oneTimeResetCode')}</h3>
 					<code class="reset-secret" data-testid="issued-password-reset-secret">{form.passwordResetSecret}</code>
-					<p>Den Code jetzt über einen privaten Kanal weitergeben. Er wird nicht erneut angezeigt.</p>
+					<p>{t('admin.resetSecretHint')}</p>
 				</section>
 			{/if}
 		</div>
 
 		<div class="password-help backup-administration" data-testid="backup-panel">
-			<h2>Backup &amp; Restore</h2>
+			<h2>{t('admin.backupRestoreTitle')}</h2>
 			<div class="backup-grid">
 				<div class="backup-block">
-					<h3>Vollständiges Backup</h3>
-					<p class="backup-hint">Lädt eine ZIP-Datei mit Datenbank, Medien und Prüfsummen-Manifest herunter.</p>
+					<h3>{t('admin.fullBackupTitle')}</h3>
+					<p class="backup-hint">{t('admin.fullBackupHint')}</p>
 					<a class="backup-download" href="/profile/backup" download data-testid="download-backup">
-						⬇ Backup herunterladen
+						{t('admin.downloadBackup')}
 					</a>
 				</div>
 				<div class="backup-block">
-					<h3>Restore</h3>
+					<h3>{t('admin.restoreTitle')}</h3>
 					<p class="backup-hint">
-						Das Hochladen ersetzt die gesamte Instanz (Datenbank und Medien) durch das Backup. Die Sitzung wird beendet.
+						{t('admin.restoreHint')}
 					</p>
 					<form method="POST" action="?/restoreBackup" enctype="multipart/form-data" data-testid="restore-form">
 						<input
@@ -80,11 +81,11 @@
 							required
 							onchange={onRestoreFileChange}
 						/>
-						<label class="file-button" for="backup-file">{restoreFile ? `📦 ${restoreFile.name}` : '📦 Backup-Datei auswählen'}</label>
+						<label class="file-button" for="backup-file">{restoreFile ? `📦 ${restoreFile.name}` : t('admin.chooseBackupFile')}</label>
 						{#if form?.backupError}
 							<p class="form-error" role="alert">{form.backupError}</p>
 						{/if}
-						<button type="submit" class="danger" data-testid="restore-submit" disabled={!restoreReady} aria-disabled={!restoreReady}>Restore ausführen</button>
+						<button type="submit" class="danger" data-testid="restore-submit" disabled={!restoreReady} aria-disabled={!restoreReady}>{t('admin.runRestore')}</button>
 					</form>
 				</div>
 			</div>
