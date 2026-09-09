@@ -12,10 +12,11 @@ project values simplicity, so the contribution process is simple too.
 - **Simple and lightweight** — passalong stays free of heavy dependencies.
   When you add code, keep the dependency footprint small and justify it.
 - **Close to web standards** — plain HTML, CSS and JavaScript where possible.
-- **German UI, English code** — the visitor-facing UI is German by product
-  decision; all code, comments, tests, CSS classes and test IDs are English.
-  User-facing strings are not hardcoded in components; keep them in the
-  component templates as German UI copy (see `docs/DESIGN.md`).
+- **German UI, English everywhere else** — the visitor-facing UI copy is
+  German and served by the i18n layer (`src/lib/i18n/`), switchable to
+  English at runtime. Everything else in the repo is English: code,
+  comments, tests, CSS classes, test IDs, **commit messages, PR titles,
+  PR descriptions, issue texts and any other repo communication**.
 - **Accessible** — keyboard-navigable, readable contrast, sensible labels.
 
 ## Code of conduct
