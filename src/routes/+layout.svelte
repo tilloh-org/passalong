@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import { getLocale, initLocale, locales, setLocale, t, type Locale } from '$lib/i18n/index.svelte';
 
 	let { children, data } = $props();
 
@@ -10,6 +11,8 @@
 	let headerElement: HTMLElement | undefined = $state();
 	let navElement: HTMLElement | undefined = $state();
 	let burgerButton: HTMLButtonElement | undefined = $state();
+
+	initLocale();
 
 	$effect(() => {
 		if (!headerElement || !navElement) {
@@ -82,6 +85,15 @@
 	}
 
 	/**
+	 * Switch to the next locale in the list and persist the choice.
+	 */
+	function cycleLocale(): void {
+		const index = locales.indexOf(getLocale());
+		const next: Locale = locales[(index + 1) % locales.length];
+		setLocale(next);
+	}
+
+	/**
 	 * Open or close the burger navigation and lock body scrolling while open.
 	 *
 	 * @param {boolean} open - Whether the drawer should be open.
@@ -112,14 +124,14 @@
 					href="/"
 					onclick={() => setMenuOpen(false)}
 				>
-					+ Neu
+					{t('nav.newItem')}
 				</a>
 				<a href="/scan" onclick={() => setMenuOpen(false)}>
-					Scannen
+					{t('nav.scan')}
 				</a>
 				{#if data.header?.standPath}
 					<a href={data.header.standPath} onclick={() => setMenuOpen(false)} data-testid="nav-stand-link">
-						Mein Stand
+						{t('nav.myStand')}
 					</a>
 				{/if}
 				</nav>
@@ -127,7 +139,7 @@
 			<div class="header-actions">
 				<button
 					class="burger"
-					aria-label={menuOpen ? 'Menü schließen' : 'Menü öffnen'}
+					aria-label={menuOpen ? t('header.menuClose') : t('header.menuOpen')}
 					aria-expanded={menuOpen}
 					type="button"
 					bind:this={burgerButton}
@@ -137,14 +149,24 @@
 				</button>
 				<button
 					class="icon-btn theme-toggle"
-					aria-label="Dark Mode umschalten"
-					title="Hell/Dunkel"
+					aria-label={t('header.toggleTheme')}
+					title={t('header.themeTitle')}
 					type="button"
 					onclick={toggleTheme}
 				>
 					<svg class="icon" aria-hidden="true" focusable="false">
 						<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
 					</svg>
+				</button>
+				<button
+					class="icon-btn language-toggle"
+					aria-label={t('header.language')}
+					title={t('header.languageTitle')}
+					type="button"
+					data-testid="language-toggle"
+					onclick={() => cycleLocale()}
+				>
+					<span class="language-label">{getLocale() === 'de' ? 'DE' : 'EN'}</span>
 				</button>
 				<a
 					class="profile-avatar"
@@ -220,6 +242,11 @@
 		padding: 0;
 		transition: all 0.25s ease;
 		width: 40px;
+	}
+	.language-label {
+		font-size: 0.72rem;
+		font-weight: 800;
+		letter-spacing: 0.04em;
 	}
 	.header-logo {
 		display: inline-block;
