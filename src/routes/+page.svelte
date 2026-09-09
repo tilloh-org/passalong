@@ -2,14 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { formatPrice } from '$lib/utils/format';
 	import { minimumPasswordLength } from '$lib/password-policy';
+	import { t } from '$lib/i18n/index.svelte';
 
 	let { data, form } = $props();
-
-	const statusFilterLabels: Record<string, string> = {
-		open: 'Offen',
-		reserved: 'Reserviert',
-		sold: 'Verkauft'
-	};
 
 	const appliedFilters = $derived(data.appliedFilters);
 	const hasActiveFilters = $derived(
@@ -18,72 +13,58 @@
 
 
 
-
 	let resetPanelOpen = $state(false);
 
-	const categoryLabels: Record<string, string> = {
-		clothing: 'Kleidung',
-		books: 'Bücher',
-		electronics: 'Elektronik',
-		home: 'Haushalt',
-		toys: 'Spielzeug',
-		decor: 'Deko',
-		furniture: 'Möbel',
-		tools: 'Werkzeug',
-		hobby: 'Hobby',
-		other: 'Sonstiges'
-	};
-
-	const conditionLabels: Record<string, string> = {
-		new: 'Neu',
-		'like-new': 'Wie neu',
-		good: 'Gut',
-		fair: 'Gebraucht',
-		poor: 'Stark gebraucht'
-	};
-
-	const saleChannelLabels: Record<string, string> = {
-		'flea-market': 'Flohmarkt',
-		'online-marketplace': 'Online-Marktplatz',
-		shop: 'Laden',
-		'private-sale': 'Privatverkauf',
-		other: 'Sonstiges'
-	};
-
-	const germanMonthNames = [
-		'Januar',
-		'Februar',
-		'März',
-		'April',
-		'Mai',
-		'Juni',
-		'Juli',
-		'August',
-		'September',
-		'Oktober',
-		'November',
-		'Dezember'
-	];
+	/**
+	 * Translate a category key in the active locale.
+	 *
+	 * @param {string} category - A category key such as `books`.
+	 * @returns {string} Human-readable category label.
+	 */
+	const categoryLabel = (category: string) => t(`category.${category}`);
 
 	/**
-	 * Format a YYYY-MM month key as a German month label.
+	 * Translate a condition key in the active locale.
+	 *
+	 * @param {string} condition - A condition key such as `good`.
+	 * @returns {string} Human-readable condition label.
+	 */
+	const conditionLabel = (condition: string) => t(`condition.${condition}`);
+
+	/**
+	 * Translate a sale channel key in the active locale.
+	 *
+	 * @param {string} channel - A sale channel key such as `flea-market`.
+	 * @returns {string} Human-readable channel label.
+	 */
+	const saleChannelLabel = (channel: string) => t(`channel.${channel}`);
+
+	/**
+	 * Translate a status filter key in the active locale.
+	 *
+	 * @param {string} status - A status filter key such as `open`.
+	 * @returns {string} Human-readable status label.
+	 */
+	const statusFilterLabel = (status: string) => t(`statusFilter.${status}`);
+
+	/**
+	 * Format a YYYY-MM month key as a localized month label.
 	 *
 	 * @param {string} month - Month key in the form YYYY-MM.
-	 * @returns {string} Human-readable German month label.
+	 * @returns {string} Human-readable month label.
 	 */
 	function formatSaleMonth(month: string): string {
 		const [year, monthNumber] = month.split('-');
-		const monthIndex = Number(monthNumber) - 1;
-		if (!year || monthIndex < 0 || monthIndex >= germanMonthNames.length) {
+		if (!year || !/^\d{1,2}$/.test(monthNumber)) {
 			return month;
 		}
-		return `${germanMonthNames[monthIndex]} ${year}`;
+		return `${t(`month.${Number(monthNumber)}`)} ${year}`;
 	}
 </script>
 
 <svelte:head>
 	<title>{data.collection ? `${data.collection.name} · passalong` : 'passalong'}</title>
-	<meta name="description" content="Verwalte deine Sammlung von Dingen, die weiterziehen dürfen." />
+	<meta name="description" content={t('portfolio.metaDescription')} />
 </svelte:head>
 
 <main>
@@ -96,87 +77,87 @@
 		<section class="onboarding" aria-labelledby="onboarding-title">
 			<img class="login-logo" src="/passalong-icon.svg" alt="passalong" />
 			{#if data.isInitialSetup}
-				<p class="eyebrow">Willkommen</p>
-				<h1 id="onboarding-title">Ersten Zugang erstellen</h1>
-				<p class="intro">Erstelle das Admin-Konto für deine persönliche passalong-Instanz.</p>
+				<p class="eyebrow">{t('portfolio.welcomeEyebrow')}</p>
+				<h1 id="onboarding-title">{t('portfolio.setupTitle')}</h1>
+				<p class="intro">{t('portfolio.setupIntro')}</p>
 				<form method="POST" action="?/register">
 					<label>
-						<span>Benutzername</span>
+						<span>{t('portfolio.username')}</span>
 						<input name="username" autocomplete="username" required />
 					</label>
 					<label>
-						<span>Dein Name</span>
+						<span>{t('portfolio.yourName')}</span>
 						<input name="displayName" autocomplete="name" required />
 					</label>
 					<label>
-						<span>Passwort</span>
+						<span>{t('portfolio.password')}</span>
 						<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
 					</label>
 					{#if form?.registerError}
 						<p class="form-error" role="alert">{form.registerError}</p>
 					{/if}
-					<button type="submit">Zugang erstellen</button>
+					<button type="submit">{t('portfolio.createAccount')}</button>
 				</form>
 			{:else}
-				<p class="eyebrow">Willkommen zurück</p>
-				<h1 id="onboarding-title">Anmelden</h1>
-				<p class="intro">Melde dich an, um deine Sammlungen zu verwalten.</p>
+				<p class="eyebrow">{t('portfolio.welcomeBackEyebrow')}</p>
+				<h1 id="onboarding-title">{t('portfolio.loginTitle')}</h1>
+				<p class="intro">{t('portfolio.loginIntro')}</p>
 				<form method="POST" action="?/login">
 					<label>
-						<span>Benutzername</span>
+						<span>{t('portfolio.username')}</span>
 						<input name="username" autocomplete="username" required />
 					</label>
 					<label>
-						<span>Passwort</span>
+						<span>{t('portfolio.password')}</span>
 						<input name="password" type="password" autocomplete="current-password" required />
 					</label>
 					{#if form?.loginError}
 						<p class="form-error" role="alert">{form.loginError}</p>
 					{/if}
-					<button type="submit">Anmelden</button>
+					<button type="submit">{t('portfolio.login')}</button>
 				</form>
 				<button class="reset-toggle" type="button" onclick={() => (resetPanelOpen = !resetPanelOpen)}>
-					Passwort mit Zurücksetzungscode ändern
+					{t('portfolio.changePasswordWithCode')}
 				</button>
 				{#if resetPanelOpen}
 					<form class="password-help" method="POST" action="?/resetPassword">
 						<label>
-							<span>Benutzername</span>
+							<span>{t('portfolio.username')}</span>
 							<input name="username" autocomplete="username" required />
 						</label>
 						<label>
-							<span>Zurücksetzungscode</span>
+							<span>{t('portfolio.resetCode')}</span>
 							<input name="resetSecret" type="password" autocomplete="one-time-code" required />
 						</label>
 						<label>
-							<span>Neues Passwort</span>
+							<span>{t('portfolio.newPassword')}</span>
 							<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
 						</label>
 						{#if form && 'resetError' in form && form.resetError}
 							<p class="form-error" role="alert">{form.resetError}</p>
 						{/if}
-						<button type="submit">Passwort zurücksetzen</button>
+						<button type="submit">{t('portfolio.resetPassword')}</button>
 					</form>
 				{/if}
 			{/if}
 		</section>
 	{:else if !data.collection}
 		<section class="onboarding" aria-labelledby="collections-title">
-			<p class="eyebrow">Dein Bereich</p>
-			<h1 id="collections-title">Deine Sammlungen</h1>
-			<p class="intro">Lege eine Sammlung an, um Dinge zu erfassen, die weiterziehen dürfen.</p>
+			<p class="eyebrow">{t('portfolio.yourAreaEyebrow')}</p>
+			<h1 id="collections-title">{t('portfolio.collectionsTitle')}</h1>
+			<p class="intro">{t('portfolio.collectionsIntro')}</p>
 			<form method="POST" action="?/createCollection">
 				<label>
-					<span>Name der Sammlung</span>
+					<span>{t('portfolio.collectionName')}</span>
 					<input name="collectionName" required />
 				</label>
 				{#if form?.createCollectionError}
 					<p class="form-error" role="alert">{form.createCollectionError}</p>
 				{/if}
-				<button type="submit">Sammlung anlegen</button>
+				<button type="submit">{t('portfolio.createCollection')}</button>
 			</form>
 			{#if data.collections.length}
-				<nav class="collection-list" aria-label="Deine Sammlungen">
+				<nav class="collection-list" aria-label={t('portfolio.yourCollections')}>
 					{#each data.collections as collection}
 						<a href={`/?collection=${encodeURIComponent(collection.id)}`}>{collection.name}</a>
 					{/each}
@@ -186,14 +167,14 @@
 	{:else}
 		<section class="collection-header" aria-labelledby="collection-title">
 			<div>
-				<p class="eyebrow">Deine Artikel</p>
+				<p class="eyebrow">{t('portfolio.yourItemsEyebrow')}</p>
 				<h1 id="collection-title">Portfolio</h1>
 			</div>
-			<p>({data.items.length})</p>
+			<p>{t('portfolio.itemsCount', { count: data.items.length })}</p>
 		</section>
 
 		{#if data.collections.length > 1}
-			<nav class="collection-switcher" aria-label="Sammlungswechsel" data-testid="collection-switcher">
+			<nav class="collection-switcher" aria-label={t('portfolio.switchCollection')} data-testid="collection-switcher">
 				{#each data.collections as collection (collection.id)}
 					<a href={`/?collection=${encodeURIComponent(collection.id)}`} aria-current={collection.id === data.collection.id ? 'page' : undefined}>
 						{collection.name}
@@ -205,90 +186,90 @@
 		<div class="workspace">
 			<div class="item-form-column">
 				<section class="item-form" aria-labelledby="add-item-title">
-				<div>
-					<p class="eyebrow">Neu in der Sammlung</p>
-					<h2 id="add-item-title">Artikel erfassen</h2>
-				</div>
-				<form method="POST" action="?/addItem">
-					<input name="collectionId" type="hidden" value={data.collection.id} />
-					<label>
-						<span>Artikelname</span>
-						<input name="title" required />
-					</label>
-					<div class="form-grid">
-						<label>
-								<span>Preis (€)</span>
-								<input name="priceEuros" type="text" inputmode="decimal" placeholder="z. B. 12,50" required />
-						</label>
-						<label>
-							<span>Kategorie</span>
-							<select name="category" aria-label="Kategorie">
-								{#each data.categoryOptions as category}
-									<option value={category}>{categoryLabels[category]}</option>
-								{/each}
-							</select>
-						</label>
-						<label>
-							<span>Zustand</span>
-							<select name="condition" aria-label="Zustand">
-								{#each data.conditionOptions as condition}
-									<option value={condition}>{conditionLabels[condition]}</option>
-								{/each}
-							</select>
-						</label>
+					<div>
+						<p class="eyebrow">{t('portfolio.addItemEyebrow')}</p>
+						<h2 id="add-item-title">{t('portfolio.addItemTitle')}</h2>
 					</div>
-					<label>
-						<span>Externe Beschreibung (für Käufer sichtbar)</span>
-						<textarea name="externalDescription" rows="3" data-testid="item-external-description-input"></textarea>
-					</label>
-					<label>
-						<span>Interne Notizen (nur für dich sichtbar)</span>
-						<textarea name="internalNotes" rows="3"></textarea>
-					</label>
-					<div class="flag-checkboxes">
-						<label class="checkbox">
-							<input name="isComplete" type="checkbox" value="1" data-testid="item-complete-checkbox" />
-							<span>Vollständig</span>
+					<form method="POST" action="?/addItem">
+						<input name="collectionId" type="hidden" value={data.collection.id} />
+						<label>
+							<span>{t('portfolio.itemTitle')}</span>
+							<input name="title" required />
 						</label>
-						<label class="checkbox">
-							<input name="isFunctional" type="checkbox" value="1" data-testid="item-functional-checkbox" />
-							<span>Funktionsfähig</span>
+						<div class="form-grid">
+							<label>
+								<span>{t('portfolio.price')}</span>
+								<input name="priceEuros" type="text" inputmode="decimal" placeholder={t('portfolio.priceExample')} required />
+							</label>
+							<label>
+								<span>{t('portfolio.category')}</span>
+								<select name="category" aria-label={t('portfolio.category')}>
+									{#each data.categoryOptions as category}
+										<option value={category}>{categoryLabel(category)}</option>
+									{/each}
+								</select>
+							</label>
+							<label>
+								<span>{t('portfolio.condition')}</span>
+								<select name="condition" aria-label={t('portfolio.condition')}>
+									{#each data.conditionOptions as condition}
+										<option value={condition}>{conditionLabel(condition)}</option>
+									{/each}
+								</select>
+							</label>
+						</div>
+						<label>
+							<span>{t('portfolio.externalDescription')}</span>
+							<textarea name="externalDescription" rows="3" data-testid="item-external-description-input"></textarea>
 						</label>
-					</div>
-					{#if form?.addItemError}
-						<p class="form-error" role="alert">{form.addItemError}</p>
-					{/if}
-					<button type="submit">Artikel hinzufügen</button>
-					{#if data.createdItemId}
-						<a class="manage-images-link" href={`/items/${encodeURIComponent(data.createdItemId)}`} data-testid="manage-images-link">
-							🖼 Bilder verwalten
-						</a>
-					{/if}
-				</form>
-			</section>
+						<label>
+							<span>{t('portfolio.internalNotes')}</span>
+							<textarea name="internalNotes" rows="3"></textarea>
+						</label>
+						<div class="flag-checkboxes">
+							<label class="checkbox">
+								<input name="isComplete" type="checkbox" value="1" data-testid="item-complete-checkbox" />
+								<span>{t('portfolio.isComplete')}</span>
+							</label>
+							<label class="checkbox">
+								<input name="isFunctional" type="checkbox" value="1" data-testid="item-functional-checkbox" />
+								<span>{t('portfolio.isFunctional')}</span>
+							</label>
+						</div>
+						{#if form?.addItemError}
+							<p class="form-error" role="alert">{form.addItemError}</p>
+						{/if}
+						<button type="submit">{t('portfolio.addItem')}</button>
+						{#if data.createdItemId}
+							<a class="manage-images-link" href={`/items/${encodeURIComponent(data.createdItemId)}`} data-testid="manage-images-link">
+								{t('portfolio.manageImages')}
+							</a>
+						{/if}
+					</form>
+				</section>
 			</div>
 
 			<div class="items-column">
 			{#if data.saleStatistics && data.saleStatistics.soldItemCount > 0}
 				<section class="sale-statistics" aria-labelledby="sale-statistics-title" data-testid="sale-statistics">
-					<p class="eyebrow">Verkaufsstatistik</p>
+					<p class="eyebrow">{t('portfolio.saleStatisticsEyebrow')}</p>
 					<h2 id="sale-statistics-title">
-						{data.saleStatistics.soldItemCount} Artikel verkauft · {formatPrice(data.saleStatistics.totalProceedsCents)} € Erlös
+						{t('portfolio.soldSummary', { count: data.saleStatistics.soldItemCount, proceeds: formatPrice(data.saleStatistics.totalProceedsCents) })}
 					</h2>
 					<div class="statistics-grid">
 						<div class="statistics-group">
-							<h3>Nach Kanal</h3>
+							<h3>{t('portfolio.byChannel')}</h3>
 							<ul data-testid="sale-statistics-channels">
 								{#each data.saleStatistics.proceedsByChannel as entry}
 									<li>
-										<span>{saleChannelLabels[entry.channel] ?? entry.channel}</span>
+										<span>{saleChannelLabel(entry.channel)}</span>
 										<span class="statistics-value">{entry.soldItemCount}× · {formatPrice(entry.totalProceedsCents)} €</span>
 									</li>
 								{/each}
 							</ul>
 						</div>
 						<div class="statistics-group">
-							<h3>Nach Monat</h3>
+							<h3>{t('portfolio.byMonth')}</h3>
 							<ul data-testid="sale-statistics-months">
 								{#each data.saleStatistics.proceedsByMonth as entry}
 									<li>
@@ -306,46 +287,46 @@
 					<input type="hidden" name="collection" value={data.collection.id} />
 				{/if}
 				<label class="filter-search">
-					<span>Suche</span>
+					<span>{t('portfolio.search')}</span>
 					<input
 						name="q"
 						type="search"
 						value={appliedFilters.query ?? ''}
-						placeholder="Titel, Notizen, Beschreibung …"
+						placeholder={t('portfolio.searchPlaceholder')}
 						data-testid="filter-search-input"
 					/>
 				</label>
 				<label>
-					<span>Kategorie</span>
+					<span>{t('portfolio.category')}</span>
 					<select name="category" data-testid="filter-category-select">
-						<option value="">Alle</option>
+						<option value="">{t('portfolio.all')}</option>
 						{#each data.categoryOptions as category}
-							<option value={category} selected={appliedFilters.category === category}>{categoryLabels[category]}</option>
+							<option value={category} selected={appliedFilters.category === category}>{categoryLabel(category)}</option>
 						{/each}
 					</select>
 				</label>
 				<label>
-					<span>Zustand</span>
+					<span>{t('portfolio.condition')}</span>
 					<select name="condition" data-testid="filter-condition-select">
-						<option value="">Alle</option>
+						<option value="">{t('portfolio.all')}</option>
 						{#each data.conditionOptions as condition}
-							<option value={condition} selected={appliedFilters.condition === condition}>{conditionLabels[condition]}</option>
+							<option value={condition} selected={appliedFilters.condition === condition}>{conditionLabel(condition)}</option>
 						{/each}
 					</select>
 				</label>
 				<label>
-					<span>Status</span>
+					<span>{t('portfolio.status')}</span>
 					<select name="status" data-testid="filter-status-select">
-						<option value="">Alle</option>
+						<option value="">{t('portfolio.all')}</option>
 						{#each ['open', 'reserved', 'sold'] as status}
-							<option value={status} selected={appliedFilters.status === status}>{statusFilterLabels[status]}</option>
+							<option value={status} selected={appliedFilters.status === status}>{statusFilterLabel(status)}</option>
 						{/each}
 					</select>
 				</label>
 				<div class="filter-actions">
-					<button type="submit" class="filter-apply" data-testid="filter-apply">Filtern</button>
+					<button type="submit" class="filter-apply" data-testid="filter-apply">{t('portfolio.applyFilters')}</button>
 					{#if hasActiveFilters}
-						<a class="filter-reset" href={data.collection ? `/?collection=${encodeURIComponent(data.collection.id)}` : '/'} data-testid="filter-reset">Zurücksetzen</a>
+						<a class="filter-reset" href={data.collection ? `/?collection=${encodeURIComponent(data.collection.id)}` : '/'} data-testid="filter-reset">{t('portfolio.resetFilters')}</a>
 					{/if}
 				</div>
 			</form>
@@ -371,7 +352,7 @@
 								{:else}
 									<div class="item-image" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
 								{/if}
-								<span class="kat">{categoryLabels[item.category]}</span>
+								<span class="kat">{categoryLabel(item.category)}</span>
 							</div>
 							<div class="item-copy">
 								<h2>{item.title}</h2>
@@ -379,13 +360,13 @@
 							</div>
 							<div class="tile-bottom">
 								{#if item.soldAt}
-									<span class="badge sold" data-testid="item-sold-badge">Verkauft{item.saleProceedsCents !== null ? ` · ${formatPrice(item.saleProceedsCents)} €` : ''}</span>
+									<span class="badge sold" data-testid="item-sold-badge">{t('portfolio.sold')}{item.saleProceedsCents !== null ? ` · ${formatPrice(item.saleProceedsCents)} €` : ''}</span>
 								{:else}
-									<span class="badge open">Offen</span>
+									<span class="badge open">{t('portfolio.open')}</span>
 									<form method="POST" action="?/quickSellItem">
 										<input name="itemId" type="hidden" value={item.id} />
 										<button class="pay" type="submit" data-testid="quick-sell-item">
-											€ Verkaufen
+											{t('portfolio.quickSell')}
 										</button>
 									</form>
 								{/if}
@@ -394,9 +375,9 @@
 					{/each}
 				</div>
 			{:else if hasActiveFilters}
-				<p class="empty" data-testid="filter-empty-state">Keine Artikel passen auf deine Filter.</p>
+				<p class="empty" data-testid="filter-empty-state">{t('portfolio.noItemsForFilters')}</p>
 			{:else}
-				<p class="empty">Deine Sammlung wartet auf ihren ersten Artikel.</p>
+				<p class="empty">{t('portfolio.waitingForFirstItem')}</p>
 			{/if}
 			</section>
 			</div>
