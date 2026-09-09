@@ -112,6 +112,17 @@ test.describe('Public stand page', () => {
 
 		// assume
 		expect(unknownResponse.status()).toBe(404);
+
+		// act — a buyer opens the public item detail page from the tile
+		await anonymousPage.getByTestId('stand-item').first().locator('.tile-link').click();
+		await expect(anonymousPage.getByTestId('stand-item-detail')).toBeVisible();
+		await expect(anonymousPage.getByTestId('stand-item-hint')).toContainText('Flohmarkt-Stand');
+		await expect(anonymousPage.locator('.item-title')).toHaveText(firstCardTitle!);
+		await expect(anonymousPage.locator('.back-link')).toBeVisible();
+		const itemNotFound = await anonymousPage.request.get('/stand/00000000-0000-0000-0000-000000000000/00000000-0000-0000-0000-000000000001');
+
+		// assume — unknown collection/item ids stay 404 on the public detail page
+		expect(itemNotFound.status()).toBe(404);
 		anonymousContext.close?.();
 	});
 });

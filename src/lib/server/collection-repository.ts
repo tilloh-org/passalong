@@ -117,6 +117,7 @@ export interface PublicStandItem {
 	category: ItemCategory;
 	condition: ItemCondition;
 	externalDescription: string;
+	reservedAt: string | null;
 }
 
 export interface PublicStandView {
@@ -242,6 +243,7 @@ export interface CollectionRepository {
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
 	getSaleStatistics(scope: SessionScope): SaleStatistics;
 	getPublicStandView(collectionId: string): PublicStandView | null;
+	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
 	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
 	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
@@ -983,18 +985,39 @@ export function createCollectionRepository(
 			const items = (
 				database
 					.prepare(
-						'SELECT id, title, price_cents, category, condition, external_description FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
+						'SELECT id, title, price_cents, category, condition, external_description, reserved_at FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
 						)
-						.all(collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string }[]
-						).map((row) => ({
-						id: row.id,
-						title: row.title,
-						priceCents: row.price_cents,
-						category: row.category,
-						condition: row.condition,
-						externalDescription: row.external_description
-						}));
+					.all(collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null }[]
+					).map((row) => ({
+					id: row.id,
+					title: row.title,
+					priceCents: row.price_cents,
+					category: row.category,
+					condition: row.condition,
+					externalDescription: row.external_description,
+					reservedAt: row.reserved_at
+					}));
 			return { collectionId, collectionName: collection.name, intro: collection.stand_intro, items };
+		},
+
+		getPublicStandItem(collectionId, itemId) {
+			const item = database
+				.prepare(
+					'SELECT id, title, price_cents, category, condition, external_description, reserved_at FROM items WHERE id = ? AND collection_id = ? AND sold_at IS NULL'
+					)
+					.get(itemId, collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null } | undefined;
+			if (!item) {
+				return null;
+			}
+			return {
+				id: item.id,
+				title: item.title,
+				priceCents: item.price_cents,
+				category: item.category,
+				condition: item.condition,
+				externalDescription: item.external_description,
+				reservedAt: item.reserved_at
+			};
 		},
 
 		listItemsForOwner(collectionId, scope) {

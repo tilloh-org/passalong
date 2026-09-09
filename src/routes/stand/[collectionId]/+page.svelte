@@ -85,9 +85,12 @@
 	{#if data.stand.items.length}
 		<div class="stand-grid" data-testid="stand-items">
 			{#each data.stand.items as item (item.id)}
-				<div class="tile" data-testid="stand-item">
+				<div class="tile" class:reserved={item.reservedAt} data-testid="stand-item">
 					<div class="img" aria-hidden="true">
 						{item.title.slice(0, 1).toUpperCase()}
+						{#if item.reservedAt}
+							<span class="reserved-tag" data-testid="stand-item-reserved">{t('item.reserved')}</span>
+						{/if}
 						<button
 							class="favorite-toggle"
 							class:active={isFavorite(item.id)}
@@ -102,7 +105,7 @@
 							</svg>
 						</button>
 					</div>
-					<a class="tile-link" href={`/?collection=${encodeURIComponent(item.id)}`}>
+					<a class="tile-link" href={`/stand/${encodeURIComponent(data.stand.collectionId)}/${encodeURIComponent(item.id)}`}>
 						<div class="body">
 							<div class="name">{item.title}</div>
 							<div class="price">{formatPrice(item.priceCents)}</div>
@@ -150,7 +153,12 @@
 		<div class="favorites-grid" data-testid="favorites-grid">
 			{#each favoriteItems as item (item.id)}
 				<div class="favorites-item" data-testid="favorites-item">
-					<div class="img" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
+					<div class="img" aria-hidden="true">
+						{item.title.slice(0, 1).toUpperCase()}
+						{#if item.reservedAt}
+							<span class="reserved-tag">{t('item.reserved')}</span>
+						{/if}
+					</div>
 					<div class="body">
 						<div class="name">{item.title}</div>
 						<div class="price">{formatPrice(item.priceCents)}</div>
@@ -324,6 +332,29 @@
 
 	.favorite-toggle.active {
 		color: var(--color-accent);
+	}
+
+	.tile.reserved .img {
+		opacity: 0.55;
+	}
+
+	.reserved-tag {
+		background: var(--color-accent);
+		border-radius: 999px;
+		color: #fff;
+		font-size: 0.62rem;
+		font-weight: 800;
+		left: 0.6rem;
+		letter-spacing: 0.03em;
+		padding: 3px 9px;
+		position: absolute;
+		top: 0.6rem;
+		z-index: 2;
+	}
+
+	.favorites-item .reserved-tag {
+		left: 0.4rem;
+		top: 0.4rem;
 	}
 
 	.tile-link {

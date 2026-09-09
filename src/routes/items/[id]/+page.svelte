@@ -1,24 +1,9 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { t } from '$lib/i18n/index.svelte';
+	import ItemInfoBlock from '$lib/components/item-info-block.svelte';
 
 	let { data, form } = $props();
-
-	/**
-	 * Translate a category key in the active locale.
-	 *
-	 * @param {string} category - A category key such as `books`.
-	 * @returns {string} Human-readable category label.
-	 */
-	const categoryLabel = (category: string) => t(`category.${category}`);
-
-	/**
-	 * Translate a condition key in the active locale.
-	 *
-	 * @param {string} condition - A condition key such as `good`.
-	 * @returns {string} Human-readable condition label.
-	 */
-	const conditionLabel = (condition: string) => t(`condition.${condition}`);
 
 	/**
 	 * Translate a sale channel key in the active locale.
@@ -59,37 +44,11 @@
 		</div>
 
 		<div class="info-column">
-			<p class="eyebrow">{categoryLabel(data.item.category)} · {conditionLabel(data.item.condition)}</p>
-			<h1 id="item-title">{data.item.title}</h1>
-			<p class="price">{formatPrice(data.item.priceCents)} €</p>
-			<div class="flag-pills" data-testid="item-flag-pills">
-				<span class="flag-pill category">{categoryLabel(data.item.category)}</span>
-				{#if data.item.isComplete}
-					<span class="flag-pill complete">{t('item.complete')}</span>
-				{/if}
-				{#if data.item.isFunctional}
-					<span class="flag-pill functional">{t('item.functional')}</span>
-				{/if}
-			</div>
-			{#if data.item.reservedAt && !data.item.soldAt}
-				<p class="reserved-badge" data-testid="item-reserved-badge">{t('item.reserved')}</p>
-			{/if}
+			<ItemInfoBlock item={data.item} variant="internal" />
 			{#if data.item.soldAt}
 				<p class="sold-badge" data-testid="item-sold-badge">
 					{t('item.soldOnChannel', { channel: saleChannelLabel(data.item.saleChannel ?? 'other') })}{data.item.saleProceedsCents !== null ? ` ${t('item.soldWithProceeds', { proceeds: formatPrice(data.item.saleProceedsCents) })}` : ''}
 				</p>
-			{/if}
-			{#if data.item.externalDescription}
-				<div class="description external" data-testid="item-external-description">
-					<strong>{t('item.descriptionLabel')}</strong>
-					<p>{data.item.externalDescription}</p>
-				</div>
-			{/if}
-			{#if data.item.internalNotes}
-				<div class="description internal" data-testid="item-internal-notes">
-					<strong>{t('item.internalNotesLabel')}</strong>
-					<p>{data.item.internalNotes}</p>
-				</div>
 			{/if}
 
 			<section class="panel" aria-labelledby="photos-title">
@@ -258,7 +217,7 @@
 					<span>{t('portfolio.category')}</span>
 					<select name="category" aria-label={t('portfolio.category')}>
 						{#each data.categoryOptions as category}
-							<option value={category} selected={category === data.item.category}>{categoryLabel(category)}</option>
+							<option value={category} selected={category === data.item.category}>{t(`category.${category}`)}</option>
 						{/each}
 					</select>
 				</label>
@@ -266,7 +225,7 @@
 					<span>{t('portfolio.condition')}</span>
 					<select name="condition" aria-label={t('portfolio.condition')}>
 						{#each data.conditionOptions as condition}
-							<option value={condition} selected={condition === data.item.condition}>{conditionLabel(condition)}</option>
+							<option value={condition} selected={condition === data.item.condition}>{t(`condition.${condition}`)}</option>
 						{/each}
 					</select>
 				</label>
@@ -348,40 +307,9 @@
 		justify-content: center;
 	}
 
-	.eyebrow {
-		color: var(--color-text-muted);
-		font-size: 0.72rem;
-		font-weight: 700;
-		letter-spacing: 0.06em;
-		margin: 0 0 0.3rem;
-		text-transform: uppercase;
-	}
-
-	.info-column h1 {
-		color: var(--color-accent-strong);
-		font-size: 1.5rem;
-		margin: 0;
-	}
-
-	.price {
-		color: var(--color-accent);
-		font-size: 1.3rem;
-		font-weight: 800;
-		margin: 0.5rem 0 0;
-	}
-
-	.reserved-badge {
-		align-self: flex-start;
-		background: var(--color-warn-soft, rgba(240, 179, 0, 0.12));
-		border: 1px solid var(--color-warn-border, rgba(240, 179, 0, 0.5));
-		border-radius: 999px;
-		color: var(--color-warn, #f0b300);
-		display: inline-block;
-		font-size: 0.75rem;
-		font-weight: 800;
-		letter-spacing: 0.03em;
-		margin: 0.6rem 0 0;
-		padding: 4px 10px;
+	.info-column {
+		display: flex;
+		flex-direction: column;
 	}
 
 	.cover-preview {
@@ -544,64 +472,6 @@
 		letter-spacing: 0.03em;
 		margin: 0.6rem 0 0;
 		padding: 4px 10px;
-	}
-
-	.flag-pills {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem;
-		margin: 0.6rem 0 0;
-	}
-
-	.flag-pill {
-		border-radius: 999px;
-		font-size: 0.75rem;
-		font-weight: 700;
-		letter-spacing: 0.02em;
-		padding: 4px 10px;
-	}
-
-	.flag-pill.category {
-		background: var(--color-surface-strong);
-		border: 1px solid var(--color-border);
-		color: var(--color-text-muted);
-	}
-
-	.flag-pill.complete {
-		background: var(--color-ok-soft);
-		border: 1px solid var(--color-ok-border);
-		color: var(--color-ok);
-	}
-
-	.flag-pill.functional {
-		background: var(--color-info-soft, rgba(56, 132, 255, 0.12));
-		border: 1px solid var(--color-info-border, rgba(56, 132, 255, 0.5));
-		color: var(--color-info, #3884ff);
-	}
-
-	.description {
-		border-top: 1px solid var(--color-border);
-		font-size: 0.9rem;
-		line-height: 1.5;
-		margin: 0.9rem 0 0;
-		padding-top: 0.6rem;
-	}
-
-	.description p {
-		margin: 0.25rem 0 0;
-		white-space: pre-line;
-	}
-
-	.description.internal {
-		background: var(--color-warn-soft, rgba(240, 179, 0, 0.1));
-		border: 1px solid var(--color-warn-border, rgba(240, 179, 0, 0.45));
-		border-radius: var(--radius-small);
-		color: var(--color-warn, #f0b300);
-		padding: 0.6rem 0.75rem;
-	}
-
-	.description.internal p {
-		color: var(--color-text-muted);
 	}
 
 	.visually-hidden-input {
