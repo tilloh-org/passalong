@@ -81,6 +81,17 @@ test.describe('Public stand page', () => {
 		await expect(standCards.filter({ hasText: 'Buch' })).toContainText('3,00');
 		await expect(standCards.filter({ hasText: 'Buch' }).getByTestId('stand-item-description')).toHaveCount(0);
 
+		// act — favorite the first card, verify persistence across reload, then toggle off
+		const firstCard = anonymousPage.getByTestId('stand-item').first();
+		const heart = firstCard.getByTestId('favorite-toggle');
+		await expect(heart).toHaveAttribute('aria-pressed', 'false');
+		await heart.click();
+		await expect(heart).toHaveAttribute('aria-pressed', 'true');
+		await anonymousPage.reload();
+		await expect(anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle')).toHaveAttribute('aria-pressed', 'true');
+		await anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle').click();
+		await expect(anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle')).toHaveAttribute('aria-pressed', 'false');
+
 		// act
 		const unknownResponse = await anonymousPage.request.get('/stand/00000000-0000-0000-0000-000000000000');
 

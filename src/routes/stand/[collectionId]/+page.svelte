@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { t } from '$lib/i18n/index.svelte';
+	import { getFavorites, pruneFavorites, toggleFavorite } from '$lib/stand-favorites.svelte';
 
 	let { data } = $props();
 
@@ -19,6 +20,38 @@
 	 * @returns {string} Human-readable condition label.
 	 */
 	const conditionLabel = (condition: string) => t(`condition.${condition}`);
+
+	/**
+	 * Favorite item IDs of this stand page, hydrated on the client only.
+	 * Server-rendered markup always starts empty so SSR and client agree.
+	 */
+	let favoriteIds = $state<string[]>([]);
+
+	$effect(() => {
+		// Prune sold items and hydrate the persisted list in the browser.
+		favoriteIds = pruneFavorites(
+			data.stand.collectionId,
+			data.stand.items.map((item) => item.id)
+		);
+	});
+
+	/**
+	 * Check whether one item is currently marked as favorite.
+	 *
+	 * @param {string} itemId - Public item identifier.
+	 * @returns {boolean} Whether the heart is active.
+	 */
+	const isFavorite = (itemId: string) => favoriteIds.includes(itemId);
+
+	/**
+	 * Toggle one item's favorite state and keep the rendered list in sync.
+	 *
+	 * @param {string} itemId - Public item identifier.
+	 */
+	function onToggleFavorite(itemId: string): void {
+		toggleFavorite(data.stand.collectionId, itemId);
+		favoriteIds = getFavorites(data.stand.collectionId);
+	}
 </script>
 
 <svelte:head>
@@ -41,17 +74,34 @@
 	{#if data.stand.items.length}
 		<div class="stand-grid" data-testid="stand-items">
 			{#each data.stand.items as item (item.id)}
-				<a class="tile" data-testid="stand-item" href={`/?collection=${encodeURIComponent(item.id)}`}>
-					<div class="img" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
-					<div class="body">
-						<div class="name">{item.title}</div>
-						<div class="price">{formatPrice(item.priceCents)}</div>
-						<div class="meta">{categoryLabel(item.category)} · {conditionLabel(item.condition)}</div>
-						{#if item.externalDescription}
-							<p class="description" data-testid="stand-item-description">{item.externalDescription}</p>
-						{/if}
+				<div class="tile" data-testid="stand-item">
+					<div class="img" aria-hidden="true">
+						{item.title.slice(0, 1).toUpperCase()}
+						<button
+							class="favorite-toggle"
+							class:active={isFavorite(item.id)}
+							aria-label={isFavorite(item.id) ? t('stand.favoriteRemove') : t('stand.favoriteAdd')}
+							aria-pressed={isFavorite(item.id)}
+							data-testid="favorite-toggle"
+							type="button"
+							onclick={() => onToggleFavorite(item.id)}
+						>
+							<svg class="icon" aria-hidden="true" focusable="false">
+								<use href={isFavorite(item.id) ? '#icon-heart-filled' : '#icon-heart-outline'} />
+							</svg>
+						</button>
 					</div>
-				</a>
+					<a class="tile-link" href={`/?collection=${encodeURIComponent(item.id)}`}>
+						<div class="body">
+							<div class="name">{item.title}</div>
+							<div class="price">{formatPrice(item.priceCents)}</div>
+							<div class="meta">{categoryLabel(item.category)} · {conditionLabel(item.condition)}</div>
+							{#if item.externalDescription}
+								<p class="description" data-testid="stand-item-description">{item.externalDescription}</p>
+							{/if}
+						</div>
+					</a>
+				</div>
 			{/each}
 		</div>
 	{:else}
@@ -165,6 +215,57 @@
 		font-size: 2.4rem;
 		font-weight: 800;
 		justify-content: center;
+		position: relative;
+	}
+
+	.favorite-toggle {
+		align-items: center;
+		background: var(--glass);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		display: flex;
+		height: 2.2rem;
+		justify-content: center;
+		padding: 0;
+		position: absolute;
+		right: 0.6rem;
+		top: 0.6rem;
+		transition: all 0.25s ease;
+		width: 2.2rem;
+		z-index: 2;
+	}
+
+	.favorite-toggle .icon {
+		height: 1.15rem;
+		width: 1.15rem;
+	}
+
+	.favorite-toggle:hover {
+		background: var(--color-accent-soft);
+		box-shadow: var(--shadow-btn-hover);
+		transform: translateY(-1px);
+	}
+
+	.favorite-toggle:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.favorite-toggle.active {
+		color: var(--color-accent);
+	}
+
+	.tile-link {
+		color: inherit;
+		display: flex;
+		flex-direction: column;
+		text-decoration: none;
+	}
+
+	.tile-link:hover .name {
+		color: var(--color-accent);
 	}
 
 	.tile .body {

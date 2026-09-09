@@ -19,6 +19,7 @@ export default defineConfig({
 	],
 	test: {
 		include: ['src/**/*.test.ts'],
-		exclude: ['e2e/**', 'node_modules/**']
+		exclude: ['e2e/**', 'node_modules/**'],
+		setupFiles: ['src/test-setup.ts']
 	}
 });

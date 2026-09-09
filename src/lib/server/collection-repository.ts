@@ -120,6 +120,7 @@ export interface PublicStandItem {
 }
 
 export interface PublicStandView {
+	collectionId: string;
 	collectionName: string;
 	intro: string;
 	items: PublicStandItem[];
@@ -993,7 +994,7 @@ export function createCollectionRepository(
 						condition: row.condition,
 						externalDescription: row.external_description
 						}));
-			return { collectionName: collection.name, intro: collection.stand_intro, items };
+			return { collectionId, collectionName: collection.name, intro: collection.stand_intro, items };
 		},
 
 		listItemsForOwner(collectionId, scope) {

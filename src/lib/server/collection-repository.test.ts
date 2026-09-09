@@ -1446,6 +1446,7 @@ describe('collection repository', () => {
 		// assume
 		expect(publicView?.items).toHaveLength(2);
 		expect(publicView).toEqual({
+			collectionId: standCollection.id,
 			collectionName: 'Flohmarkt',
 			intro: '',
 			items: expect.arrayContaining([
