@@ -34,8 +34,11 @@ time; current rules in the docs above win.
   instead of opening a second PR. Release-candidate PRs are integration
   context, not parallel feature PRs.
 - **Feature branches only, PRs against `develop`.** `main` is release-only.
-- **Code, comments, tests, CSS classes, test IDs: English.** German only in
-  user-facing UI copy.
+- **Everything in the repo is English — no exceptions.** Code, comments,
+  tests, CSS classes, test IDs, **commit messages, PR titles, PR
+  descriptions, issue texts and any other repo communication**: English.
+  The only German content is the visitor-facing UI copy that the i18n
+  layer serves (`src/lib/i18n/` dictionaries), switchable at runtime.
 - **No secrets in code, docs, PRs, or logs.** Never commit `.env` files.
 - **A question from Tim is a discussion, not an order to change anything.**
   Only act after an explicit decision or implementation instruction.
