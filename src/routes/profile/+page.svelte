@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { t } from '$lib/i18n/index.svelte';
 	let { data, form } = $props();
 
 	const avatarFallback = $derived((data.profile.displayName ?? 'P').slice(0, 1).toUpperCase());
@@ -67,7 +68,7 @@
 </script>
 
 <svelte:head>
-	<title>Profil · passalong</title>
+	<title>{t('profile.title')} · passalong</title>
 </svelte:head>
 
 <main class="profile">
@@ -76,8 +77,8 @@
 	{/if}
 
 	<section class="profile-card" aria-labelledby="profile-title">
-		<p class="eyebrow">Dein Zugang</p>
-		<h1 id="profile-title">Profil</h1>
+		<p class="eyebrow">{t('profile.yourAccountEyebrow')}</p>
+		<h1 id="profile-title">{t('profile.title')}</h1>
 
 		<div class="profile-layout">
 			<div class="avatar-column">
@@ -86,7 +87,7 @@
 						<img
 							class="avatar-img"
 							src={`/media/${encodeURIComponent(data.profile.avatarStorageKey)}`}
-							alt="Profilbild von {data.profile.displayName}"
+							alt={t('profile.avatarAlt', { name: data.profile.displayName })}
 						/>
 					{:else}
 						<span class="avatar-fallback">{avatarFallback}</span>
@@ -103,12 +104,12 @@
 						required
 						onchange={onAvatarFileChange}
 					/>
-					<label class="file-button" for="avatar-file">{avatarFile ? `🖼 ${avatarFile.name}` : '🖼 Bild auswählen'}</label>
-					<button type="submit" disabled={!avatarReady} aria-disabled={!avatarReady}>Avatar speichern</button>
+					<label class="file-button" for="avatar-file">{avatarFile ? `🖼 ${avatarFile.name}` : t('profile.chooseImage')}</label>
+					<button type="submit" disabled={!avatarReady} aria-disabled={!avatarReady}>{t('profile.saveAvatar')}</button>
 				</form>
 				{#if data.profile.avatarStorageKey}
 					<form method="POST" action="?/removeAvatar" class="avatar-remove-form">
-						<button type="submit" class="danger" data-testid="remove-avatar">Avatar entfernen</button>
+						<button type="submit" class="danger" data-testid="remove-avatar">{t('profile.removeAvatar')}</button>
 					</form>
 				{/if}
 				{#if form?.avatarError}
@@ -118,50 +119,50 @@
 
 			<div class="details-column">
 				<form method="POST" action="?/updateProfile" class="panel" data-testid="profile-details-form">
-					<h2>Stammdaten</h2>
+					<h2>{t('profile.detailsTitle')}</h2>
 					<label>
-						<span>Benutzername</span>
+						<span>{t('profile.username')}</span>
 						<input value={data.profile.username} disabled />
 					</label>
 					<label>
-						<span>Anzeigename</span>
+						<span>{t('profile.displayName')}</span>
 						<input name="displayName" value={data.profile.displayName} required data-testid="display-name-input" />
 					</label>
 					{#if form?.updateProfileError}
 						<p class="form-error" role="alert">{form.updateProfileError}</p>
 					{/if}
-					<button type="submit" data-testid="save-profile">Änderungen speichern</button>
+					<button type="submit" data-testid="save-profile">{t('profile.saveChanges')}</button>
 				</form>
 
 				{#if data.activeCollection}
 					<section class="panel stand-panel" aria-labelledby="stand-title" data-testid="stand-panel">
-						<h2 id="stand-title">🛒 Meine Angebote</h2>
+						<h2 id="stand-title">{t('profile.standTitle')}</h2>
 						<p class="stand-hint">
-							Eine Galerie deiner offenen Artikel — ohne Login für Käufer erreichbar. Ideal als QR-Code am Stand.
+							{t('profile.standHint')}
 						</p>
 						<form method="POST" action="?/saveStandIntro" data-testid="stand-intro-form">
 							<input name="collectionId" type="hidden" value={data.activeCollection.id} />
 							<label>
-								<span>Einleitung für die Standseite</span>
+								<span>{t('profile.standIntroLabel')}</span>
 								<textarea
 									name="standIntro"
 									rows="3"
-									placeholder="optional — z.B. ein paar Sätze zu deinem Sortiment"
+									placeholder={t('profile.standIntroPlaceholder')}
 									data-testid="stand-intro-input"
 									bind:value={standIntroDraft}>{data.activeCollection.standIntro}</textarea>
 							</label>
-							<p class="stand-hint">Wird auf deiner Standseite unter deinem Namen angezeigt.</p>
+							<p class="stand-hint">{t('profile.standIntroHint')}</p>
 						{#if form?.standIntroError}
 							<p class="form-error" role="alert">{form.standIntroError}</p>
 						{/if}
-						<button type="submit" data-testid="save-stand-intro" disabled={!standIntroChanged} aria-disabled={!standIntroChanged}>✓ Einleitung speichern</button>
+						<button type="submit" data-testid="save-stand-intro" disabled={!standIntroChanged} aria-disabled={!standIntroChanged}>{t('profile.saveStandIntro')}</button>
 					</form>
 
 					<hr class="stand-divider" />
 
 					<div class="stand-actions">
 						<button type="button" class="secondary" onclick={() => copyStandLink()} data-testid="copy-stand-link">
-							🔗 Link kopieren
+							{t('profile.copyStandLink')}
 						</button>
 						<a
 							class="stand-open"
@@ -170,20 +171,20 @@
 							rel="noopener"
 							data-testid="open-stand-link"
 						>
-							↗ Meine Angebote öffnen
+							{t('profile.openStand')}
 						</a>
 					</div>
-				</section>
+					</section>
 			{/if}
 
 				<form method="POST" action="?/changePassword" class="panel" data-testid="password-form">
-					<h2>Passwort ändern</h2>
+					<h2>{t('profile.changePasswordTitle')}</h2>
 					<label>
-						<span>Aktuelles Passwort</span>
+						<span>{t('profile.currentPassword')}</span>
 						<input name="currentPassword" type="password" autocomplete="current-password" required />
 					</label>
 					<label>
-						<span>Neues Passwort</span>
+						<span>{t('profile.newPassword')}</span>
 						<input
 							name="password"
 							type="password"
@@ -193,21 +194,25 @@
 							required
 						/>
 					</label>
-					<p class="password-hint">Mindestens {data.minimumPasswordLength} Zeichen.</p>
+					<p class="password-hint">{t('profile.passwordHint', { count: data.minimumPasswordLength })}</p>
 					{#if form?.changePasswordError}
 						<p class="form-error" role="alert">{form.changePasswordError}</p>
 					{/if}
-					<button type="submit" data-testid="save-password">Passwort speichern</button>
+					<button type="submit" data-testid="save-password">{t('profile.savePassword')}</button>
 				</form>
 
 				<section class="panel import-panel" aria-labelledby="import-title" data-testid="import-panel">
-					<h2 id="import-title">Daten importieren</h2>
+					<h2 id="import-title">{t('profile.importTitle')}</h2>
 					<p class="import-hint">
-						Ein ZIP-Export wird in dein aktuelles Konto hinzugefügt. Bestehende Daten bleiben erhalten.
+						{t('profile.importHint')}
 					</p>
 					{#if form && 'importAccountSuccess' in form && form.importAccountSuccess}
 						<p class="import-success" role="status">
-							Import abgeschlossen: {form.importAccountSuccess.collectionsImported} Sammlungen, {form.importAccountSuccess.itemsImported} Artikel und {form.importAccountSuccess.imagesImported} Bilder hinzugefügt.
+							{t('profile.importSuccess', {
+								collections: form.importAccountSuccess.collectionsImported,
+								items: form.importAccountSuccess.itemsImported,
+								images: form.importAccountSuccess.imagesImported
+							})}
 						</p>
 					{/if}
 					{#if form && 'importAccountError' in form && form.importAccountError}
@@ -224,26 +229,26 @@
 							required
 							onchange={onImportFileChange}
 						/>
-						<label class="file-button" for="account-archive-file">{importFile ? `📦 ${importFile.name}` : '📦 ZIP-Archiv auswählen'}</label>
-						<button type="submit" data-testid="import-submit" disabled={!importReady} aria-disabled={!importReady}>Import ausführen</button>
+						<label class="file-button" for="account-archive-file">{importFile ? `📦 ${importFile.name}` : t('profile.chooseArchive')}</label>
+						<button type="submit" data-testid="import-submit" disabled={!importReady} aria-disabled={!importReady}>{t('profile.runImport')}</button>
 					</form>
 				</section>
 
 				<section class="panel logout-panel" aria-labelledby="logout-title" data-testid="logout-panel">
-					<h2 id="logout-title">Sitzung</h2>
-					<p class="logout-hint">Beendet deine aktuelle Sitzung und leitet dich zur Startseite zurück.</p>
+					<h2 id="logout-title">{t('profile.sessionTitle')}</h2>
+					<p class="logout-hint">{t('profile.sessionHint')}</p>
 					<form method="POST" action="?/logout" class="logout-form">
-						<button type="submit" class="danger logout-btn" data-testid="profile-logout">Abmelden</button>
+						<button type="submit" class="danger logout-btn" data-testid="profile-logout">{t('profile.logout')}</button>
 					</form>
 				</section>
 
 			<section class="panel delete-account-panel" aria-labelledby="delete-account-title" data-testid="delete-account-panel">
-					<h2 id="delete-account-title">Konto löschen</h2>
+					<h2 id="delete-account-title">{t('profile.deleteAccountTitle')}</h2>
 					<p class="delete-account-hint">
-						Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Die Bestätigung öffnet sich erst nach Klick auf den Lösch-Button.
+						{t('profile.deleteAccountHint')}
 					</p>
 					<button type="button" class="danger delete-account-trigger" data-testid="delete-account-trigger" onclick={() => openDeleteAccountDialog()}>
-						Konto löschen
+						{t('profile.deleteAccountTitle')}
 					</button>
 				</section>
 
@@ -254,23 +259,23 @@
 					data-testid="delete-account-dialog"
 				>
 					<div class="dialog-head">
-						<h3 id="delete-account-dialog-title">Konto löschen bestätigen</h3>
-						<button type="button" class="secondary" onclick={() => deleteAccountDialog?.close()}>Schließen</button>
+						<h3 id="delete-account-dialog-title">{t('profile.deleteAccountConfirmTitle')}</h3>
+						<button type="button" class="secondary" onclick={() => deleteAccountDialog?.close()}>{t('profile.close')}</button>
 					</div>
 					<p class="dialog-hint">
-						Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Zum Bestätigen gib bitte deinen Benutzernamen ein.
+						{t('profile.deleteAccountDialogHint')}
 					</p>
-					<div class="delete-account-warning" role="note" aria-label="Warnhinweis zur Konto-Löschung">
+					<div class="delete-account-warning" role="note" aria-label={t('profile.deleteAccountWarningLabel')}>
 						<span aria-hidden="true">⚠️</span>
-						<span>Mit der Bestätigung werden deine Account-Daten unwiederbringlich gelöscht.</span>
+						<span>{t('profile.deleteAccountWarning')}</span>
 					</div>
 					<div class="delete-account-export">
-						<p class="delete-account-export-hint">Wenn du die Daten behalten willst, lade sie jetzt als ZIP herunter.</p>
-						<a class="secondary delete-account-export-link" href="/profile/export" download data-testid="export-account-archive">ZIP-Export herunterladen</a>
+						<p class="delete-account-export-hint">{t('profile.deleteAccountExportHint')}</p>
+						<a class="secondary delete-account-export-link" href="/profile/export" download data-testid="export-account-archive">{t('profile.downloadZipExport')}</a>
 					</div>
 					<form method="POST" action="?/deleteAccount" class="delete-account-form" data-testid="delete-account-form">
 						<label>
-							<span>Benutzername bestätigen</span>
+							<span>{t('profile.confirmUsername')}</span>
 							<input
 								name="confirmUsername"
 								autocomplete="username"
@@ -286,7 +291,7 @@
 						{#if form?.deleteAccountError}
 							<p class="form-error" role="alert">{form.deleteAccountError}</p>
 						{/if}
-						<button type="submit" class="danger" data-testid="delete-account-submit" disabled={!deleteAccountReady} aria-disabled={!deleteAccountReady}>Konto endgültig löschen</button>
+						<button type="submit" class="danger" data-testid="delete-account-submit" disabled={!deleteAccountReady} aria-disabled={!deleteAccountReady}>{t('profile.deleteAccountFinal')}</button>
 					</form>
 				</dialog>
 			</div>
@@ -295,10 +300,10 @@
 		{#if data.isInstanceAdmin}
 			<hr class="admin-divider" />
 			<section class="panel admin-area-panel" aria-labelledby="admin-area-title" data-testid="admin-area-panel">
-				<h2 id="admin-area-title">🔒 Admin Bereich</h2>
-				<p class="admin-area-hint">Technische Verwaltung der Instanz: Passwort-Reset-Codes, Backups und Restore.</p>
+				<h2 id="admin-area-title">{t('profile.adminAreaTitle')}</h2>
+				<p class="admin-area-hint">{t('profile.adminAreaHint')}</p>
 				<a class="admin-area-link" href="/admin" data-testid="instance-admin-link">
-					Zur Instanzverwaltung
+					{t('profile.goToInstanceAdmin')}
 				</a>
 			</section>
 		{/if}

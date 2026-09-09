@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { resolveArticleDetailPath } from '$lib/utils/scan';
+	import { t } from '$lib/i18n/index.svelte';
 
 	interface BarcodeDetectorLike {
 		detect(source: HTMLVideoElement): Promise<Array<{ rawValue?: string }>>;
@@ -11,10 +12,13 @@
 	let mediaStream = $state<MediaStream | null>(null);
 	let barcodeDetector = $state<BarcodeDetectorLike | null>(null);
 	let cameraActive = $state(false);
-	let scanStatus = $state('Drücke auf „Kamera starten“, um einen QR-Code zu scannen.');
+	let scanStatus = $state('');
 	let scanError = $state<string | null>(null);
 	let manualValue = $state('');
 	let animationFrameId = $state<number | null>(null);
+
+	// Seed the idle status text after translation lookup is available.
+	scanStatus = t('scan.statusIdle');
 
 	/**
 	 * Start the live camera scanner and begin reading QR codes.
@@ -23,9 +27,9 @@
 	 */
 	async function startScanner(): Promise<void> {
 		scanError = null;
-		scanStatus = 'Die Kamera wird gestartet…';
+		scanStatus = t('scan.statusStarting');
 		if (!navigator.mediaDevices?.getUserMedia) {
-			scanStatus = 'Dein Browser unterstützt keinen Kamerazugriff. Nutze den direkten Link weiter unten.';
+			scanStatus = t('scan.statusNoMediaDevices');
 			return;
 		}
 
@@ -34,7 +38,7 @@
 		}).BarcodeDetector;
 
 		if (!detectorConstructor) {
-			scanStatus = 'Dein Browser unterstützt die QR-Erkennung nicht. Nutze den direkten Link weiter unten.';
+			scanStatus = t('scan.statusNoDetector');
 			return;
 		}
 
@@ -47,17 +51,17 @@
 				audio: false
 			});
 			if (!videoElement) {
-				throw new Error('Kameraelement ist nicht verfügbar.');
+				throw new Error(t('scan.cameraElementMissing'));
 			}
 			videoElement.srcObject = mediaStream;
 			await videoElement.play();
 			cameraActive = true;
-			scanStatus = 'Kamera aktiv — halte den QR-Code gut sichtbar ins Bild.';
+			scanStatus = t('scan.statusActive');
 			void scanLoop();
-		} catch {
-			await stopScanner();
-			scanStatus = 'Die Kamera konnte nicht gestartet werden. Bitte erlaube den Zugriff oder nutze den direkten Link weiter unten.';
-		}
+			} catch {
+				await stopScanner();
+				scanStatus = t('scan.statusCameraFailed');
+			}
 	}
 
 	/**
@@ -100,12 +104,12 @@
 			if (rawValue) {
 				const targetPath = resolveArticleDetailPath(rawValue, window.location.origin);
 				if (targetPath) {
-					scanStatus = 'Artikel erkannt — öffne die Detailseite…';
+					scanStatus = t('scan.statusDetected');
 					await stopScanner();
 					await goto(targetPath);
 					return;
 				}
-				scanError = 'Der erkannte QR-Code führt nicht zu einer Artikeldetailseite.';
+				scanError = t('scan.qrNotAnItem');
 			}
 		} catch {
 			// Ignore transient detector failures and try again on the next frame.
@@ -128,7 +132,7 @@
 	async function openManualTarget(): Promise<void> {
 		const targetPath = resolveArticleDetailPath(manualValue, window.location.origin);
 		if (!targetPath) {
-			scanError = 'Bitte gib einen gültigen Artikellink oder eine Artikel-ID ein.';
+			scanError = t('scan.invalidManualInput');
 			return;
 		}
 		scanError = null;
@@ -144,33 +148,33 @@
 </script>
 
 <svelte:head>
-	<title>Artikel scannen · passalong</title>
-	<meta name="description" content="Scanne einen Artikellink oder QR-Code, um direkt zur Artikeldetailseite zu springen." />
+	<title>{t('scan.title')} · passalong</title>
+	<meta name="description" content={t('scan.metaDescription')} />
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
 <main class="scan-page">
 	<section class="hero card">
 		<div class="hero-copy">
-			<p class="eyebrow">Nur für Verkäufer</p>
-			<h1>Artikel scannen</h1>
+			<p class="eyebrow">{t('scan.eyebrow')}</p>
+			<h1>{t('scan.title')}</h1>
 			<p>
-				Scanne den QR-Code am Artikelschild oder füge den Link ein, um sofort zur Artikeldetailseite zu springen.
+				{t('scan.heroIntro')}
 			</p>
 		</div>
 		<div class="hero-actions">
 			<button type="button" class="primary" onclick={() => void startScanner()}>
-				Kamera starten
+				{t('scan.startCamera')}
 			</button>
 			<button type="button" class="secondary" onclick={() => void stopScanner()} disabled={!cameraActive}>
-				Kamera stoppen
+				{t('scan.stopCamera')}
 			</button>
 		</div>
 	</section>
 
 	<section class="scanner-grid">
 		<article class="card camera-card" aria-labelledby="camera-title">
-			<h2 id="camera-title">Kamera</h2>
+			<h2 id="camera-title">{t('scan.cameraTitle')}</h2>
 			<div class:active={cameraActive} class="camera-shell">
 				<video
 					bind:this={videoElement}
@@ -178,7 +182,7 @@
 					playsinline
 					muted
 					class:active={cameraActive}
-					aria-label="Kameravorschau zum Scannen von QR-Codes"
+					aria-label={t('scan.cameraPreviewLabel')}
 				></video>
 				{#if !cameraActive}
 					<div class="camera-placeholder" aria-hidden="true">
@@ -191,17 +195,17 @@
 				<p class="error" role="alert">{scanError}</p>
 			{/if}
 			<p class="hint">
-				Halte den QR-Code mittig im Bild. Der Scanner öffnet die Artikeldetailseite automatisch.
+				{t('scan.cameraHint')}
 			</p>
 		</article>
 
 		<aside class="card manual-card" aria-labelledby="manual-title">
-			<h2 id="manual-title">Direkt öffnen</h2>
+			<h2 id="manual-title">{t('scan.manualTitle')}</h2>
 			<p>
-				Wenn die Kamera nicht verfügbar ist, kannst du den Artikel-Link oder die Artikel-ID auch direkt eingeben.
+				{t('scan.manualIntro')}
 			</p>
 			<label class="field">
-				<span>Artikel-Link oder -ID</span>
+				<span>{t('scan.manualInputLabel')}</span>
 				<input
 					type="text"
 					bind:value={manualValue}
@@ -214,7 +218,7 @@
 			</label>
 			<div class="manual-actions">
 				<button type="button" class="primary" onclick={() => void openManualTarget()}>
-					Artikel öffnen
+					{t('scan.openItem')}
 				</button>
 			</div>
 		</aside>
