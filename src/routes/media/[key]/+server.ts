@@ -15,23 +15,38 @@ const jpegMimeType = 'image/jpeg';
 const webpMimeType = 'image/webp';
 
 /**
- * Stream an uploaded image to an authenticated tenant-authorized viewer.
+ * Stream an uploaded image to an authenticated tenant-authorized viewer,
+ * or to anonymous visitors when the image belongs to an unsold item of a
+ * public stand page (mirrors the buyer-facing visibility of the item
+ * itself: sold items disappear from the public view and their images
+ * stop resolving, too).
  *
  * @param {Parameters<RequestHandler>[0]} event - The SvelteKit request event.
  * @returns {Response} The image bytes or a 404 error.
  * @throws {HttpError} When the image is missing, not owned, or the session is invalid.
  */
 export const GET: RequestHandler = ({ cookies, params }) => {
-	const scope = getCollectionRepository().getSession(hashSessionToken(cookies.get(sessionCookieName) ?? ''));
-	if (!scope) {
-		throw error(404, 'image not found');
+	const repository = getCollectionRepository();
+	const sessionToken = cookies.get(sessionCookieName) ?? '';
+	const scope = sessionToken ? repository.getSession(hashSessionToken(sessionToken)) : null;
+	const image = scope ? repository.findImageMetadataForTenant(params.key, scope) : null;
+	const isProfileAvatar = scope && !image ? repository.findProfileAvatarForTenant(params.key, scope) : false;
+	let storageKey: string;
+	let isPublic = false;
+	if (image || isProfileAvatar) {
+		storageKey = image?.storageKey ?? params.key;
+	} else {
+		const publicImage = repository.findPublicItemImage(params.key);
+		if (publicImage) {
+			storageKey = publicImage.storageKey;
+			isPublic = true;
+		} else if (repository.findPublicOwnerAvatar(params.key)) {
+			storageKey = params.key;
+			isPublic = true;
+		} else {
+			throw error(404, 'image not found');
+		}
 	}
-	const image = getCollectionRepository().findImageMetadataForTenant(params.key, scope);
-	const isProfileAvatar = image ? false : getCollectionRepository().findProfileAvatarForTenant(params.key, scope);
-	if (!image && !isProfileAvatar) {
-		throw error(404, 'image not found');
-	}
-	const storageKey = image?.storageKey ?? params.key;
 	const storagePath = join(getMediaRoot(), storageKey);
 	if (!isPathInsideMediaRoot(storagePath)) {
 		throw error(404, 'image not found');
@@ -40,7 +55,7 @@ export const GET: RequestHandler = ({ cookies, params }) => {
 	return new Response(new Uint8Array(filePayload), {
 		headers: {
 			'Content-Type': getContentType(storageKey),
-			'Cache-Control': 'private, no-store',
+			'Cache-Control': isPublic ? 'public, max-age=3600' : 'private, no-store',
 			'Content-Length': String(filePayload.length)
 		}
 	});

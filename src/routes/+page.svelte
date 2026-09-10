@@ -3,6 +3,7 @@
 	import { formatPrice } from '$lib/utils/format';
 	import { minimumPasswordLength } from '$lib/password-policy';
 	import { t } from '$lib/i18n/index.svelte';
+	import ItemFilterForm from '$lib/components/item-filter-form.svelte';
 
 	let { data, form } = $props();
 
@@ -38,14 +39,6 @@
 	 * @returns {string} Human-readable channel label.
 	 */
 	const saleChannelLabel = (channel: string) => t(`channel.${channel}`);
-
-	/**
-	 * Translate a status filter key in the active locale.
-	 *
-	 * @param {string} status - A status filter key such as `open`.
-	 * @returns {string} Human-readable status label.
-	 */
-	const statusFilterLabel = (status: string) => t(`statusFilter.${status}`);
 
 	/**
 	 * Format a YYYY-MM month key as a localized month label.
@@ -282,54 +275,16 @@
 					</div>
 				</section>
 			{/if}
-			<form class="item-filters" method="GET" action="/" data-testid="item-filter-form">
-				{#if data.collection}
-					<input type="hidden" name="collection" value={data.collection.id} />
-				{/if}
-				<label class="filter-search">
-					<span>{t('portfolio.search')}</span>
-					<input
-						name="q"
-						type="search"
-						value={appliedFilters.query ?? ''}
-						placeholder={t('portfolio.searchPlaceholder')}
-						data-testid="filter-search-input"
-					/>
-				</label>
-				<label>
-					<span>{t('portfolio.category')}</span>
-					<select name="category" data-testid="filter-category-select">
-						<option value="">{t('portfolio.all')}</option>
-						{#each data.categoryOptions as category}
-							<option value={category} selected={appliedFilters.category === category}>{categoryLabel(category)}</option>
-						{/each}
-					</select>
-				</label>
-				<label>
-					<span>{t('portfolio.condition')}</span>
-					<select name="condition" data-testid="filter-condition-select">
-						<option value="">{t('portfolio.all')}</option>
-						{#each data.conditionOptions as condition}
-							<option value={condition} selected={appliedFilters.condition === condition}>{conditionLabel(condition)}</option>
-						{/each}
-					</select>
-				</label>
-				<label>
-					<span>{t('portfolio.status')}</span>
-					<select name="status" data-testid="filter-status-select">
-						<option value="">{t('portfolio.all')}</option>
-						{#each ['open', 'reserved', 'sold'] as status}
-							<option value={status} selected={appliedFilters.status === status}>{statusFilterLabel(status)}</option>
-						{/each}
-					</select>
-				</label>
-				<div class="filter-actions">
-					<button type="submit" class="filter-apply" data-testid="filter-apply">{t('portfolio.applyFilters')}</button>
-					{#if hasActiveFilters}
-						<a class="filter-reset" href={data.collection ? `/?collection=${encodeURIComponent(data.collection.id)}` : '/'} data-testid="filter-reset">{t('portfolio.resetFilters')}</a>
-					{/if}
-				</div>
-			</form>
+			<ItemFilterForm
+				action="/"
+				hiddenFields={data.collection ? { collection: data.collection.id } : {}}
+				appliedFilters={appliedFilters}
+				categoryOptions={data.categoryOptions}
+				conditionOptions={data.conditionOptions}
+				hasActive={hasActiveFilters}
+				resetHref={data.collection ? `/?collection=${encodeURIComponent(data.collection.id)}` : '/'}
+				testIdPrefix="filter"
+			/>
 			<section class="items" aria-labelledby="items-title">
 				{#if data.items.length}
 				<div class="item-grid">
@@ -694,94 +649,6 @@
 
 	.manage-images-link:hover {
 		background: var(--color-accent-soft);
-	}
-
-	.item-filters {
-		align-items: end;
-		display: grid;
-		gap: 1rem;
-		grid-template-columns: minmax(12rem, 1.6fr) repeat(3, minmax(0, 1fr)) auto;
-		margin: 0 0 0.25rem;
-	}
-
-	.item-filters label {
-		display: grid;
-		gap: 0.3rem;
-	}
-
-	.item-filters label > span {
-		color: var(--color-text-muted);
-		font-size: 0.72rem;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-	}
-
-	.item-filters input,
-	.item-filters select {
-		background: var(--color-input);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-control);
-		color: var(--color-text);
-		font: inherit;
-		font-size: 0.9rem;
-		padding: 0.6rem 0.75rem;
-		width: 100%;
-	}
-
-	.item-filters input:focus,
-	.item-filters select:focus {
-		border-color: var(--color-ice);
-		box-shadow: 0 0 0 4px var(--focus-ring);
-		outline: none;
-	}
-
-	.filter-actions {
-		align-items: center;
-		display: flex;
-		gap: 0.6rem;
-		justify-content: flex-end;
-	}
-
-	.filter-apply {
-		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
-		border: 0;
-		border-radius: var(--radius-control);
-		box-shadow: var(--shadow-cta);
-		color: #fff;
-		font-size: 0.9rem;
-		font-weight: 700;
-		padding: 0.6rem 1.1rem;
-	}
-
-	.filter-reset {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-control);
-		color: var(--color-accent);
-		font-size: 0.85rem;
-		font-weight: 700;
-		padding: 0.55rem 0.9rem;
-		text-decoration: none;
-	}
-
-	.filter-reset:hover {
-		background: var(--color-accent-soft);
-	}
-
-	@media (max-width: 56rem) {
-		.item-filters {
-			grid-template-columns: 1fr 1fr;
-		}
-
-		.filter-actions {
-			grid-column: 1 / -1;
-		}
-	}
-
-	@media (max-width: 34rem) {
-		.item-filters {
-			grid-template-columns: 1fr;
-		}
 	}
 
 	.item-grid {

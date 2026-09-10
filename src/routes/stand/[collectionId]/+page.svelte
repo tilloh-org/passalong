@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { t } from '$lib/i18n/index.svelte';
+	import { getFavorites, pruneFavorites, toggleFavorite } from '$lib/stand-favorites.svelte';
+	import ItemFilterForm from '$lib/components/item-filter-form.svelte';
 
 	let { data } = $props();
 
@@ -19,6 +21,49 @@
 	 * @returns {string} Human-readable condition label.
 	 */
 	const conditionLabel = (condition: string) => t(`condition.${condition}`);
+
+	/**
+	 * Favorite item IDs of this stand page, hydrated on the client only.
+	 * Server-rendered markup always starts empty so SSR and client agree.
+	 */
+	let favoriteIds = $state<string[]>([]);
+
+	$effect(() => {
+		// Prune sold items and hydrate the persisted list in the browser.
+		favoriteIds = pruneFavorites(
+			data.stand.collectionId,
+			data.stand.items.map((item) => item.id)
+		);
+	});
+
+	/**
+	 * Check whether one item is currently marked as favorite.
+	 *
+	 * @param {string} itemId - Public item identifier.
+	 * @returns {boolean} Whether the heart is active.
+	 */
+	const isFavorite = (itemId: string) => favoriteIds.includes(itemId);
+
+	/**
+	 * Toggle one item's favorite state and keep the rendered list in sync.
+	 *
+	 * @param {string} itemId - Public item identifier.
+	 */
+	function onToggleFavorite(itemId: string): void {
+		toggleFavorite(data.stand.collectionId, itemId);
+		favoriteIds = getFavorites(data.stand.collectionId);
+	}
+
+	/**
+	 * Favorite item cards in insertion order (first favorited first).
+	 */
+	const favoriteItems = $derived(
+		favoriteIds
+			.map((itemId) => data.stand.items.find((item) => item.id === itemId))
+			.filter((item) => item !== undefined)
+	);
+
+	let favoritesDialog: HTMLDialogElement | undefined = $state();
 </script>
 
 <svelte:head>
@@ -28,8 +73,12 @@
 
 <main class="stand">
 	<section class="hero">
-		<div class="hero-avatar" aria-hidden="true">
-			<span class="initial">{data.stand.collectionName.slice(0, 1).toUpperCase()}</span>
+		<div class="hero-avatar">
+			{#if data.stand.ownerAvatarStorageKey}
+				<img src={`/media/${encodeURIComponent(data.stand.ownerAvatarStorageKey)}`} alt={t('stand.ownerAvatarAlt', { name: data.stand.collectionName })} data-testid="stand-owner-avatar" />
+			{:else}
+				<span class="initial" aria-hidden="true">{data.stand.collectionName.slice(0, 1).toUpperCase()}</span>
+			{/if}
 		</div>
 		<h1 data-testid="stand-title">{data.stand.collectionName}</h1>
 		{#if data.stand.intro}
@@ -38,22 +87,80 @@
 		<p class="sub">{t('stand.sub')}</p>
 	</section>
 
+	{#if data.stand.items.length || data.hasActiveFilters}
+		<ItemFilterForm
+			action={`/stand/${encodeURIComponent(data.stand.collectionId)}`}
+			appliedFilters={data.appliedFilters}
+			categoryOptions={data.categoryOptions}
+			conditionOptions={data.conditionOptions}
+			statusOptions={['open', 'reserved']}
+			hasActive={data.hasActiveFilters}
+			resetHref={`/stand/${encodeURIComponent(data.stand.collectionId)}`}
+			testIdPrefix="stand-filter"
+		/>
+	{/if}
+
 	{#if data.stand.items.length}
 		<div class="stand-grid" data-testid="stand-items">
 			{#each data.stand.items as item (item.id)}
-				<a class="tile" data-testid="stand-item" href={`/?collection=${encodeURIComponent(item.id)}`}>
-					<div class="img" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
-					<div class="body">
-						<div class="name">{item.title}</div>
-						<div class="price">{formatPrice(item.priceCents)}</div>
-						<div class="meta">{categoryLabel(item.category)} · {conditionLabel(item.condition)}</div>
-						{#if item.externalDescription}
-							<p class="description" data-testid="stand-item-description">{item.externalDescription}</p>
+				<div class="tile" class:reserved={item.reservedAt} data-testid="stand-item">
+					<div class="img" class:has-photo={item.images.some((image) => image.isCover)}>
+						{#each item.images.filter((image) => image.isCover) as cover (cover.storageKey)}
+							<img src={`/media/${encodeURIComponent(cover.storageKey)}`} alt={item.title} loading="lazy" />
+						{/each}
+						{#if !item.images.some((image) => image.isCover)}
+							{item.title.slice(0, 1).toUpperCase()}
 						{/if}
+						{#if item.reservedAt}
+							<span class="reserved-tag" data-testid="stand-item-reserved">{t('item.reserved')}</span>
+						{/if}
+						{#if item.images.length > 1}
+							<span class="photo-count" data-testid="stand-item-photo-count">
+								<svg class="icon" aria-hidden="true" focusable="false">
+									<use href="#icon-photo" />
+								</svg>
+								{item.images.length}
+							</span>
+						{/if}
+						<button
+							class="favorite-toggle"
+							class:active={isFavorite(item.id)}
+							aria-label={isFavorite(item.id) ? t('stand.favoriteRemove') : t('stand.favoriteAdd')}
+							aria-pressed={isFavorite(item.id)}
+							data-testid="favorite-toggle"
+							type="button"
+							onclick={() => onToggleFavorite(item.id)}
+						>
+							<svg class="icon" aria-hidden="true" focusable="false">
+								<use href={isFavorite(item.id) ? '#icon-heart-filled' : '#icon-heart-outline'} />
+							</svg>
+						</button>
 					</div>
-				</a>
-			{/each}
+					<a class="tile-link" href={`/stand/${encodeURIComponent(data.stand.collectionId)}/${encodeURIComponent(item.id)}`}>
+						<div class="body">
+							<div class="name">{item.title}</div>
+							<div class="price">{formatPrice(item.priceCents)}</div>
+							<div class="meta">{categoryLabel(item.category)} · {conditionLabel(item.condition)}</div>
+							{#if item.isComplete || item.isFunctional}
+								<div class="flag-pills" data-testid="stand-item-flags">
+									{#if item.isComplete}
+										<span class="flag-pill complete">{t('item.complete')}</span>
+									{/if}
+									{#if item.isFunctional}
+										<span class="flag-pill functional">{t('item.functional')}</span>
+									{/if}
+								</div>
+							{/if}
+							{#if item.externalDescription}
+								<p class="description" data-testid="stand-item-description">{item.externalDescription}</p>
+							{/if}
+						</div>
+					</a>
+			</div>
+		{/each}
 		</div>
+	{:else if data.hasActiveFilters}
+		<p class="empty" data-testid="stand-filter-empty-state">{t('portfolio.noItemsForFilters')}</p>
 	{:else}
 		<p class="empty">{t('stand.empty')}</p>
 	{/if}
@@ -62,6 +169,69 @@
 		<p>{t('stand.footer')}</p>
 	</footer>
 </main>
+
+<dialog
+	class="favorites-dialog"
+	bind:this={favoritesDialog}
+	aria-label={t('stand.favoritesTitle')}
+	data-testid="favorites-dialog"
+>
+	<div class="dialog-head">
+		<div class="dialog-brand">
+			<div class="brand-avatar" aria-hidden="true">
+				{data.stand.collectionName.slice(0, 1).toUpperCase()}
+			</div>
+			<div>
+				<h3>{t('stand.favoritesTitle')}</h3>
+				<p class="brand-stand" data-testid="favorites-stand-name">
+					{t('stand.favoritesStandSubtitle', { name: data.stand.collectionName })}
+				</p>
+			</div>
+		</div>
+		<button type="button" class="dialog-close" onclick={() => favoritesDialog?.close()}>
+			{t('stand.favoritesClose')}
+		</button>
+	</div>
+	{#if favoriteItems.length}
+		<div class="favorites-grid" data-testid="favorites-grid">
+			{#each favoriteItems as item (item.id)}
+				<div class="favorites-item" data-testid="favorites-item">
+					<div class="img" aria-hidden="true">
+						{item.title.slice(0, 1).toUpperCase()}
+						{#if item.reservedAt}
+							<span class="reserved-tag">{t('item.reserved')}</span>
+						{/if}
+					</div>
+					<div class="body">
+						<div class="name">{item.title}</div>
+						<div class="price">{formatPrice(item.priceCents)}</div>
+					</div>
+				</div>
+			{/each}
+		</div>
+	{:else}
+		<p class="favorites-empty" data-testid="favorites-empty">{t('stand.favoritesEmpty')}</p>
+	{/if}
+</dialog>
+
+{#if data.stand.items.length}
+	<div class="favorites-bar" data-testid="favorites-bar">
+		<button
+			type="button"
+			onclick={() => favoritesDialog?.showModal()}
+			aria-label={t('stand.favoritesOpen')}
+			data-testid="favorites-bar-trigger"
+		>
+			<svg class="icon" aria-hidden="true" focusable="false">
+				<use href={favoriteIds.length ? '#icon-heart-filled' : '#icon-heart-outline'} />
+			</svg>
+			{t('stand.favoritesTitle')}
+			{#if favoriteIds.length}
+				<span class="favorites-badge" data-testid="favorites-badge">{favoriteIds.length}</span>
+			{/if}
+		</button>
+	</div>
+{/if}
 
 <style>
 	.stand {
@@ -99,6 +269,12 @@
 		margin: 0 auto 14px;
 		overflow: hidden;
 		width: 84px;
+	}
+
+	.hero-avatar img {
+		height: 100%;
+		object-fit: cover;
+		width: 100%;
 	}
 
 	.hero-avatar .initial {
@@ -165,6 +341,120 @@
 		font-size: 2.4rem;
 		font-weight: 800;
 		justify-content: center;
+		overflow: hidden;
+		position: relative;
+	}
+
+	.tile .img.has-photo {
+		color: inherit;
+	}
+
+	.tile .img img {
+		display: block;
+		height: 100%;
+		inset: 0;
+		object-fit: cover;
+		position: absolute;
+		width: 100%;
+	}
+
+	.tile .img .reserved-tag,
+	.tile .img .photo-count {
+		z-index: 2;
+	}
+
+	.photo-count {
+		align-items: center;
+		background: var(--scrim);
+		border-radius: 999px;
+		bottom: 0.6rem;
+		color: #fff;
+		display: inline-flex;
+		font-size: 0.62rem;
+		font-weight: 800;
+		gap: 4px;
+		left: 0.6rem;
+		padding: 3px 9px;
+		position: absolute;
+		z-index: 2;
+	}
+
+	.photo-count .icon {
+		height: 0.85rem;
+		width: 0.85rem;
+	}
+
+	.favorite-toggle {
+		align-items: center;
+		background: var(--glass);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		display: flex;
+		height: 2.2rem;
+		justify-content: center;
+		padding: 0;
+		position: absolute;
+		right: 0.6rem;
+		top: 0.6rem;
+		transition: all 0.25s ease;
+		width: 2.2rem;
+		z-index: 2;
+	}
+
+	.favorite-toggle .icon {
+		height: 1.15rem;
+		width: 1.15rem;
+	}
+
+	.favorite-toggle:hover {
+		background: var(--color-accent-soft);
+		box-shadow: var(--shadow-btn-hover);
+		transform: translateY(-1px);
+	}
+
+	.favorite-toggle:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.favorite-toggle.active {
+		color: var(--color-accent);
+	}
+
+	.tile.reserved .img {
+		opacity: 0.55;
+	}
+
+	.reserved-tag {
+		background: var(--color-accent);
+		border-radius: 999px;
+		color: #fff;
+		font-size: 0.62rem;
+		font-weight: 800;
+		left: 0.6rem;
+		letter-spacing: 0.03em;
+		padding: 3px 9px;
+		position: absolute;
+		top: 0.6rem;
+		z-index: 2;
+	}
+
+	.favorites-item .reserved-tag {
+		left: 0.4rem;
+		top: 0.4rem;
+	}
+
+	.tile-link {
+		color: inherit;
+		display: flex;
+		flex-direction: column;
+		text-decoration: none;
+	}
+
+	.tile-link:hover .name {
+		color: var(--color-accent);
 	}
 
 	.tile .body {
@@ -189,6 +479,34 @@
 		font-size: 0.78rem;
 		margin-top: 2px;
 	}
+
+	.flag-pills {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-top: 6px;
+	}
+
+	.flag-pill {
+		border-radius: 999px;
+		font-size: 0.68rem;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		padding: 2px 8px;
+	}
+
+	.flag-pill.complete {
+		background: var(--color-ok-soft);
+		border: 1px solid var(--color-ok-border);
+		color: var(--color-ok);
+	}
+
+	.flag-pill.functional {
+		background: var(--color-warn-soft);
+		border: 1px solid var(--color-warn);
+		color: var(--color-warn);
+	}
+
 	.description {
 		color: var(--color-text-muted);
 		font-size: 0.82rem;
@@ -212,5 +530,184 @@
 
 	.footer p {
 		margin: 0;
+	}
+
+	.favorites-bar {
+		bottom: 1rem;
+		left: 50%;
+		position: fixed;
+		transform: translateX(-50%);
+		z-index: 80;
+	}
+
+	.favorites-bar button {
+		align-items: center;
+		background: var(--glass);
+		backdrop-filter: blur(14px) saturate(1.4);
+		-webkit-backdrop-filter: blur(14px) saturate(1.4);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		box-shadow: var(--shadow-tile);
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-flex;
+		font: inherit;
+		font-size: 0.9rem;
+		font-weight: 700;
+		gap: 8px;
+		padding: 10px 18px;
+		transition: all 0.25s ease;
+	}
+
+	.favorites-bar button:hover {
+		background: var(--color-accent-soft);
+		box-shadow: var(--shadow-btn-hover);
+		transform: translateY(-1px);
+	}
+
+	.favorites-bar button:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.favorites-bar .icon {
+		height: 1.15rem;
+		width: 1.15rem;
+	}
+
+	.favorites-badge {
+		align-items: center;
+		background: var(--color-accent);
+		border-radius: 999px;
+		color: #fff;
+		display: inline-flex;
+		font-size: 0.72rem;
+		font-weight: 800;
+		justify-content: center;
+		min-width: 1.25rem;
+		padding: 0 6px;
+	}
+
+	.favorites-dialog {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		max-width: min(34rem, 92vw);
+		padding: 1.25rem;
+		width: 34rem;
+	}
+
+	.favorites-dialog::backdrop {
+		background: var(--scrim);
+	}
+
+	.favorites-dialog .dialog-head {
+		align-items: center;
+		display: flex;
+		justify-content: space-between;
+		margin-bottom: 0.75rem;
+	}
+
+	.favorites-dialog .dialog-brand {
+		align-items: center;
+		display: flex;
+		gap: 10px;
+	}
+
+	.favorites-dialog .brand-avatar {
+		align-items: center;
+		background: var(--color-surface);
+		border: 3px solid var(--color-border);
+		border-radius: 999px;
+		color: var(--color-accent);
+		display: flex;
+		font-size: 1.05rem;
+		font-weight: 800;
+		height: 44px;
+		justify-content: center;
+		width: 44px;
+	}
+
+	.favorites-dialog .dialog-head h3 {
+		color: var(--color-accent-strong);
+		font-size: 1.1rem;
+		margin: 0;
+	}
+
+	.favorites-dialog .brand-stand {
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+		margin: 2px 0 0;
+	}
+
+	.favorites-dialog .dialog-close {
+		background: none;
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		color: var(--color-accent);
+		cursor: pointer;
+		font: inherit;
+		font-size: 0.85rem;
+		font-weight: 600;
+		padding: 6px 14px;
+		transition: all 0.25s ease;
+	}
+
+	.favorites-dialog .dialog-close:hover {
+		background: var(--color-accent-soft);
+	}
+
+	.favorites-dialog .dialog-close:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.favorites-grid {
+		display: grid;
+		gap: 0.75rem;
+		grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+		max-height: 60vh;
+		overflow-y: auto;
+	}
+
+	.favorites-item {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		overflow: hidden;
+	}
+
+	.favorites-item .img {
+		align-items: center;
+		aspect-ratio: 1;
+		background: linear-gradient(135deg, var(--color-surface-strong), var(--fog));
+		color: var(--color-accent);
+		display: flex;
+		font-size: 1.6rem;
+		font-weight: 800;
+		justify-content: center;
+	}
+
+	.favorites-item .body {
+		padding: 0.6rem 0.7rem;
+	}
+
+	.favorites-item .name {
+		font-size: 0.85rem;
+		font-weight: 700;
+		line-height: 1.3;
+	}
+
+	.favorites-item .price {
+		color: var(--color-accent);
+		font-size: 0.95rem;
+		font-weight: 800;
+		margin-top: 2px;
+	}
+
+	.favorites-empty {
+		color: var(--color-text-muted);
+		padding: 2rem 1rem;
+		text-align: center;
 	}
 </style>

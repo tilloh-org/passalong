@@ -52,7 +52,14 @@ test.describe('Core collection', () => {
 		await loginForm.getByLabel('Benutzername').fill(registrations[0].username);
 		await loginForm.getByLabel('Passwort').fill(registrations[0].password);
 		await loginForm.getByRole('button', { name: 'Anmelden' }).click();
-		const firstAccountWon = await page.getByRole('heading', { name: 'Deine Sammlungen' }).isVisible();
+		// Wait for the post-login navigation to settle before deciding which account won;
+		// an instant isVisible() races the redirect and flips the branch nondeterministically.
+		// The authenticated state is signaled by the header avatar; a failed login keeps the form.
+		const firstAccountWon = await page
+			.getByTestId('profile-avatar-link')
+			.or(page.getByRole('heading', { name: 'Anmelden' }))
+			.waitFor()
+			.then(() => page.getByTestId('profile-avatar-link').isVisible());
 		let failedLoginCount = firstAccountWon ? 0 : 1;
 		const winningAccount = registrations[firstAccountWon ? 0 : 1]!;
 		const losingAccount = registrations[firstAccountWon ? 1 : 0]!;
@@ -63,8 +70,11 @@ test.describe('Core collection', () => {
 			await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 		}
 
-		// assume
-		await expect(page.getByRole('heading', { name: 'Deine Sammlungen' })).toBeVisible();
+		// assume — a fresh account sees the collection onboarding; a retry after a
+		// mid-test failure lands on the portfolio heading with leftover data instead
+		await expect(
+			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
+		).toBeVisible();
 
 		// act
 		await expect(page.getByRole('button', { name: 'Abmelden' })).toHaveCount(0);

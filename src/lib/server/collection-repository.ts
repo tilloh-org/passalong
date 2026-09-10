@@ -117,10 +117,21 @@ export interface PublicStandItem {
 	category: ItemCategory;
 	condition: ItemCondition;
 	externalDescription: string;
+	reservedAt: string | null;
+	isComplete: boolean;
+	isFunctional: boolean;
+	images: PublicItemImage[];
+}
+
+export interface PublicItemImage {
+	storageKey: string;
+	isCover: boolean;
 }
 
 export interface PublicStandView {
+	collectionId: string;
 	collectionName: string;
+	ownerAvatarStorageKey: string | null;
 	intro: string;
 	items: PublicStandItem[];
 }
@@ -241,6 +252,8 @@ export interface CollectionRepository {
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
 	getSaleStatistics(scope: SessionScope): SaleStatistics;
 	getPublicStandView(collectionId: string): PublicStandView | null;
+	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
+	searchPublicStandItems(collectionId: string, filters: ItemFilters): PublicStandItem[];
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
 	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
 	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
@@ -250,6 +263,8 @@ export interface CollectionRepository {
 	setItemReservation(itemId: string, reserved: boolean, scope: SessionScope): Item;
 	findImageMetadataForTenant(storageKey: string, scope: SessionScope): ItemImage | null;
 	findProfileAvatarForTenant(storageKey: string, scope: SessionScope): boolean;
+	findPublicOwnerAvatar(storageKey: string): boolean;
+	findPublicItemImage(storageKey: string): { storageKey: string; isCover: boolean } | null;
 	updateStandIntro(collectionId: string, intro: string, scope: SessionScope): Collection;
 }
 
@@ -974,26 +989,108 @@ export function createCollectionRepository(
 
 		getPublicStandView(collectionId) {
 			const collection = database
-				.prepare('SELECT name, stand_intro FROM collections WHERE id = ?')
-				.get(collectionId) as { name: string; stand_intro: string } | undefined;
+				.prepare(
+					'SELECT collections.name, collections.stand_intro, users.avatar_storage_key AS owner_avatar_storage_key FROM collections JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id WHERE collections.id = ?'
+				)
+				.get(collectionId) as { name: string; stand_intro: string; owner_avatar_storage_key: string | null } | undefined;
 			if (!collection) {
 				return null;
 			}
 			const items = (
 				database
 					.prepare(
-						'SELECT id, title, price_cents, category, condition, external_description FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
+						'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
 						)
-						.all(collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string }[]
-						).map((row) => ({
-						id: row.id,
-						title: row.title,
-						priceCents: row.price_cents,
-						category: row.category,
-						condition: row.condition,
-						externalDescription: row.external_description
-						}));
-			return { collectionName: collection.name, intro: collection.stand_intro, items };
+					.all(collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null; is_complete: number; is_functional: number }[]
+					).map((row) => ({
+					id: row.id,
+					title: row.title,
+					priceCents: row.price_cents,
+					category: row.category,
+					condition: row.condition,
+					externalDescription: row.external_description,
+					reservedAt: row.reserved_at,
+					isComplete: Boolean(row.is_complete),
+					isFunctional: Boolean(row.is_functional),
+					images: listPublicItemImages(database, row.id)
+					}));
+			return {
+				collectionId,
+				collectionName: collection.name,
+				ownerAvatarStorageKey: collection.owner_avatar_storage_key,
+				intro: collection.stand_intro,
+				items
+			};
+		},
+
+		searchPublicStandItems(collectionId, filters) {
+			const clauses = ['items.collection_id = ?', 'items.sold_at IS NULL'];
+			const parameters: (string | number)[] = [collectionId];
+			if (filters.query && filters.query.trim().length > 0) {
+				const escapedQuery = filters.query.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
+				const pattern = `%${escapedQuery}%`;
+				// Search only buyer-visible fields; matching on internal notes would leak that a
+				// private note matches without revealing its content.
+				clauses.push("(items.title LIKE ? ESCAPE '\\' OR items.external_description LIKE ? ESCAPE '\\')");
+				parameters.push(pattern, pattern);
+			}
+			if (filters.category) {
+				clauses.push('items.category = ?');
+				parameters.push(filters.category);
+			}
+			if (filters.condition) {
+				clauses.push('items.condition = ?');
+				parameters.push(filters.condition);
+			}
+			// Public status semantics: only unsold items are listed, so 'open' vs 'reserved'.
+			if (filters.status === 'reserved') {
+				clauses.push('items.reserved_at IS NOT NULL');
+			} else if (filters.status === 'open') {
+				clauses.push('items.reserved_at IS NULL');
+			}
+			const items = database
+				.prepare(
+					`SELECT id, title, price_cents, category, condition, external_description, reserved_at
+					 FROM items
+					 WHERE ${clauses.join(' AND ')}
+					 ORDER BY items.created_at DESC, items.id DESC`
+				)
+				.all(...parameters) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null; is_complete: number; is_functional: number }[];
+			return items.map((row) => ({
+				id: row.id,
+				title: row.title,
+				priceCents: row.price_cents,
+				category: row.category,
+				condition: row.condition,
+				externalDescription: row.external_description,
+				reservedAt: row.reserved_at,
+				isComplete: Boolean(row.is_complete),
+				isFunctional: Boolean(row.is_functional),
+				images: listPublicItemImages(database, row.id)
+			}));
+		},
+
+		getPublicStandItem(collectionId, itemId) {
+			const item = database
+				.prepare(
+					'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE id = ? AND collection_id = ? AND sold_at IS NULL'
+					)
+					.get(itemId, collectionId) as { id: string; title: string; price_cents: number; category: ItemCategory; condition: ItemCondition; external_description: string; reserved_at: string | null; is_complete: number; is_functional: number } | undefined;
+			if (!item) {
+				return null;
+			}
+			return {
+				id: item.id,
+				title: item.title,
+				priceCents: item.price_cents,
+				category: item.category,
+				condition: item.condition,
+				externalDescription: item.external_description,
+				reservedAt: item.reserved_at,
+				isComplete: Boolean(item.is_complete),
+				isFunctional: Boolean(item.is_functional),
+				images: listPublicItemImages(database, item.id)
+			};
 		},
 
 		listItemsForOwner(collectionId, scope) {
@@ -1226,6 +1323,29 @@ export function createCollectionRepository(
 			return Boolean(row);
 		},
 
+		findPublicOwnerAvatar(storageKey) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare(
+					'SELECT 1 FROM users JOIN collections ON collections.owner_id = users.id AND collections.tenant_id = users.tenant_id WHERE users.avatar_storage_key = ?'
+				)
+				.get(validatedStorageKey);
+			return Boolean(row);
+		},
+
+		findPublicItemImage(storageKey) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare(
+					`SELECT item_images.storage_key, item_images.is_cover
+					 FROM item_images
+					 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+					 WHERE item_images.storage_key = ? AND items.sold_at IS NULL`
+				)
+				.get(validatedStorageKey) as { storage_key: string; is_cover: number } | undefined;
+			return row ? { storageKey: row.storage_key, isCover: Boolean(row.is_cover) } : null;
+		},
+
 		updateStandIntro(collectionId, intro, scope) {
 			const normalizedIntro = typeof intro === 'string' ? intro.trim() : '';
 			const result = database
@@ -1393,6 +1513,24 @@ function mapImageRow(row: ImageRow): ItemImage {
 		position: row.position,
 		isCover: row.is_cover === sqliteTrue
 	};
+}
+
+/**
+ * List the public buyer-facing images of one item, cover image first.
+ *
+ * Only storage keys and the cover flag are exposed; no internal metadata.
+ *
+ * @param {Database} database - The tenant's database handle.
+ * @param {string} itemId - Public item identifier.
+ * @returns {PublicItemImage[]} Images in cover-first, position order.
+ */
+function listPublicItemImages(database: Database.Database, itemId: string): PublicItemImage[] {
+	const rows = database
+		.prepare(
+			'SELECT storage_key, is_cover FROM item_images WHERE item_id = ? ORDER BY is_cover DESC, position ASC'
+		)
+		.all(itemId) as { storage_key: string; is_cover: number }[];
+	return rows.map((row) => ({ storageKey: row.storage_key, isCover: Boolean(row.is_cover) }));
 }
 
 /**
