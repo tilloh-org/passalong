@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { sharedTestAccount } from './test-account';
 
@@ -147,6 +148,26 @@ test.describe('Public stand page', () => {
 		// assume — category filter restricts the list
 		await anonymousPage.goto(`${standPath}?category=clothing`);
 		await expect(anonymousPage.getByTestId('stand-item')).toHaveCount(2);
+
+		// act — the owner uploads an avatar; the anonymous visitor sees it in the hero
+		const pngGreen = Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+			'base64'
+		);
+		writeFileSync('e2e/.test-avatar.png', pngGreen);
+		await page.getByTestId('profile-avatar-link').click();
+		await expect(page).toHaveURL(/\/profile/);
+		await page.getByTestId('avatar-input').setInputFiles('e2e/.test-avatar.png');
+		await page.getByRole('button', { name: 'Avatar speichern' }).click();
+		await expect(page.getByTestId('profile-avatar')).toBeVisible();
+		const avatarSrc = await page.locator('[data-testid=profile-avatar] img').getAttribute('src');
+		const avatarKey = avatarSrc?.replace('/media/', '') ?? '';
+		await anonymousPage.goto(standPath);
+		await expect(anonymousPage.getByTestId('stand-owner-avatar')).toBeVisible();
+
+		// assume — the avatar image resolves anonymously under the same media route
+		const avatarMediaResponse = await anonymousPage.request.get(`/media/${decodeURIComponent(avatarKey)}`);
+		expect(avatarMediaResponse.status()).toBe(200);
 		anonymousContext.close?.();
 	});
 });

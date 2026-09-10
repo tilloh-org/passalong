@@ -32,14 +32,20 @@ export const GET: RequestHandler = ({ cookies, params }) => {
 	const image = scope ? repository.findImageMetadataForTenant(params.key, scope) : null;
 	const isProfileAvatar = scope && !image ? repository.findProfileAvatarForTenant(params.key, scope) : false;
 	let storageKey: string;
+	let isPublic = false;
 	if (image || isProfileAvatar) {
 		storageKey = image?.storageKey ?? params.key;
 	} else {
 		const publicImage = repository.findPublicItemImage(params.key);
-		if (!publicImage) {
+		if (publicImage) {
+			storageKey = publicImage.storageKey;
+			isPublic = true;
+		} else if (repository.findPublicOwnerAvatar(params.key)) {
+			storageKey = params.key;
+			isPublic = true;
+		} else {
 			throw error(404, 'image not found');
 		}
-		storageKey = publicImage.storageKey;
 	}
 	const storagePath = join(getMediaRoot(), storageKey);
 	if (!isPathInsideMediaRoot(storagePath)) {
@@ -49,7 +55,7 @@ export const GET: RequestHandler = ({ cookies, params }) => {
 	return new Response(new Uint8Array(filePayload), {
 		headers: {
 			'Content-Type': getContentType(storageKey),
-			'Cache-Control': image || isProfileAvatar ? 'private, no-store' : 'public, max-age=3600',
+			'Cache-Control': isPublic ? 'public, max-age=3600' : 'private, no-store',
 			'Content-Length': String(filePayload.length)
 		}
 	});

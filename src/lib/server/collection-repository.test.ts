@@ -1449,6 +1449,7 @@ describe('collection repository', () => {
 		expect(publicView).toEqual({
 			collectionId: standCollection.id,
 			collectionName: 'Flohmarkt',
+			ownerAvatarStorageKey: null,
 			intro: '',
 			items: expect.arrayContaining([
 				expect.objectContaining({ id: privateNotesItem.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair', reservedAt: expect.any(String), images: [] }),
@@ -1581,6 +1582,31 @@ describe('collection repository', () => {
 		expect(publicViewAfterSale?.items).toHaveLength(0);
 		expect(repository.findPublicItemImage('hash-second.webp')).toBeNull();
 		expect(repository.findPublicItemImage('hash-cover.png')).toBeNull();
+	});
+
+	it('exposes the owner avatar storage key in the public stand view and resolves it publicly', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const unknownKey = 'unknown-avatar.png';
+		let avatarVisible: boolean;
+
+		// act
+		const publicViewBefore = repository.getPublicStandView(standCollection.id);
+		repository.setProfileAvatar(owner, 'avatar-hash.png');
+		const publicViewAfter = repository.getPublicStandView(standCollection.id);
+		avatarVisible = repository.findPublicOwnerAvatar('avatar-hash.png');
+
+		// assume
+		expect(publicViewBefore?.ownerAvatarStorageKey).toBeNull();
+		expect(publicViewAfter?.ownerAvatarStorageKey).toBe('avatar-hash.png');
+		expect(avatarVisible).toBe(true);
+		expect(repository.findPublicOwnerAvatar(unknownKey)).toBe(false);
 	});
 
 	it('searches public stand items by buyer-visible fields only and filters by status', () => {

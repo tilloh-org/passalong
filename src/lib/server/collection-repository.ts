@@ -131,6 +131,7 @@ export interface PublicItemImage {
 export interface PublicStandView {
 	collectionId: string;
 	collectionName: string;
+	ownerAvatarStorageKey: string | null;
 	intro: string;
 	items: PublicStandItem[];
 }
@@ -262,6 +263,7 @@ export interface CollectionRepository {
 	setItemReservation(itemId: string, reserved: boolean, scope: SessionScope): Item;
 	findImageMetadataForTenant(storageKey: string, scope: SessionScope): ItemImage | null;
 	findProfileAvatarForTenant(storageKey: string, scope: SessionScope): boolean;
+	findPublicOwnerAvatar(storageKey: string): boolean;
 	findPublicItemImage(storageKey: string): { storageKey: string; isCover: boolean } | null;
 	updateStandIntro(collectionId: string, intro: string, scope: SessionScope): Collection;
 }
@@ -987,8 +989,10 @@ export function createCollectionRepository(
 
 		getPublicStandView(collectionId) {
 			const collection = database
-				.prepare('SELECT name, stand_intro FROM collections WHERE id = ?')
-				.get(collectionId) as { name: string; stand_intro: string } | undefined;
+				.prepare(
+					'SELECT collections.name, collections.stand_intro, users.avatar_storage_key AS owner_avatar_storage_key FROM collections JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id WHERE collections.id = ?'
+				)
+				.get(collectionId) as { name: string; stand_intro: string; owner_avatar_storage_key: string | null } | undefined;
 			if (!collection) {
 				return null;
 			}
@@ -1010,7 +1014,13 @@ export function createCollectionRepository(
 					isFunctional: Boolean(row.is_functional),
 					images: listPublicItemImages(database, row.id)
 					}));
-			return { collectionId, collectionName: collection.name, intro: collection.stand_intro, items };
+			return {
+				collectionId,
+				collectionName: collection.name,
+				ownerAvatarStorageKey: collection.owner_avatar_storage_key,
+				intro: collection.stand_intro,
+				items
+			};
 		},
 
 		searchPublicStandItems(collectionId, filters) {
@@ -1310,6 +1320,16 @@ export function createCollectionRepository(
 			const row = database
 				.prepare('SELECT 1 FROM users WHERE avatar_storage_key = ? AND id = ? AND tenant_id = ?')
 				.get(validatedStorageKey, scope.userId, scope.tenantId);
+			return Boolean(row);
+		},
+
+		findPublicOwnerAvatar(storageKey) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare(
+					'SELECT 1 FROM users JOIN collections ON collections.owner_id = users.id AND collections.tenant_id = users.tenant_id WHERE users.avatar_storage_key = ?'
+				)
+				.get(validatedStorageKey);
 			return Boolean(row);
 		},
 

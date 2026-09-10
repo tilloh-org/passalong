@@ -73,8 +73,12 @@
 
 <main class="stand">
 	<section class="hero">
-		<div class="hero-avatar" aria-hidden="true">
-			<span class="initial">{data.stand.collectionName.slice(0, 1).toUpperCase()}</span>
+		<div class="hero-avatar">
+			{#if data.stand.ownerAvatarStorageKey}
+				<img src={`/media/${encodeURIComponent(data.stand.ownerAvatarStorageKey)}`} alt={t('stand.ownerAvatarAlt', { name: data.stand.collectionName })} data-testid="stand-owner-avatar" />
+			{:else}
+				<span class="initial" aria-hidden="true">{data.stand.collectionName.slice(0, 1).toUpperCase()}</span>
+			{/if}
 		</div>
 		<h1 data-testid="stand-title">{data.stand.collectionName}</h1>
 		{#if data.stand.intro}
@@ -265,6 +269,12 @@
 		margin: 0 auto 14px;
 		overflow: hidden;
 		width: 84px;
+	}
+
+	.hero-avatar img {
+		height: 100%;
+		object-fit: cover;
+		width: 100%;
 	}
 
 	.hero-avatar .initial {
