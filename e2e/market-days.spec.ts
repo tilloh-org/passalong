@@ -26,57 +26,57 @@ test.describe('Market days', () => {
 		await expect(page.getByTestId('profile-avatar-link')).toBeVisible();
 
 		// act — open the market days page via the nav link
-		await page.getByTestId('nav-tage-link').click();
-		await expect(page).toHaveURL(/\/tage/);
-		await expect(page.getByTestId('tage-title')).toBeVisible();
+		await page.getByTestId('nav-market-days-link').click();
+		await expect(page).toHaveURL(/market-days/);
+		await expect(page.getByTestId('market-days-title')).toBeVisible();
 
 		// assume — the page starts empty
-		await expect(page.getByTestId('tage-empty')).toBeVisible();
+		await expect(page.getByTestId('market-days-empty')).toBeVisible();
 
 		// act — open the create form and submit a market day
 		const marketDayName = `Flohmarkt ${new Date().toISOString().slice(0, 16)}`;
-		await page.getByTestId('tage-create-toggle').click();
-		await page.getByTestId('tage-name-input').fill(marketDayName);
-		await page.getByTestId('tage-date-input').fill('2026-05-16');
-		await page.getByTestId('tage-start-input').fill('08:00');
-		await page.getByTestId('tage-end-input').fill('16:00');
-		await page.getByTestId('tage-location-input').fill('Schulhof Moorweg');
-		await page.getByTestId('tage-notes-input').fill('Erster Versuch mit neuem App-Zyklus.');
-		await page.getByTestId('tage-create-submit').click();
+		await page.getByTestId('market-days-create-toggle').click();
+		await page.getByTestId('market-days-name-input').fill(marketDayName);
+		await page.getByTestId('market-days-date-input').fill('2026-05-16');
+		await page.getByTestId('market-days-start-input').fill('08:00');
+		await page.getByTestId('market-days-end-input').fill('16:00');
+		await page.getByTestId('market-days-location-input').fill('Schulhof Moorweg');
+		await page.getByTestId('market-days-notes-input').fill('Erster Versuch mit neuem App-Zyklus.');
+		await page.getByTestId('market-days-create-submit').click();
 
 		// assume — the day appears in the list as open
-		const dayCard = page.getByTestId('tage-item').filter({ hasText: marketDayName }).first();
-		await expect(page.getByTestId('tage-item')).toHaveCount(1);
+		const dayCard = page.getByTestId('market-day-item').filter({ hasText: marketDayName }).first();
+		await expect(page.getByTestId('market-day-item')).toHaveCount(1);
 		await expect(dayCard).toContainText(marketDayName);
 		await expect(dayCard).toContainText('Offen');
 
 		// act — close the day
-		await page.getByTestId('tage-close').click();
+		await page.getByTestId('market-days-close').click();
 
 		// assume — the status pill flips to closed
-		await expect(page.getByTestId('tage-item').filter({ hasText: marketDayName })).toContainText('Abgeschlossen');
-		await expect(page.getByTestId('tage-item').filter({ hasText: marketDayName }).locator('[data-testid=tage-reopen]')).toBeVisible();
+		await expect(page.getByTestId('market-day-item').filter({ hasText: marketDayName })).toContainText('Abgeschlossen');
+		await expect(page.getByTestId('market-day-item').filter({ hasText: marketDayName }).locator('[data-testid=market-days-reopen]')).toBeVisible();
 
 		// act — reopen the day
-		await page.getByTestId('tage-reopen').click();
+		await page.getByTestId('market-days-reopen').click();
 
 		// assume
-		await expect(page.getByTestId('tage-item').filter({ hasText: marketDayName })).toContainText('Offen');
+		await expect(page.getByTestId('market-day-item').filter({ hasText: marketDayName })).toContainText('Offen');
 
 		// act — edit the day through the dialog
-		await page.getByTestId('tage-edit-trigger').click();
-		await expect(page.getByTestId('tage-edit-dialog')).toBeVisible();
-		await page.locator('[data-testid=tage-edit-dialog] input[name="name"]').fill(`${marketDayName} (verschoben)`);
-		await page.locator('[data-testid=tage-edit-dialog] input[name="date"]').fill('2026-05-23');
+		await page.getByTestId('market-days-edit-trigger').click();
+		await expect(page.getByTestId('market-days-edit-dialog')).toBeVisible();
+		await page.locator('[data-testid=market-days-edit-dialog] input[name="name"]').fill(`${marketDayName} (verschoben)`);
+		await page.locator('[data-testid=market-days-edit-dialog] input[name="date"]').fill('2026-05-23');
 		await page.getByRole('button', { name: 'Änderungen speichern' }).click();
 
 		// assume — the list shows the updated name
-		await expect(page.getByTestId('tage-item').first()).toContainText(`${marketDayName} (verschoben)`);
+		await expect(page.getByTestId('market-day-item').first()).toContainText(`${marketDayName} (verschoben)`);
 
 		// act — delete the day
-		await page.getByTestId('tage-delete').click();
+		await page.getByTestId('market-days-delete').click();
 
 		// assume — the list is empty again
-		await expect(page.getByTestId('tage-empty')).toBeVisible();
+		await expect(page.getByTestId('market-days-empty')).toBeVisible();
 	});
 });

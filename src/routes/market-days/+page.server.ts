@@ -99,7 +99,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.badRequest, { marketDayError: marketDayInputError });
 		}
-		redirect(httpStatus.seeOther, '/tage');
+		redirect(httpStatus.seeOther, '/market-days');
 	},
 	updateMarketDay: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -115,7 +115,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.badRequest, { marketDayError: marketDayInputError });
 		}
-		redirect(httpStatus.seeOther, '/tage');
+		redirect(httpStatus.seeOther, '/market-days');
 	},
 	deleteMarketDay: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -131,7 +131,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.notFound, { marketDayError: 'Markttag nicht gefunden.' });
 		}
-		redirect(httpStatus.seeOther, '/tage');
+		redirect(httpStatus.seeOther, '/market-days');
 	},
 	closeMarketDay: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -147,7 +147,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.notFound, { marketDayError: 'Markttag nicht gefunden.' });
 		}
-		redirect(httpStatus.seeOther, '/tage');
+		redirect(httpStatus.seeOther, '/market-days');
 	},
 	reopenMarketDay: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -163,6 +163,6 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.notFound, { marketDayError: 'Markttag nicht gefunden.' });
 		}
-		redirect(httpStatus.seeOther, '/tage');
+		redirect(httpStatus.seeOther, '/market-days');
 	}
 };

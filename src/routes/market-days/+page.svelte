@@ -30,7 +30,7 @@
 	 * @returns {string} The human-readable status label.
 	 */
 	function statusLabel(marketDay: MarketDay): string {
-		return marketDay.closedAt ? t('tage.closed') : t('tage.open');
+		return marketDay.closedAt ? t('marketDays.closed') : t('marketDays.open');
 	}
 
 	let editMarketDayOpen = $state(false);
@@ -69,62 +69,62 @@
 </script>
 
 <svelte:head>
-	<title>{t('tage.titleSuffix')} · passalong</title>
+	<title>{t('marketDays.titleSuffix')} · passalong</title>
 </svelte:head>
 
-<main class="tage">
+<main class="market-days-page">
 	<section class="head">
-		<h1 data-testid="tage-title">{t('tage.title')}</h1>
-		<p class="sub">{t('tage.sub')}</p>
+		<h1 data-testid="market-days-title">{t('marketDays.title')}</h1>
+		<p class="sub">{t('marketDays.sub')}</p>
 	</section>
 
 	<section class="panel" aria-labelledby="create-title">
 		<div class="panel-head">
-			<h2 id="create-title">{t('tage.createTitle')}</h2>
-			<button type="button" class="toggle" data-testid="tage-create-toggle" onclick={() => (createFormOpen = !createFormOpen)}>
-				{createFormOpen ? t('tage.cancel') : t('tage.createToggle')}
+			<h2 id="create-title">{t('marketDays.createTitle')}</h2>
+			<button type="button" class="toggle" data-testid="market-days-create-toggle" onclick={() => (createFormOpen = !createFormOpen)}>
+				{createFormOpen ? t('marketDays.cancel') : t('marketDays.createToggle')}
 			</button>
 		</div>
 		{#if form?.marketDayError}
-			<p class="form-error" role="alert" data-testid="tage-error">{form.marketDayError}</p>
+			<p class="form-error" role="alert" data-testid="market-days-error">{form.marketDayError}</p>
 		{/if}
 		{#if createFormOpen}
-			<form method="POST" action="?/createMarketDay" class="form-grid" data-testid="tage-create-form">
+			<form method="POST" action="?/createMarketDay" class="form-grid" data-testid="market-days-create-form">
 				<label>
-					<span>{t('tage.name')}</span>
-					<input name="name" required data-testid="tage-name-input" />
+					<span>{t('marketDays.name')}</span>
+					<input name="name" required data-testid="market-days-name-input" />
 				</label>
 				<label>
-					<span>{t('tage.date')}</span>
-					<input name="date" type="date" data-testid="tage-date-input" />
+					<span>{t('marketDays.date')}</span>
+					<input name="date" type="date" data-testid="market-days-date-input" />
 				</label>
 				<label>
-					<span>{t('tage.startTime')}</span>
-					<input name="startTime" type="time" data-testid="tage-start-input" />
+					<span>{t('marketDays.startTime')}</span>
+					<input name="startTime" type="time" data-testid="market-days-start-input" />
 				</label>
 				<label>
-					<span>{t('tage.endTime')}</span>
-					<input name="endTime" type="time" data-testid="tage-end-input" />
+					<span>{t('marketDays.endTime')}</span>
+					<input name="endTime" type="time" data-testid="market-days-end-input" />
 				</label>
 				<label class="wide">
-					<span>{t('tage.location')}</span>
-					<input name="location" data-testid="tage-location-input" />
+					<span>{t('marketDays.location')}</span>
+					<input name="location" data-testid="market-days-location-input" />
 				</label>
 				<label class="wide">
-					<span>{t('tage.notes')}</span>
-					<input name="notes" placeholder={t('tage.notesPlaceholder')} data-testid="tage-notes-input" />
+					<span>{t('marketDays.notes')}</span>
+					<input name="notes" placeholder={t('marketDays.notesPlaceholder')} data-testid="market-days-notes-input" />
 				</label>
 				<div class="actions">
-					<button type="submit" data-testid="tage-create-submit">{t('tage.create')}</button>
+					<button type="submit" data-testid="market-days-create-submit">{t('marketDays.create')}</button>
 				</div>
 			</form>
 		{/if}
 	</section>
 
-	<section class="list" data-testid="tage-list">
+	<section class="list" data-testid="market-days-list">
 		{#if data.marketDays.length}
 			{#each data.marketDays as marketDay (marketDay.id)}
-				<article class="market-day" class:closed={marketDay.closedAt} data-testid="tage-item">
+				<article class="market-day" class:closed={marketDay.closedAt} data-testid="market-day-item">
 					<div class="day-head">
 						<div>
 							<h3>{marketDay.name}</h3>
@@ -139,20 +139,20 @@
 							</p>
 						</div>
 						<div class="day-actions">
-							<button type="button" class="secondary" data-testid="tage-edit-trigger" onclick={() => openEditDialog(marketDay)}>
-								{t('tage.edit')}
+							<button type="button" class="secondary" data-testid="market-days-edit-trigger" onclick={() => openEditDialog(marketDay)}>
+								{t('marketDays.edit')}
 							</button>
 							<form method="POST" action={marketDay.closedAt ? '?/reopenMarketDay' : '?/closeMarketDay'} class="inline">
 								<input type="hidden" name="marketDayId" value={marketDay.id} />
 								{#if marketDay.closedAt}
-									<button type="submit" class="secondary" data-testid="tage-reopen">{t('tage.reopen')}</button>
+									<button type="submit" class="secondary" data-testid="market-days-reopen">{t('marketDays.reopen')}</button>
 								{:else}
-									<button type="submit" class="primary" data-testid="tage-close">{t('tage.close')}</button>
+									<button type="submit" class="primary" data-testid="market-days-close">{t('marketDays.close')}</button>
 								{/if}
 							</form>
 							<form method="POST" action="?/deleteMarketDay" class="inline">
 								<input type="hidden" name="marketDayId" value={marketDay.id} />
-								<button type="submit" class="danger" data-testid="tage-delete">{t('tage.delete')}</button>
+								<button type="submit" class="danger" data-testid="market-days-delete">{t('marketDays.delete')}</button>
 							</form>
 						</div>
 					</div>
@@ -169,52 +169,52 @@
 				</article>
 			{/each}
 		{:else}
-			<p class="empty" data-testid="tage-empty">{t('tage.empty')}</p>
+			<p class="empty" data-testid="market-days-empty">{t('marketDays.empty')}</p>
 		{/if}
 	</section>
 </main>
 
-<dialog class="edit-dialog" bind:this={editDialog} aria-label={t('tage.edit')} data-testid="tage-edit-dialog">
+<dialog class="edit-dialog" bind:this={editDialog} aria-label={t('marketDays.edit')} data-testid="market-days-edit-dialog">
 	<div class="dialog-head">
-		<h3>{t('tage.editTitle')}</h3>
-		<button type="button" class="secondary" onclick={closeEditDialog}>{t('tage.cancel')}</button>
+		<h3>{t('marketDays.editTitle')}</h3>
+		<button type="button" class="secondary" onclick={closeEditDialog}>{t('marketDays.cancel')}</button>
 	</div>
 	<form method="POST" action="?/updateMarketDay">
 		<input type="hidden" name="marketDayId" value={editMarketDayId} />
 		<div class="form-grid">
 			<label>
-				<span>{t('tage.name')}</span>
+				<span>{t('marketDays.name')}</span>
 				<input name="name" value={editMarketDayName} required />
 			</label>
 			<label>
-				<span>{t('tage.date')}</span>
+				<span>{t('marketDays.date')}</span>
 				<input name="date" type="date" value={editMarketDayDate} />
 			</label>
 			<label>
-				<span>{t('tage.startTime')}</span>
+				<span>{t('marketDays.startTime')}</span>
 				<input name="startTime" type="time" value={editMarketDayStartTime} />
 			</label>
 			<label>
-				<span>{t('tage.endTime')}</span>
+				<span>{t('marketDays.endTime')}</span>
 				<input name="endTime" type="time" value={editMarketDayEndTime} />
 			</label>
 			<label class="wide">
-				<span>{t('tage.location')}</span>
+				<span>{t('marketDays.location')}</span>
 				<input name="location" value={editMarketDayLocation} />
 			</label>
 			<label class="wide">
-				<span>{t('tage.notes')}</span>
-				<input name="notes" value={editMarketDayNotes} placeholder={t('tage.notesPlaceholder')} />
+				<span>{t('marketDays.notes')}</span>
+				<input name="notes" value={editMarketDayNotes} placeholder={t('marketDays.notesPlaceholder')} />
 			</label>
 		</div>
 		<div class="actions">
-			<button type="submit">{t('tage.save')}</button>
+			<button type="submit">{t('marketDays.save')}</button>
 		</div>
 	</form>
 </dialog>
 
 <style>
-	.tage {
+	.market-days-page {
 		margin: 0 auto;
 		max-width: 52rem;
 		padding: 0 1.25rem 3rem;
