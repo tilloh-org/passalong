@@ -129,6 +129,9 @@
 				<a href="/scan" onclick={() => setMenuOpen(false)}>
 					{t('nav.scan')}
 				</a>
+				<a href="/tage" onclick={() => setMenuOpen(false)} data-testid="nav-tage-link">
+					{t('nav.marketDays')}
+				</a>
 				{#if data.header?.standPath}
 					<a href={data.header.standPath} onclick={() => setMenuOpen(false)} data-testid="nav-stand-link">
 						{t('nav.myStand')}
