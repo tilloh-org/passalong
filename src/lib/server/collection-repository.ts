@@ -81,6 +81,27 @@ export const emptyItemFilters: ItemFilters = {
 	status: null
 };
 
+export interface MarketDay {
+	id: string;
+	name: string;
+	date: string | null;
+	startTime: string | null;
+	endTime: string | null;
+	location: string;
+	notes: string;
+	closedAt: string | null;
+	createdAt: string;
+}
+
+export interface CreateMarketDayInput {
+	name: string;
+	date: string | null;
+	startTime: string | null;
+	endTime: string | null;
+	location: string;
+	notes: string;
+}
+
 const ITEM_SELECT_COLUMNS = [
 	'items.id',
 	'items.collection_id',
@@ -246,6 +267,12 @@ export interface CollectionRepository {
 	updateProfile(scope: SessionScope, input: UpdateProfileInput): UserProfile;
 	setProfileAvatar(scope: SessionScope, avatarStorageKey: string | null): UserProfile;
 	createItem(input: CreateItemInput, scope: SessionScope): Item;
+	listMarketDays(scope: SessionScope): MarketDay[];
+	createMarketDay(input: CreateMarketDayInput, scope: SessionScope): MarketDay;
+	updateMarketDay(marketDayId: string, input: CreateMarketDayInput, scope: SessionScope): MarketDay;
+	deleteMarketDay(marketDayId: string, scope: SessionScope): void;
+	closeMarketDay(marketDayId: string, scope: SessionScope): MarketDay;
+	reopenMarketDay(marketDayId: string, scope: SessionScope): MarketDay;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
 	searchItemsForOwner(collectionId: string, filters: ItemFilters, scope: SessionScope): Item[];
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
@@ -306,6 +333,18 @@ interface ImageRow {
 	is_cover: number;
 }
 
+interface MarketDayRow {
+	id: string;
+	name: string;
+	date: string | null;
+	start_time: string | null;
+	end_time: string | null;
+	location: string;
+	notes: string;
+	closed_at: string | null;
+	created_at: string;
+}
+
 const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
 const authHardeningVersion = '2026083001_auth_hardening';
 const itemScopedImageKeysVersion = '2026083101_item_scoped_image_keys';
@@ -314,6 +353,7 @@ const itemDetailFieldsVersion = '2026090101_item_detail_fields';
 const itemReservationVersion = '2026090201_item_reservation';
 const userAvatarVersion = '2026090202_user_avatar';
 const collectionStandIntroVersion = '2026090203_collection_stand_intro';
+const marketDaysVersion = '2026090901_market_days';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -914,6 +954,96 @@ export function createCollectionRepository(
 				throw new Error('collection was not found');
 			}
 			return item;
+		},
+
+		listMarketDays(scope) {
+			return database
+				.prepare(
+					'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE owner_id = ? AND tenant_id = ? ORDER BY closed_at IS NULL DESC, COALESCE(date, created_at) DESC, id DESC'
+				)
+				.all(scope.userId, scope.tenantId)
+				.map((row) => mapMarketDayRow(row as MarketDayRow));
+		},
+
+		createMarketDay(input, scope) {
+			const marketDay = validateMarketDayInput(input);
+			const marketDayId = randomUUID();
+			const createdAt = new Date().toISOString();
+			database
+				.prepare(
+					'INSERT INTO market_days (id, tenant_id, owner_id, name, date, start_time, end_time, location, notes, closed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)'
+				)
+				.run(marketDayId, scope.tenantId, scope.userId, marketDay.name, marketDay.date, marketDay.startTime, marketDay.endTime, marketDay.location, marketDay.notes, createdAt);
+			return {
+				id: marketDayId,
+				name: marketDay.name,
+				date: marketDay.date,
+				startTime: marketDay.startTime,
+				endTime: marketDay.endTime,
+				location: marketDay.location,
+				notes: marketDay.notes,
+				closedAt: null,
+				createdAt
+			};
+		},
+
+		updateMarketDay(marketDayId, input, scope) {
+			const marketDay = validateMarketDayInput(input);
+			const result = database
+				.prepare(
+					'UPDATE market_days SET name = ?, date = ?, start_time = ?, end_time = ?, location = ?, notes = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.run(marketDay.name, marketDay.date, marketDay.startTime, marketDay.endTime, marketDay.location, marketDay.notes, marketDayId, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('market day was not found');
+			}
+			return mapMarketDayRow(
+				database
+					.prepare('SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?')
+					.get(marketDayId, scope.tenantId) as MarketDayRow
+			);
+		},
+
+		deleteMarketDay(marketDayId, scope) {
+			const result = database
+				.prepare('DELETE FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+				.run(marketDayId, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('market day was not found');
+			}
+		},
+
+		closeMarketDay(marketDayId, scope) {
+			const closedAt = new Date().toISOString();
+			const result = database
+				.prepare(
+					'UPDATE market_days SET closed_at = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.run(closedAt, marketDayId, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('market day was not found');
+			}
+			return mapMarketDayRow(
+				database
+					.prepare('SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?')
+					.get(marketDayId, scope.tenantId) as MarketDayRow
+			);
+		},
+
+		reopenMarketDay(marketDayId, scope) {
+			const result = database
+				.prepare(
+					'UPDATE market_days SET closed_at = NULL WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.run(marketDayId, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('market day was not found');
+			}
+			return mapMarketDayRow(
+				database
+					.prepare('SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?')
+					.get(marketDayId, scope.tenantId) as MarketDayRow
+			);
 		},
 
 		markItemSold(itemId, sale, scope) {
@@ -1534,6 +1664,50 @@ function listPublicItemImages(database: Database.Database, itemId: string): Publ
 }
 
 /**
+ * Map a market-days database row to the public repository value.
+ *
+ * @param {MarketDayRow} row - The raw market day row.
+ * @returns {MarketDay} The tenant-agnostic market day value.
+ */
+function mapMarketDayRow(row: MarketDayRow): MarketDay {
+	return {
+		id: row.id,
+		name: row.name,
+		date: row.date,
+		startTime: row.start_time,
+		endTime: row.end_time,
+		location: row.location,
+		notes: row.notes,
+		closedAt: row.closed_at,
+		createdAt: row.created_at
+	};
+}
+
+/**
+ * Validate and normalize market-day input before persistence.
+ *
+ * @param {CreateMarketDayInput} input - Raw market day values.
+ * @returns {CreateMarketDayInput} Normalized values (trimmed text, optional date/times).
+ */
+function validateMarketDayInput(input: CreateMarketDayInput): CreateMarketDayInput {
+	const name = requireText(input.name, 'name');
+	const date = input.date === null ? null : requireIsoDate(input.date, 'date');
+	const startTime = input.startTime === null || input.startTime === '' ? null : requireText(input.startTime, 'startTime');
+	const endTime = input.endTime === null || input.endTime === '' ? null : requireText(input.endTime, 'endTime');
+	if (startTime && endTime && endTime <= startTime) {
+		throw new Error('endTime must be after startTime');
+	}
+	return {
+		name,
+		date,
+		startTime,
+		endTime,
+		location: (input.location ?? '').trim(),
+		notes: (input.notes ?? '').trim()
+	};
+}
+
+/**
  * Rewrite image position numbers so they stay gap-free after a deletion.
  *
  * @param {ImageRow[]} orderedImages - Remaining images sorted by current position.
@@ -1561,8 +1735,8 @@ function initializeSchema(database: Database.Database): void {
 			createIndexes(database);
 			const appliedAt = new Date().toISOString();
 			database
-				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)')
-				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, itemScopedImageKeysVersion, appliedAt, saleStatusVersion, appliedAt, itemDetailFieldsVersion, appliedAt);
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)')
+				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, itemScopedImageKeysVersion, appliedAt, saleStatusVersion, appliedAt, itemDetailFieldsVersion, appliedAt, itemReservationVersion, appliedAt, userAvatarVersion, appliedAt, collectionStandIntroVersion, appliedAt, marketDaysVersion, appliedAt);
 		})();
 		return;
 	}
@@ -1667,6 +1841,7 @@ function createSchema(database: Database.Database): void {
 			sold_at TEXT,
 			reserved_at TEXT,
 			sale_proceeds_cents INTEGER CHECK (sale_proceeds_cents IS NULL OR sale_proceeds_cents >= 0),
+			market_day_id TEXT REFERENCES market_days(id) ON DELETE SET NULL,
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
@@ -1683,6 +1858,21 @@ function createSchema(database: Database.Database): void {
 			UNIQUE (item_id, tenant_id, position),
 			UNIQUE (item_id, tenant_id, storage_key),
 			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
+		);
+		CREATE TABLE IF NOT EXISTS market_days (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			owner_id TEXT NOT NULL,
+			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+			date TEXT,
+			start_time TEXT,
+			end_time TEXT,
+			location TEXT NOT NULL DEFAULT '',
+			notes TEXT NOT NULL DEFAULT '',
+			closed_at TEXT,
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id),
+			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
 		);
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
@@ -1761,6 +1951,7 @@ function migrateSchema(database: Database.Database): void {
 	migrateItemReservation(database);
 	migrateUserAvatar(database);
 	migrateCollectionStandIntro(database);
+	migrateMarketDays(database);
 }
 
 /**
@@ -1781,6 +1972,46 @@ function migrateCollectionStandIntro(database: Database.Database): void {
 		database
 			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
 			.run(collectionStandIntroVersion, new Date().toISOString());
+	});
+}
+
+/**
+ * Add the market-days tables once, preserving every existing record.
+ *
+ * Market days belong to one tenant and one owner; a sale references its
+ * market day through the optional `market_day_id` column on `items`.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateMarketDays(database: Database.Database): void {
+	if (hasMigrationVersion(database, marketDaysVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		database.exec(`
+			CREATE TABLE IF NOT EXISTS market_days (
+				id TEXT PRIMARY KEY,
+				tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+				owner_id TEXT NOT NULL,
+				name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+				date TEXT,
+				start_time TEXT,
+				end_time TEXT,
+				location TEXT NOT NULL DEFAULT '',
+				notes TEXT NOT NULL DEFAULT '',
+				closed_at TEXT,
+				created_at TEXT NOT NULL,
+				UNIQUE (id, tenant_id),
+				FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
+			);
+			CREATE INDEX IF NOT EXISTS market_days_tenant_owner_created_idx ON market_days(tenant_id, owner_id, created_at, id);
+			ALTER TABLE items ADD COLUMN market_day_id TEXT REFERENCES market_days(id) ON DELETE SET NULL;
+		`);
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(marketDaysVersion, new Date().toISOString());
 	});
 }
 
@@ -2331,6 +2562,21 @@ function requireIsoTimestamp(value: string): string {
 		throw new Error('soldAt must be a canonical UTC ISO timestamp');
 	}
 	return value;
+}
+
+/**
+ * Require a YYYY-MM-DD calendar date string.
+ *
+ * @param {string} value - The untrusted date value.
+ * @param {string} fieldName - Field name for the error message.
+ * @returns {string} The validated date value.
+ */
+function requireIsoDate(value: string, fieldName: string): string {
+	const validated = requireText(value, fieldName);
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(validated) || Number.isNaN(Date.parse(`${validated}T00:00:00.000Z`))) {
+		throw new Error(`${fieldName} must be a YYYY-MM-DD calendar date`);
+	}
+	return validated;
 }
 
 /**

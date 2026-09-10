@@ -1679,4 +1679,127 @@ describe('collection repository', () => {
 			expect(entry).not.toHaveProperty('soldAt');
 		}
 	});
+
+	it('manages market days per tenant with open/closed lifecycle and tenant isolation', () => {
+		// arrange
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const avery = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		// a second repository on a separate database simulates another tenant
+		const secondRepository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const blake = secondRepository.createInitialAdmin({
+			username: 'blake',
+			displayName: 'Blake',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+
+		// act — create an open market day
+		const created = repository.createMarketDay(
+			{
+				name: 'Flohmarkt Mai',
+				date: '2026-05-16',
+				startTime: '08:00',
+				endTime: '16:00',
+				location: 'Schulhof Moorweg',
+				notes: 'Wetter war gut geplant'
+			},
+			avery
+		);
+
+		// assume
+		expect(created).toMatchObject({
+			name: 'Flohmarkt Mai',
+			date: '2026-05-16',
+			startTime: '08:00',
+			endTime: '16:00',
+			location: 'Schulhof Moorweg',
+			notes: 'Wetter war gut geplant',
+			closedAt: null
+		});
+
+		// act — list and read back
+		const list = repository.listMarketDays(avery);
+
+		// assume
+		expect(list).toHaveLength(1);
+		expect(list[0]).toMatchObject({ id: created.id, name: 'Flohmarkt Mai' });
+
+		// act — update the day
+		const updated = repository.updateMarketDay(
+			created.id,
+			{
+				name: 'Flohmarkt Mai (verschoben)',
+				date: '2026-05-23',
+				startTime: '09:00',
+				endTime: '17:00',
+				location: 'Parkplatz Moorweg',
+				notes: ''
+			},
+			avery
+		);
+
+		// assume
+		expect(updated).toMatchObject({ name: 'Flohmarkt Mai (verschoben)', date: '2026-05-23' });
+
+		// act — close and reopen
+		const closed = repository.closeMarketDay(created.id, avery);
+
+		// assume
+		expect(closed.closedAt).toEqual(expect.any(String));
+		expect(repository.listMarketDays(avery)).toHaveLength(1);
+
+		// act
+		const reopened = repository.reopenMarketDay(created.id, avery);
+
+		// assume
+		expect(reopened.closedAt).toBeNull();
+
+		// act — invalid inputs are rejected during creation
+		let invalidNameError: unknown;
+		let invalidDateError: unknown;
+		let invalidTimeRangeError: unknown;
+		try {
+			repository.createMarketDay({ name: '   ', date: null, startTime: null, endTime: null, location: '', notes: '' }, avery);
+		} catch (error) {
+			invalidNameError = error;
+		}
+		try {
+			repository.createMarketDay({ name: 'X', date: '16.05.2026', startTime: null, endTime: null, location: '', notes: '' }, avery);
+		} catch (error) {
+			invalidDateError = error;
+		}
+		try {
+			repository.createMarketDay({ name: 'X', date: '2026-05-16', startTime: '18:00', endTime: '08:00', location: '', notes: '' }, avery);
+		} catch (error) {
+			invalidTimeRangeError = error;
+		}
+
+		// assume
+		expect(invalidNameError).toMatchObject({ message: expect.stringMatching(/name/) });
+		expect(invalidDateError).toMatchObject({ message: expect.stringMatching(/YYYY-MM-DD/) });
+		expect(invalidTimeRangeError).toMatchObject({ message: expect.stringMatching(/endTime/) });
+
+		// act — another tenant cannot see or modify the market day
+		let crossAccessError: unknown;
+		try {
+			secondRepository.updateMarketDay(created.id, { name: 'Hacked', date: null, startTime: null, endTime: null, location: '', notes: '' }, blake);
+		} catch (error) {
+			crossAccessError = error;
+		}
+
+		// assume
+		expect(crossAccessError).toMatchObject({ message: expect.stringMatching(/market day was not found/) });
+		expect(secondRepository.listMarketDays(blake)).toEqual([]);
+		expect(repository.listMarketDays(avery)).toHaveLength(1);
+
+		// act — delete the market day
+		repository.deleteMarketDay(created.id, avery);
+
+		// assume
+		expect(repository.listMarketDays(avery)).toEqual([]);
+	});
 });
