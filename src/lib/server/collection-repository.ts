@@ -51,12 +51,20 @@ export interface Item {
 	saleChannel: SaleChannel | null;
 	soldAt: string | null;
 	saleProceedsCents: number | null;
+	marketDayId: string | null;
 }
 
 export interface MarkItemSoldInput {
 	channel: SaleChannel;
 	soldAt: string;
 	proceedsCents: number;
+	marketDayId?: string | null;
+}
+
+export interface UpdateSaleInput {
+	channel: SaleChannel;
+	proceedsCents: number;
+	marketDayId: string | null;
 }
 
 export interface SaleChannelProceeds {
@@ -115,7 +123,8 @@ const ITEM_SELECT_COLUMNS = [
 	'items.is_functional',
 	'items.sale_channel',
 	'items.sold_at',
-	'items.sale_proceeds_cents'
+	'items.sale_proceeds_cents',
+	'items.market_day_id'
 ].join(', ');
 
 export interface SaleMonthProceeds {
@@ -129,6 +138,22 @@ export interface SaleStatistics {
 	totalProceedsCents: number;
 	proceedsByChannel: SaleChannelProceeds[];
 	proceedsByMonth: SaleMonthProceeds[];
+}
+
+export interface SaleHistoryEntry {
+	itemId: string;
+	itemTitle: string;
+	category: ItemCategory;
+	saleChannel: SaleChannel;
+	soldAt: string;
+	saleProceedsCents: number;
+	marketDayId: string | null;
+	marketDayName: string | null;
+}
+
+export interface SaleHistoryFilters {
+	marketDayId: string | null;
+	channel: SaleChannel | null;
 }
 
 export interface PublicStandItem {
@@ -276,7 +301,9 @@ export interface CollectionRepository {
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
 	searchItemsForOwner(collectionId: string, filters: ItemFilters, scope: SessionScope): Item[];
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
+	updateSale(itemId: string, sale: UpdateSaleInput, scope: SessionScope): Item;
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
+	getSaleHistory(scope: SessionScope, filters: SaleHistoryFilters): SaleHistoryEntry[];
 	getSaleStatistics(scope: SessionScope): SaleStatistics;
 	getPublicStandView(collectionId: string): PublicStandView | null;
 	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
@@ -324,6 +351,7 @@ interface ItemRow {
 	sale_channel: SaleChannel | null;
 	sold_at: string | null;
 	sale_proceeds_cents: number | null;
+	market_day_id: string | null;
 }
 
 interface ImageRow {
@@ -731,6 +759,7 @@ export function createCollectionRepository(
 				).map(({ storage_key }) => storage_key);
 				database.prepare("DELETE FROM login_attempts WHERE scope = 'username' AND subject = ?").run(profile.username);
 				database.prepare('DELETE FROM items WHERE owner_id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
+				database.prepare('DELETE FROM market_days WHERE owner_id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
 				database.prepare('DELETE FROM collections WHERE owner_id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
 				database.prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
 				const remainingUsers = database
@@ -924,7 +953,8 @@ export function createCollectionRepository(
 				reservedAt: null,
 				saleChannel: null,
 				soldAt: null,
-				saleProceedsCents: null
+				saleProceedsCents: null,
+				marketDayId: null
 			};
 
 			const result = database
@@ -1050,14 +1080,60 @@ export function createCollectionRepository(
 			const channel = requireValidSaleChannel(sale.channel);
 			const soldAt = requireIsoTimestamp(sale.soldAt);
 			const proceedsCents = requireNonNegativeInteger(sale.proceedsCents, 'proceedsCents');
+			const marketDayId = sale.marketDayId ?? null;
 			return runImmediateTransaction(database, () => {
+				const item = database
+					.prepare('SELECT sold_at FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+					.get(itemId, scope.userId, scope.tenantId) as { sold_at: string | null } | undefined;
+				if (!item) {
+					throw new Error('item was not found');
+				}
+				if (item.sold_at !== null) {
+					throw new Error('item is already sold');
+				}
+				if (marketDayId !== null) {
+					const marketDay = database
+						.prepare('SELECT 1 FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+						.get(marketDayId, scope.userId, scope.tenantId);
+					if (!marketDay) {
+						throw new Error('market day was not found');
+					}
+				}
 				const updated = database
 					.prepare(
-						'UPDATE items SET sale_channel = ?, sold_at = ?, sale_proceeds_cents = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+						'UPDATE items SET sale_channel = ?, sold_at = ?, sale_proceeds_cents = ?, market_day_id = ? WHERE id = ? AND owner_id = ? AND tenant_id = ? AND sold_at IS NULL'
 					)
-					.run(channel, soldAt, proceedsCents, itemId, scope.userId, scope.tenantId);
+					.run(channel, soldAt, proceedsCents, marketDayId, itemId, scope.userId, scope.tenantId);
 				if (updated.changes !== singleDatabaseRowChange) {
-					throw new Error('item was not found');
+					throw new Error('item is already sold');
+				}
+				return mapItemRow(
+					database
+						.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
+						.get(itemId, scope.tenantId) as ItemRow
+				);
+			});
+		},
+
+		updateSale(itemId, sale, scope) {
+			const channel = requireValidSaleChannel(sale.channel);
+			const proceedsCents = requireNonNegativeInteger(sale.proceedsCents, 'proceedsCents');
+			return runImmediateTransaction(database, () => {
+				if (sale.marketDayId !== null) {
+					const marketDay = database
+						.prepare('SELECT 1 FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+						.get(sale.marketDayId, scope.userId, scope.tenantId);
+					if (!marketDay) {
+						throw new Error('market day was not found');
+					}
+				}
+				const updated = database
+					.prepare(
+						'UPDATE items SET sale_channel = ?, sale_proceeds_cents = ?, market_day_id = ? WHERE id = ? AND owner_id = ? AND tenant_id = ? AND sold_at IS NOT NULL'
+					)
+					.run(channel, proceedsCents, sale.marketDayId, itemId, scope.userId, scope.tenantId);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('sold item was not found');
 				}
 				return mapItemRow(
 					database
@@ -1071,11 +1147,11 @@ export function createCollectionRepository(
 			return runImmediateTransaction(database, () => {
 				const updated = database
 					.prepare(
-						'UPDATE items SET sale_channel = NULL, sold_at = NULL, sale_proceeds_cents = NULL WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+						'UPDATE items SET sale_channel = NULL, sold_at = NULL, sale_proceeds_cents = NULL, market_day_id = NULL WHERE id = ? AND owner_id = ? AND tenant_id = ? AND sold_at IS NOT NULL'
 					)
 					.run(itemId, scope.userId, scope.tenantId);
 				if (updated.changes !== singleDatabaseRowChange) {
-					throw new Error('item was not found');
+					throw new Error('sold item was not found');
 				}
 				return mapItemRow(
 					database
@@ -1083,6 +1159,50 @@ export function createCollectionRepository(
 						.get(itemId, scope.tenantId) as ItemRow
 				);
 			});
+		},
+
+		getSaleHistory(scope, filters) {
+			const clauses = ['items.owner_id = ?', 'items.tenant_id = ?', 'items.sold_at IS NOT NULL'];
+			const parameters: string[] = [scope.userId, scope.tenantId];
+			if (filters.marketDayId) {
+				clauses.push('items.market_day_id = ?');
+				parameters.push(filters.marketDayId);
+			}
+			if (filters.channel) {
+				clauses.push('items.sale_channel = ?');
+				parameters.push(requireValidSaleChannel(filters.channel));
+			}
+			return (
+				database
+					.prepare(
+						`SELECT items.id AS item_id, items.title, items.category, items.sale_channel, items.sold_at,
+							items.sale_proceeds_cents, items.market_day_id, market_days.name AS market_day_name
+						 FROM items
+						 LEFT JOIN market_days ON market_days.id = items.market_day_id
+							AND market_days.owner_id = items.owner_id AND market_days.tenant_id = items.tenant_id
+						 WHERE ${clauses.join(' AND ')}
+						 ORDER BY items.sold_at DESC, items.id DESC`
+					)
+					.all(...parameters) as {
+						item_id: string;
+						title: string;
+						category: ItemCategory;
+						sale_channel: SaleChannel;
+						sold_at: string;
+						sale_proceeds_cents: number;
+						market_day_id: string | null;
+						market_day_name: string | null;
+					}[]
+			).map((row) => ({
+				itemId: row.item_id,
+				itemTitle: row.title,
+				category: row.category,
+				saleChannel: row.sale_channel,
+				soldAt: row.sold_at,
+				saleProceedsCents: row.sale_proceeds_cents,
+				marketDayId: row.market_day_id,
+				marketDayName: row.market_day_name
+			}));
 		},
 
 		getSaleStatistics(scope) {
@@ -2012,7 +2132,7 @@ function migrateMarketDays(database: Database.Database): void {
 		database
 			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
 			.run(marketDaysVersion, new Date().toISOString());
-	});
+	})();
 }
 
 /**
@@ -2530,7 +2650,8 @@ function mapItemRow(row: ItemRow): Item {
 		reservedAt: row.reserved_at,
 		saleChannel: row.sale_channel,
 		soldAt: row.sold_at,
-		saleProceedsCents: row.sale_proceeds_cents
+		saleProceedsCents: row.sale_proceeds_cents,
+		marketDayId: row.market_day_id
 	};
 }
 

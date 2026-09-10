@@ -37,6 +37,8 @@ const userFacingImageMessages = [
 const imageErrorMessage = 'Das Bild konnte nicht verarbeitet werden. Bitte prüfe Format und Größe.';
 const saleStatusErrorByInternalMessage: Record<string, string> = {
 	'item was not found': 'Der Artikel wurde nicht gefunden.',
+	'item is already sold': 'Der Artikel wurde bereits als verkauft erfasst.',
+	'market day was not found': 'Der Markttag wurde nicht gefunden.',
 	'channel is not a supported sale channel': 'Bitte wähle einen gültigen Verkaufskanal.',
 	'soldAt must be a canonical UTC ISO timestamp': 'Bitte gib ein gültiges Verkaufsdatum an.'
 };
@@ -185,6 +187,7 @@ export const load: PageServerLoad = async ({ cookies, params, url }) => {
 		categoryOptions: itemCategories,
 		conditionOptions: itemConditions,
 		saleChannelOptions: saleChannels,
+		marketDays: repository.listMarketDays(scope),
 		qrCodeDataUrl
 	};
 };
@@ -259,7 +262,8 @@ export const actions: Actions = {
 				{
 					channel: getFormText(formData, 'channel') as SaleChannel,
 					soldAt: new Date().toISOString(),
-					proceedsCents: getSaleProceedsCents(formData)
+					proceedsCents: getSaleProceedsCents(formData),
+					marketDayId: getFormText(formData, 'marketDayId') || null
 				},
 				scope
 			);

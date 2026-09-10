@@ -169,6 +169,7 @@ test.describe('Core collection', () => {
 
 		// assume
 		await expect(page).toHaveURL(/\/items\//);
+		const protectedUrl = page.url();
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 		await expect(page.getByTestId('item-sale-section')).toBeVisible();
 		await expect(page.getByTestId('item-flag-pills')).toContainText('Haushalt');
@@ -219,18 +220,50 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('item-image-key').nth(1)).toContainText('Titelbild');
 		// dialog closed itself after the set-cover redirect
 
-		// act — register a sale with the full form on the detail page (euro input, date auto-set)
+		// act — create a market day and register a linked sale from the item detail page
+		const marketDayName = 'Saturday market';
+		await page.request.post('/market-days?/createMarketDay', {
+			form: {
+				name: marketDayName,
+				date: '2026-05-16',
+				startTime: '',
+				endTime: '',
+				location: '',
+				notes: ''
+			},
+			headers: { Origin: 'http://localhost:4173' }
+		});
+		await page.reload();
 		await page.getByTestId('item-proceeds').fill('9,50');
+		await page.getByTestId('item-market-day').selectOption({ label: marketDayName });
 		await page.getByTestId('mark-item-sold').click();
 
 		// assume
 		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
 		await expect(page.getByTestId('item-sold-badge')).toContainText('9,50 €');
 
-		// act — unmark the sale again (card shows sold after quick-sell was replaced by detail flow)
-		await page.getByTestId('unmark-item-sold').click();
+		// act — open sale history, correct the sale, then undo it
+		await page.getByTestId('nav-sale-history-link').click();
+		await expect(page).toHaveURL(/\/sales/);
+		const saleCard = page.getByTestId('sale-history-item').filter({ hasText: 'Leselampe' });
+		await expect(saleCard).toContainText(marketDayName);
+		await expect(saleCard).toContainText('9,50 €');
+		await saleCard.getByTestId('sale-history-edit').click();
+		await expect(page.getByTestId('sale-history-edit-dialog')).toBeVisible();
+		await page.getByTestId('sale-history-edit-dialog').getByLabel('Verkaufskanal').selectOption('private-sale');
+		await page.getByTestId('sale-history-edit-dialog').getByLabel('Erlös (€)').fill('10,00');
+		await page.getByTestId('sale-history-save').click();
+
+		// assume — the corrected sale is reflected in both the card and summary
+		await expect(page.getByTestId('sale-history-summary')).toContainText('10,00 € Erlös');
+		await expect(page.getByTestId('sale-history-item').filter({ hasText: 'Leselampe' })).toContainText('Privatverkauf');
+
+		// act — reopen the item from the sale history and return to its detail page
+		await page.getByTestId('sale-history-reopen').click();
 
 		// assume
+		await expect(page.getByTestId('sale-history-empty')).toBeVisible();
+		await page.goto(protectedUrl);
 		await expect(page.getByTestId('item-sale-section')).toBeVisible();
 
 		// act — edit the item through the edit dialog
@@ -294,7 +327,6 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Schreibtisch' })).toBeVisible();
 
 		// act — open the profile page via the header avatar and change the display name
-		const protectedUrl = page.url();
 		await page.getByTestId('profile-avatar-link').click();
 		await expect(page).toHaveURL(/\/profile/);
 		await expect(page.getByTestId('profile-avatar')).toBeVisible();
