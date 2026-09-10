@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { t } from '$lib/i18n/index.svelte';
+	import { t, getLocale } from '$lib/i18n/index.svelte';
 	import type { MarketDay } from '$lib/server/collection-repository';
 
 	let { data, form } = $props();
@@ -20,7 +20,7 @@
 			return '—';
 		}
 		const parsed = new Date(`${date}T00:00:00.000Z`);
-		return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString(undefined, { dateStyle: 'long', timeZone: 'UTC' });
+		return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString(getLocale(), { dateStyle: 'long', timeZone: 'UTC' });
 	}
 
 	/**
