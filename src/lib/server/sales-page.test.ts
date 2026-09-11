@@ -14,19 +14,6 @@ function createDatabasePath(): string {
 	return join(directory, 'passalong.sqlite');
 }
 
-function actionInput(formData: URLSearchParams, rawSessionToken?: string, origin = 'http://localhost'): object {
-	const url = new URL('http://localhost/sales');
-	return {
-		cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
-		request: new Request(url, {
-			body: formData,
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: origin },
-			method: 'POST'
-		}),
-		url
-	};
-}
-
 function createSalesFixture() {
 	const databasePath = createDatabasePath();
 	const repository = createCollectionRepository({ databasePath });
@@ -40,21 +27,39 @@ function createSalesFixture() {
 		{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
 		scope
 	);
-	const item = repository.createItem(
+	const vase = repository.createItem(
 		{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
 		scope
 	);
-	repository.markItemSold(item.id, {
+	const book = repository.createItem(
+		{ collectionId: collection.id, title: 'Book', priceCents: 300, category: 'books', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+		scope
+	);
+	repository.markItemSold(vase.id, {
 		channel: 'flea-market',
 		soldAt: '2026-05-16T10:00:00.000Z',
 		proceedsCents: 750,
 		marketDayId: marketDay.id
 	}, scope);
+	repository.markItemSold(book.id, {
+		channel: 'online-marketplace',
+		soldAt: '2026-05-17T10:00:00.000Z',
+		proceedsCents: 250
+	}, scope);
 	const rawSessionToken = 'authenticated-sales-session-token';
 	repository.createSessionForUser(scope, hashSessionToken(rawSessionToken));
 	process.env.PASSALONG_DATABASE_PATH = databasePath;
 	vi.resetModules();
-	return { repository, scope, item, marketDay, rawSessionToken };
+	return { repository, scope, vase, book, marketDay, rawSessionToken };
+}
+
+function loadWithFilters(token: string | undefined, query: string) {
+	return import('../../routes/sales/+page.server').then(({ load }) =>
+		load({
+			cookies: { get: (name: string) => (name === sessionCookieName ? token : undefined) },
+			url: new URL(`http://localhost/sales${query}`)
+		} as never)
+	);
 }
 
 afterEach(() => {
@@ -66,110 +71,92 @@ afterEach(() => {
 });
 
 describe('sales page', () => {
-	it('rejects unauthenticated sale corrections with a localizable error code', async () => {
+	it('redirects unauthenticated visitors to the login', async () => {
 		// arrange
 		createSalesFixture();
-		const { actions } = await import('../../routes/sales/+page.server');
-
-		// act
-		const outcome = await actions.updateSale(actionInput(new URLSearchParams({
-			itemId: 'unavailable',
-			channel: 'flea-market',
-			proceedsEuros: '7,00'
-		})) as never);
-
-		// assume
-		expect(outcome).toMatchObject({ status: 401, data: { saleHistoryError: 'sessionExpired' } });
-	});
-
-	it('rejects cross-origin sale corrections with a localizable error code', async () => {
-		// arrange
-		const { item, rawSessionToken } = createSalesFixture();
-		const { actions } = await import('../../routes/sales/+page.server');
-
-		// act
-		const outcome = await actions.updateSale(actionInput(new URLSearchParams({
-			itemId: item.id,
-			channel: 'flea-market',
-			proceedsEuros: '7,00'
-		}), rawSessionToken, 'https://attacker.example') as never);
-
-		// assume
-		expect(outcome).toMatchObject({ status: 403, data: { saleHistoryError: 'csrf' } });
-	});
-
-	it('loads owner-scoped sale history with validated filters', async () => {
-		// arrange
-		const { item, marketDay, rawSessionToken } = createSalesFixture();
 		const { load } = await import('../../routes/sales/+page.server');
-		const url = new URL(`http://localhost/sales?marketDayId=${encodeURIComponent(marketDay.id)}&channel=flea-market`);
+		let redirectOutcome: unknown;
 
 		// act
-		const data = await load({
-			cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
-			url
-		} as never);
+		try {
+			await loadWithFilters(undefined, '');
+		} catch (error) {
+			redirectOutcome = error;
+		}
+
+		// assume
+		expect(redirectOutcome).toMatchObject({ status: 303, location: '/' });
+	});
+
+	it('loads owner-scoped sale history without filter values', async () => {
+		// arrange
+		const { vase, book, rawSessionToken } = createSalesFixture();
+
+		// act
+		const data = await loadWithFilters(rawSessionToken, '');
 
 		// assume
 		expect(data).toMatchObject({
-			filters: { marketDayId: marketDay.id, channel: 'flea-market' },
+			filters: { channel: null, category: null, proceedsMinCents: null, proceedsMaxCents: null },
+			summary: { soldItemCount: 2, totalProceedsCents: 1000 },
+			sales: [expect.objectContaining({ itemId: book.id }), expect.objectContaining({ itemId: vase.id })]
+		});
+	});
+
+	it('loads owner-scoped sale history with validated channel and category filters', async () => {
+		// arrange
+		const { vase, rawSessionToken } = createSalesFixture();
+
+		// act
+		const data = await loadWithFilters(rawSessionToken, '?channel=flea-market&category=decor');
+
+		// assume
+		expect(data).toMatchObject({
+			filters: { channel: 'flea-market', category: 'decor' },
 			summary: { soldItemCount: 1, totalProceedsCents: 750 },
-			marketDays: [expect.objectContaining({ id: marketDay.id, name: 'May market' })],
-			sales: [expect.objectContaining({ itemId: item.id, marketDayId: marketDay.id })]
+			sales: [expect.objectContaining({ itemId: vase.id })]
 		});
 	});
 
-	it('updates sale details through a same-origin owner action', async () => {
+	it('loads owner-scoped sale history with a proceeds range filter', async () => {
 		// arrange
-		const { repository, scope, item, rawSessionToken } = createSalesFixture();
-		const secondMarketDay = repository.createMarketDay(
-			{ name: 'June market', date: '2026-06-20', startTime: null, endTime: null, location: '', notes: '' },
-			scope
-		);
-		const { actions } = await import('../../routes/sales/+page.server');
-		let redirectOutcome: unknown;
+		const { book, rawSessionToken } = createSalesFixture();
 
 		// act
-		try {
-			await actions.updateSale(actionInput(new URLSearchParams({
-				itemId: item.id,
-				channel: 'private-sale',
-				proceedsEuros: '7,00',
-				marketDayId: secondMarketDay.id
-			}), rawSessionToken) as never);
-		} catch (error) {
-			redirectOutcome = error;
-		}
+		const data = await loadWithFilters(rawSessionToken, '?proceedsMin=2,50&proceedsMax=3,00');
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: '/sales' });
-		expect(repository.getItemForOwner(item.id, scope)).toMatchObject({
-			saleChannel: 'private-sale',
-			saleProceedsCents: 700,
-			marketDayId: secondMarketDay.id
+		expect(data).toMatchObject({
+			filters: { proceedsMinCents: 250, proceedsMaxCents: 300 },
+			summary: { soldItemCount: 1, totalProceedsCents: 250 },
+			sales: [expect.objectContaining({ itemId: book.id })]
 		});
 	});
 
-	it('reopens a sold item through a same-origin owner action', async () => {
+	it('rejects invalid filter values with an empty result', async () => {
 		// arrange
-		const { repository, scope, item, rawSessionToken } = createSalesFixture();
-		const { actions } = await import('../../routes/sales/+page.server');
-		let redirectOutcome: unknown;
+		const { rawSessionToken } = createSalesFixture();
 
 		// act
-		try {
-			await actions.reopenItem(actionInput(new URLSearchParams({ itemId: item.id }), rawSessionToken) as never);
-		} catch (error) {
-			redirectOutcome = error;
-		}
+		const invalidAmount = await loadWithFilters(rawSessionToken, '?proceedsMin=abc');
+		const invertedRange = await loadWithFilters(rawSessionToken, '?proceedsMin=5&proceedsMax=2');
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: '/sales' });
-		expect(repository.getItemForOwner(item.id, scope)).toMatchObject({
-			saleChannel: null,
-			soldAt: null,
-			saleProceedsCents: null,
-			marketDayId: null
+		expect(invalidAmount).toMatchObject({ invalidRange: true, sales: [], summary: { soldItemCount: 0 } });
+		expect(invertedRange).toMatchObject({ invalidRange: true, sales: [], summary: { soldItemCount: 0 } });
+	});
+
+	it('ignores unknown channel and category filter values', async () => {
+		// arrange
+		const { rawSessionToken } = createSalesFixture();
+
+		// act
+		const data = await loadWithFilters(rawSessionToken, '?channel=weapon&category=not-a-category');
+
+		// assume
+		expect(data).toMatchObject({
+			filters: { channel: null, category: null },
+			summary: { soldItemCount: 2 }
 		});
 	});
 });

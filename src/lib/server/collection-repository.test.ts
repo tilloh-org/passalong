@@ -1331,7 +1331,7 @@ describe('collection repository', () => {
 		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
 	});
 
-	it('lists owner-scoped sales and filters them by market day and channel', () => {
+	it('lists owner-scoped sales and filters them by channel, category and proceeds range', () => {
 		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
 		const owner = repository.createInitialAdmin({
@@ -1356,22 +1356,26 @@ describe('collection repository', () => {
 		repository.markItemSold(secondItem.id, { channel: 'online-marketplace', soldAt: '2026-05-17T10:00:00.000Z', proceedsCents: 250 }, owner);
 
 		// act
-		const allSales = repository.getSaleHistory(owner, { marketDayId: null, channel: null });
-		const marketDaySales = repository.getSaleHistory(owner, { marketDayId: marketDay.id, channel: null });
-		const marketplaceSales = repository.getSaleHistory(owner, { marketDayId: null, channel: 'online-marketplace' });
-		const foreignSales = repository.getSaleHistory({ userId: 'other-user', tenantId: 'other-tenant' }, { marketDayId: null, channel: null });
+		const allSales = repository.getSaleHistory(owner, { channel: null, category: null, proceedsMinCents: null, proceedsMaxCents: null });
+		const marketplaceSales = repository.getSaleHistory(owner, { channel: 'online-marketplace', category: null, proceedsMinCents: null, proceedsMaxCents: null });
+		const decorSales = repository.getSaleHistory(owner, { channel: null, category: 'decor', proceedsMinCents: null, proceedsMaxCents: null });
+		const cheapSales = repository.getSaleHistory(owner, { channel: null, category: null, proceedsMinCents: 200, proceedsMaxCents: 500 });
+		const emptyRangeSales = repository.getSaleHistory(owner, { channel: null, category: null, proceedsMinCents: 800, proceedsMaxCents: 900 });
+		const foreignSales = repository.getSaleHistory({ userId: 'other-user', tenantId: 'other-tenant' }, { channel: null, category: null, proceedsMinCents: null, proceedsMaxCents: null });
 
 		// assume
 		expect(allSales).toEqual([
 			expect.objectContaining({ itemId: secondItem.id, itemTitle: 'Book', saleChannel: 'online-marketplace', saleProceedsCents: 250, marketDayId: null, marketDayName: null }),
 			expect.objectContaining({ itemId: firstItem.id, itemTitle: 'Vase', saleChannel: 'flea-market', saleProceedsCents: 750, marketDayId: marketDay.id, marketDayName: 'May market' })
 		]);
-		expect(marketDaySales).toEqual([expect.objectContaining({ itemId: firstItem.id })]);
 		expect(marketplaceSales).toEqual([expect.objectContaining({ itemId: secondItem.id })]);
+		expect(decorSales).toEqual([expect.objectContaining({ itemId: firstItem.id })]);
+		expect(cheapSales).toEqual([expect.objectContaining({ itemId: secondItem.id })]);
+		expect(emptyRangeSales).toEqual([]);
 		expect(foreignSales).toEqual([]);
 	});
 
-	it('corrects sale details, rejects duplicate sales and clears the market day when reopening an item', () => {
+	it('rejects duplicate sales and clears the market day when reopening an item', () => {
 		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
 		const owner = repository.createInitialAdmin({
@@ -1384,17 +1388,12 @@ describe('collection repository', () => {
 			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
 			owner
 		);
-		const secondMarketDay = repository.createMarketDay(
-			{ name: 'June market', date: '2026-06-20', startTime: null, endTime: null, location: '', notes: '' },
-			owner
-		);
 		const item = repository.createItem(
 			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
 			owner
 		);
 		repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-05-16T10:00:00.000Z', proceedsCents: 750, marketDayId: firstMarketDay.id }, owner);
 		let duplicateSaleError: unknown;
-		let invalidMarketDayError: unknown;
 
 		// act
 		try {
@@ -1402,18 +1401,11 @@ describe('collection repository', () => {
 		} catch (error) {
 			duplicateSaleError = error;
 		}
-		const correctedItem = repository.updateSale(item.id, { channel: 'private-sale', proceedsCents: 700, marketDayId: secondMarketDay.id }, owner);
-		try {
-			repository.updateSale(item.id, { channel: 'private-sale', proceedsCents: 700, marketDayId: 'missing-day' }, owner);
-		} catch (error) {
-			invalidMarketDayError = error;
-		}
 		const reopenedItem = repository.unmarkItemSold(item.id, owner);
 
 		// assume
 		expect(duplicateSaleError).toMatchObject({ message: 'item is already sold' });
-		expect(correctedItem).toMatchObject({ saleChannel: 'private-sale', soldAt: '2026-05-16T10:00:00.000Z', saleProceedsCents: 700, marketDayId: secondMarketDay.id });
-		expect(invalidMarketDayError).toMatchObject({ message: 'market day was not found' });
+
 		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null, marketDayId: null });
 	});
 

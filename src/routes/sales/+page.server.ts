@@ -1,12 +1,13 @@
 import { fail, redirect } from '@sveltejs/kit';
 import {
+	itemCategories,
 	saleChannels,
+	type ItemCategory,
 	type SaleChannel,
 	type SaleHistoryFilters,
 	type SessionScope
 } from '$lib/server/collection-repository';
 import { getCollectionRepository } from '$lib/server/repository';
-import { hasSameOrigin } from '$lib/server/csrf';
 import { hashSessionToken } from '$lib/server/session-token';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -15,15 +16,9 @@ const maximumPriceCents = 10_000_000;
 const euroAmountPattern = /^\d{1,7}([.,]\d{1,2})?$/;
 const httpStatus = {
 	seeOther: 303,
-	badRequest: 400,
-	unauthorized: 401,
-	forbidden: 403
+	badRequest: 400
 } as const;
-const saleHistoryError = {
-	csrf: 'csrf',
-	sessionExpired: 'sessionExpired',
-	invalid: 'invalid'
-} as const;
+const invalidFilterError = 'invalid';
 
 /**
  * Resolve an authenticated owner scope from a raw session cookie.
@@ -66,6 +61,21 @@ function parseEuroAmount(value: string): number | null {
 }
 
 /**
+ * Read an optional euro range bound from the filter form.
+ *
+ * @param {URLSearchParams} params - The request query parameters.
+ * @param {string} name - Query parameter name to read.
+ * @returns {number | null | 'invalid'} The validated bound, null when unset, or 'invalid'.
+ */
+function parseProceedsBound(params: URLSearchParams, name: string): number | null | 'invalid' {
+	const raw = params.get(name);
+	if (raw === null || raw === '') {
+		return null;
+	}
+	return parseEuroAmount(raw) ?? 'invalid';
+}
+
+/**
  * Load the authenticated owner's filtered sale history.
  *
  * @returns Sale history entries, filter options, and filtered summary values.
@@ -76,23 +86,32 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 		redirect(httpStatus.seeOther, '/');
 	}
 	const repository = getCollectionRepository();
-	const marketDays = repository.listMarketDays(scope);
-	const requestedMarketDayId = url.searchParams.get('marketDayId');
 	const requestedChannel = url.searchParams.get('channel');
+	const requestedCategory = url.searchParams.get('category');
+	const proceedsMin = parseProceedsBound(url.searchParams, 'proceedsMin');
+	const proceedsMax = parseProceedsBound(url.searchParams, 'proceedsMax');
+	const invalidRange =
+		proceedsMin === 'invalid' ||
+		proceedsMax === 'invalid' ||
+		(proceedsMin !== null && proceedsMax !== null && proceedsMin > proceedsMax);
 	const filters: SaleHistoryFilters = {
-		marketDayId: requestedMarketDayId && marketDays.some((marketDay) => marketDay.id === requestedMarketDayId)
-			? requestedMarketDayId
-			: null,
 		channel: requestedChannel && (saleChannels as readonly string[]).includes(requestedChannel)
 			? requestedChannel as SaleChannel
-			: null
+			: null,
+		category:
+			requestedCategory && (itemCategories as readonly string[]).includes(requestedCategory)
+				? requestedCategory as ItemCategory
+				: null,
+		proceedsMinCents: proceedsMin === 'invalid' ? null : proceedsMin,
+		proceedsMaxCents: proceedsMax === 'invalid' ? null : proceedsMax
 	};
-	const sales = repository.getSaleHistory(scope, filters);
+	const sales = invalidRange ? [] : repository.getSaleHistory(scope, filters);
 	return {
 		sales,
-		marketDays,
 		filters,
 		saleChannelOptions: saleChannels,
+		categoryOptions: itemCategories,
+		invalidRange,
 		summary: {
 			soldItemCount: sales.length,
 			totalProceedsCents: sales.reduce((total, sale) => total + sale.saleProceedsCents, 0)
@@ -100,55 +119,4 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	};
 };
 
-export const actions: Actions = {
-	/**
-	 * Correct the channel, proceeds, and optional market day of an existing sale.
-	 */
-	updateSale: async ({ cookies, request, url }) => {
-		if (!hasSameOrigin(request, url)) {
-			return fail(httpStatus.forbidden, { saleHistoryError: saleHistoryError.csrf });
-		}
-		const scope = getSessionScope(cookies.get(sessionCookieName));
-		if (!scope) {
-			return fail(httpStatus.unauthorized, { saleHistoryError: saleHistoryError.sessionExpired });
-		}
-		const formData = await request.formData();
-		const proceedsCents = parseEuroAmount(getFormText(formData, 'proceedsEuros'));
-		if (proceedsCents === null) {
-			return fail(httpStatus.badRequest, { saleHistoryError: saleHistoryError.invalid });
-		}
-		try {
-			getCollectionRepository().updateSale(
-				getFormText(formData, 'itemId'),
-				{
-					channel: getFormText(formData, 'channel') as SaleChannel,
-					proceedsCents,
-					marketDayId: getFormText(formData, 'marketDayId') || null
-				},
-				scope
-			);
-		} catch {
-			return fail(httpStatus.badRequest, { saleHistoryError: saleHistoryError.invalid });
-		}
-		redirect(httpStatus.seeOther, '/sales');
-	},
-	/**
-	 * Undo an existing sale and return the item to the open state.
-	 */
-	reopenItem: async ({ cookies, request, url }) => {
-		if (!hasSameOrigin(request, url)) {
-			return fail(httpStatus.forbidden, { saleHistoryError: saleHistoryError.csrf });
-		}
-		const scope = getSessionScope(cookies.get(sessionCookieName));
-		if (!scope) {
-			return fail(httpStatus.unauthorized, { saleHistoryError: saleHistoryError.sessionExpired });
-		}
-		const formData = await request.formData();
-		try {
-			getCollectionRepository().unmarkItemSold(getFormText(formData, 'itemId'), scope);
-		} catch {
-			return fail(httpStatus.badRequest, { saleHistoryError: saleHistoryError.invalid });
-		}
-		redirect(httpStatus.seeOther, '/sales');
-	}
-};
+export const actions: Actions = {};

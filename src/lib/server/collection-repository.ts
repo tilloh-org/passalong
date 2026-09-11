@@ -61,12 +61,6 @@ export interface MarkItemSoldInput {
 	marketDayId?: string | null;
 }
 
-export interface UpdateSaleInput {
-	channel: SaleChannel;
-	proceedsCents: number;
-	marketDayId: string | null;
-}
-
 export interface SaleChannelProceeds {
 	channel: SaleChannel;
 	soldItemCount: number;
@@ -152,8 +146,10 @@ export interface SaleHistoryEntry {
 }
 
 export interface SaleHistoryFilters {
-	marketDayId: string | null;
 	channel: SaleChannel | null;
+	category: ItemCategory | null;
+	proceedsMinCents: number | null;
+	proceedsMaxCents: number | null;
 }
 
 export interface PublicStandItem {
@@ -301,7 +297,6 @@ export interface CollectionRepository {
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
 	searchItemsForOwner(collectionId: string, filters: ItemFilters, scope: SessionScope): Item[];
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
-	updateSale(itemId: string, sale: UpdateSaleInput, scope: SessionScope): Item;
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
 	getSaleHistory(scope: SessionScope, filters: SaleHistoryFilters): SaleHistoryEntry[];
 	getSaleStatistics(scope: SessionScope): SaleStatistics;
@@ -1115,34 +1110,6 @@ export function createCollectionRepository(
 			});
 		},
 
-		updateSale(itemId, sale, scope) {
-			const channel = requireValidSaleChannel(sale.channel);
-			const proceedsCents = requireNonNegativeInteger(sale.proceedsCents, 'proceedsCents');
-			return runImmediateTransaction(database, () => {
-				if (sale.marketDayId !== null) {
-					const marketDay = database
-						.prepare('SELECT 1 FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?')
-						.get(sale.marketDayId, scope.userId, scope.tenantId);
-					if (!marketDay) {
-						throw new Error('market day was not found');
-					}
-				}
-				const updated = database
-					.prepare(
-						'UPDATE items SET sale_channel = ?, sale_proceeds_cents = ?, market_day_id = ? WHERE id = ? AND owner_id = ? AND tenant_id = ? AND sold_at IS NOT NULL'
-					)
-					.run(channel, proceedsCents, sale.marketDayId, itemId, scope.userId, scope.tenantId);
-				if (updated.changes !== singleDatabaseRowChange) {
-					throw new Error('sold item was not found');
-				}
-				return mapItemRow(
-					database
-						.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
-						.get(itemId, scope.tenantId) as ItemRow
-				);
-			});
-		},
-
 		unmarkItemSold(itemId, scope) {
 			return runImmediateTransaction(database, () => {
 				const updated = database
@@ -1164,13 +1131,21 @@ export function createCollectionRepository(
 		getSaleHistory(scope, filters) {
 			const clauses = ['items.owner_id = ?', 'items.tenant_id = ?', 'items.sold_at IS NOT NULL'];
 			const parameters: string[] = [scope.userId, scope.tenantId];
-			if (filters.marketDayId) {
-				clauses.push('items.market_day_id = ?');
-				parameters.push(filters.marketDayId);
-			}
 			if (filters.channel) {
 				clauses.push('items.sale_channel = ?');
 				parameters.push(requireValidSaleChannel(filters.channel));
+			}
+			if (filters.category) {
+				clauses.push('items.category = ?');
+				parameters.push(filters.category);
+			}
+			if (filters.proceedsMinCents !== null) {
+				clauses.push('items.sale_proceeds_cents >= ?');
+				parameters.push(String(filters.proceedsMinCents));
+			}
+			if (filters.proceedsMaxCents !== null) {
+				clauses.push('items.sale_proceeds_cents <= ?');
+				parameters.push(String(filters.proceedsMaxCents));
 			}
 			return (
 				database

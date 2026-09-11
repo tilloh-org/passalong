@@ -242,31 +242,35 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
 		await expect(page.getByTestId('item-sold-badge')).toContainText('9,50 €');
 
-		// act — open sale history, correct the sale, then undo it
+		// act — open the read-only sale history and verify the compact sale row
 		await page.getByTestId('nav-sale-history-link').click();
 		await expect(page).toHaveURL(/\/sales/);
-		const saleCard = page.getByTestId('sale-history-item').filter({ hasText: 'Leselampe' });
-		await expect(saleCard).toContainText(marketDayName);
-		await expect(saleCard).toContainText('9,50 €');
-		await saleCard.getByTestId('sale-history-edit').click();
-		await expect(page.getByTestId('sale-history-edit-dialog')).toBeVisible();
-		await page.getByTestId('sale-history-edit-dialog').getByLabel('Verkaufskanal').selectOption('private-sale');
-		await page.getByTestId('sale-history-edit-dialog').getByLabel('Erlös (€)').fill('10,00');
-		await page.getByTestId('sale-history-save').click();
+		const saleRow = page.getByTestId('sale-history-item').filter({ hasText: 'Leselampe' });
+		await expect(saleRow).toContainText(marketDayName);
+		await expect(saleRow).toContainText('9,50 €');
+		await expect(saleRow).toContainText('Flohmarkt');
+		await expect(saleRow.getByTestId('sale-history-edit')).toHaveCount(0);
+		await expect(saleRow.getByTestId('sale-history-reopen')).toHaveCount(0);
 
-		// assume — the corrected sale is reflected in both the card and summary
-		await expect(page.getByTestId('sale-history-summary')).toContainText('10,00 € Erlös');
-		await expect(page.getByTestId('sale-history-item').filter({ hasText: 'Leselampe' })).toContainText('Privatverkauf');
+		// act — filter by the item's category and verify the row stays listed
+		await page.getByTestId('sale-history-filters').getByLabel('Kategorie').selectOption('home');
+		await page.getByTestId('sale-history-filters').getByRole('button', { name: 'Filtern' }).click();
 
-		// act — reopen the item from the sale history and return to its detail page
-		await page.getByTestId('sale-history-reopen').click();
+		// assume — the filtered history still shows the sale with the range in the URL
+		await expect(page).toHaveURL(/category=home/);
+		await expect(page.getByTestId('sale-history-item')).toHaveCount(1);
+
+		// act — filter by an proceeds range that excludes the sale
+		await page.getByTestId('sale-history-filters').getByLabel('Erlös von (€)').fill('20');
+		await page.getByTestId('sale-history-filters').getByRole('button', { name: 'Filtern' }).click();
 
 		// assume
+		await expect(page).toHaveURL(/proceedsMin=20/);
 		await expect(page.getByTestId('sale-history-empty')).toBeVisible();
-		await page.goto(protectedUrl);
-		await expect(page.getByTestId('item-sale-section')).toBeVisible();
 
 		// act — edit the item through the edit dialog
+		await page.goto(protectedUrl);
+		await expect(page.getByTestId('edit-dialog-trigger')).toBeVisible();
 		await page.getByTestId('edit-dialog-trigger').click();
 		await expect(page.getByTestId('edit-dialog')).toBeVisible();
 		await page.getByLabel('Artikelname').fill('Leselampe (gebraucht)');
@@ -275,15 +279,15 @@ test.describe('Core collection', () => {
 		// assume
 		await expect(page.getByRole('heading', { name: 'Leselampe (gebraucht)' })).toBeVisible();
 
-		// act — go back to the portfolio via the header and quick-sell from the card
+		// act — go back to the portfolio via the header and check the sale statistics
+		// (the item is still sold from the history flow, so no quick-sell happens here)
 		await page.getByRole('link', { name: '+ Neu' }).click();
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
-		await page.getByTestId('item-card').first().getByTestId('quick-sell-item').click();
 
 		// assume
-		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
+		await expect(page.getByTestId('item-sold-badge').first()).toBeVisible();
 		await expect(page.getByTestId('sale-statistics')).toContainText('1 Artikel verkauft');
-		await expect(page.getByTestId('sale-statistics')).toContainText('12,00 € Erlös');
+		await expect(page.getByTestId('sale-statistics')).toContainText('9,50 € Erlös');
 		await expect(page.getByTestId('sale-statistics-channels')).toContainText('Flohmarkt');
 		const currentMonth = new Date().toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
 		await expect(page.getByTestId('sale-statistics-months')).toContainText(currentMonth);
