@@ -889,7 +889,8 @@ describe('collection repository', () => {
 		expect(migratedDatabase.prepare('SELECT version FROM schema_migrations').all()).toEqual([
 			{ version: '2026082601_tenant_schema_foundation' },
 			{ version: '2026083101_item_scoped_image_keys' },
-			{ version: '2026090901_market_days' }
+			{ version: '2026090901_market_days' },
+			{ version: '2026091001_expenses' }
 		]);
 		expect(
 			migratedDatabase
@@ -938,7 +939,8 @@ describe('collection repository', () => {
 		expect(reopenedDatabase.prepare('SELECT version FROM schema_migrations').all()).toEqual([
 			{ version: '2026082601_tenant_schema_foundation' },
 			{ version: '2026083101_item_scoped_image_keys' },
-			{ version: '2026090901_market_days' }
+			{ version: '2026090901_market_days' },
+			{ version: '2026091001_expenses' }
 		]);
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM items').get()).toEqual({ count: 1 });
@@ -1331,6 +1333,170 @@ describe('collection repository', () => {
 		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
 	});
 
+	it('manages owner-scoped expenses with categories and tenant isolation', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const secondRepository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const blake = secondRepository.createInitialAdmin({
+			username: 'blake',
+			displayName: 'Blake',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const marketDay = repository.createMarketDay(
+			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			owner
+		);
+		let invalidAmountError: unknown;
+		let invalidCategoryError: unknown;
+		let invalidDateError: unknown;
+		let foreignMarketDayError: unknown;
+
+		// act
+		const created = repository.createExpense(
+			{
+				label: 'Standgebühr',
+				category: 'fee',
+				amountCents: 1500,
+				expenseDate: '2026-05-16',
+				marketDayId: marketDay.id
+			},
+			owner
+		);
+		repository.createExpense(
+			{ label: 'Kaffee', category: 'other', expenseDate: '2026-05-16', marketDayId: null, amountCents: 350 },
+			owner
+		);
+		try {
+			repository.createExpense(
+				{ label: 'Negativ', category: 'other', expenseDate: '2026-05-16', marketDayId: null, amountCents: -5 },
+				owner
+			);
+		} catch (error) {
+			invalidAmountError = error;
+		}
+		try {
+			repository.createExpense(
+				{ label: 'Falsche Kategorie', category: 'not-a-category' as never, expenseDate: '2026-05-16', marketDayId: null, amountCents: 100 },
+				owner
+			);
+		} catch (error) {
+			invalidCategoryError = error;
+		}
+		try {
+			repository.createExpense(
+				{ label: 'Falsches Datum', category: 'other', expenseDate: '16.05.2026', marketDayId: null, amountCents: 100 },
+				owner
+			);
+		} catch (error) {
+			invalidDateError = error;
+		}
+		try {
+			repository.createExpense(
+				{ label: 'Fremder Markttag', category: 'other', expenseDate: '2026-05-16', marketDayId: 'missing-day', amountCents: 100 },
+				owner
+			);
+		} catch (error) {
+			foreignMarketDayError = error;
+		}
+
+		// assume
+		expect(created).toMatchObject({
+			label: 'Standgebühr',
+			category: 'fee',
+			amountCents: 1500,
+			expenseDate: '2026-05-16',
+			marketDayId: marketDay.id
+		});
+		const listed = repository.listExpenses(owner);
+		expect(listed).toHaveLength(2);
+		expect(listed[0]).toMatchObject({ label: 'Kaffee' });
+		expect(invalidAmountError).toMatchObject({ message: expect.stringMatching(/amountCents/) });
+		expect(invalidCategoryError).toMatchObject({ message: expect.stringMatching(/category/) });
+		expect(invalidDateError).toMatchObject({ message: expect.stringMatching(/YYYY-MM-DD/) });
+		expect(foreignMarketDayError).toMatchObject({ message: expect.stringMatching(/market day was not found/) });
+
+		// act — another owner cannot list, update or delete foreign expenses
+		expect(secondRepository.listExpenses(blake)).toEqual([]);
+		let crossDeleteError: unknown;
+		try {
+			secondRepository.deleteExpense(created.id, blake);
+		} catch (error) {
+			crossDeleteError = error;
+		}
+
+		// assume
+		expect(crossDeleteError).toMatchObject({ message: expect.stringMatching(/expense was not found/) });
+		expect(repository.listExpenses(owner)).toHaveLength(2);
+
+		// act — update and delete an own expense
+		const updated = repository.updateExpense(
+			created.id,
+			{ label: 'Standgebühr erhöht', category: 'fee', amountCents: 1800, expenseDate: '2026-05-16', marketDayId: marketDay.id },
+			owner
+		);
+		repository.deleteExpense(listed[1]!.id, owner);
+
+		// assume
+		expect(updated).toMatchObject({ label: 'Standgebühr erhöht', amountCents: 1800 });
+		expect(repository.listExpenses(owner)).toHaveLength(1);
+	});
+
+	it('settles a market day as proceeds minus expenses with tenant isolation', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const secondRepository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const blake = secondRepository.createInitialAdmin({
+			username: 'blake',
+			displayName: 'Blake',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const marketDay = repository.createMarketDay(
+			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			owner
+		);
+		const otherMarketDay = repository.createMarketDay(
+			{ name: 'June market', date: '2026-06-20', startTime: null, endTime: null, location: '', notes: '' },
+			owner
+		);
+		const vase = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			owner
+		);
+		const book = repository.createItem(
+			{ collectionId: collection.id, title: 'Book', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			owner
+		);
+		repository.markItemSold(vase.id, { channel: 'flea-market', soldAt: '2026-05-16T10:00:00.000Z', proceedsCents: 750, marketDayId: marketDay.id }, owner);
+		repository.markItemSold(book.id, { channel: 'private-sale', soldAt: '2026-05-17T10:00:00.000Z', proceedsCents: 250, marketDayId: marketDay.id }, owner);
+		repository.createExpense({ label: 'Standgebühr', category: 'fee', amountCents: 500, expenseDate: '2026-05-16', marketDayId: marketDay.id }, owner);
+		repository.createExpense({ label: 'Kaffee', category: 'supplies', amountCents: 200, expenseDate: '2026-05-16', marketDayId: marketDay.id }, owner);
+		repository.createExpense({ label: 'Anderer Tag', category: 'fee', amountCents: 999, expenseDate: '2026-06-20', marketDayId: otherMarketDay.id }, owner);
+
+		// act
+		const settlement = repository.getMarketDaySettlement(marketDay.id, owner);
+		const foreignSettlement = repository.getMarketDaySettlement(marketDay.id, blake);
+
+		// assume
+		expect(settlement).toMatchObject({
+			marketDayId: marketDay.id,
+			soldItemCount: 2,
+			totalProceedsCents: 1000,
+			totalExpensesCents: 700,
+			netResultCents: 300
+		});
+		expect(foreignSettlement).toBeNull();
+	});
 	it('lists owner-scoped sales and filters them by channel, category and proceeds range', () => {
 		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
