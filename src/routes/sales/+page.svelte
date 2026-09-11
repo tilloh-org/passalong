@@ -85,7 +85,7 @@
 			</label>
 			<div class="filter-actions">
 				<a class="secondary-link" href="/sales">{t('saleHistory.resetFilters')}</a>
-				<button type="submit">{t('saleHistory.applyFilters')}</button>
+				<button type="submit" class="filter-submit">{t('saleHistory.applyFilters')}</button>
 			</div>
 		</form>
 	</section>
@@ -95,17 +95,20 @@
 			<div class="sale-rows" role="list" data-testid="sale-history-rows">
 				{#each data.sales as sale (sale.itemId)}
 					<div class="sale-row" role="listitem" data-testid="sale-history-item">
-						<span class="row-date">{displayTimestamp(sale.soldAt)}</span>
-						<span class="row-title">{sale.itemTitle}</span>
-						<span class="row-meta">
-							<span>{saleChannelLabel(sale.saleChannel)}</span>
-							<span aria-hidden="true">·</span>
-							<span>{categoryLabel(sale.category)}</span>
-							{#if sale.marketDayName}
+						<div class="row-main">
+							<span class="row-title">{sale.itemTitle}</span>
+							<span class="row-meta">
+								<span>{displayTimestamp(sale.soldAt)}</span>
 								<span aria-hidden="true">·</span>
-								<span>{sale.marketDayName}</span>
-							{/if}
-						</span>
+								<span>{saleChannelLabel(sale.saleChannel)}</span>
+								<span aria-hidden="true">·</span>
+								<span>{categoryLabel(sale.category)}</span>
+								{#if sale.marketDayName}
+									<span aria-hidden="true">·</span>
+									<span>{sale.marketDayName}</span>
+								{/if}
+							</span>
+						</div>
 						<strong class="row-proceeds">{formatPrice(sale.saleProceedsCents)} €</strong>
 					</div>
 				{/each}
@@ -154,8 +157,7 @@
 	}
 
 	.summary,
-	.filter-panel,
-	.sale-row {
+	.filter-panel {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-card);
@@ -215,12 +217,33 @@
 	}
 
 	.secondary-link {
-		color: var(--color-text-muted);
-		font-size: 0.85rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		cursor: pointer;
+		font-size: 0.82rem;
+		font-weight: 700;
+		padding: 0.5rem 0.85rem;
+		text-decoration: none;
 	}
 
-	button {
+	.filter-submit {
+		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
+		border: 0;
+		border-radius: var(--radius-control);
+		box-shadow: var(--shadow-cta);
+		color: #fff;
 		cursor: pointer;
+		font-size: 0.82rem;
+		font-weight: 700;
+		padding: 0.5rem 0.85rem;
+	}
+
+	.secondary-link:focus-visible,
+	.filter-submit:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
 	}
 
 	.sale-rows {
@@ -230,17 +253,21 @@
 
 	.sale-row {
 		align-items: center;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
 		color: var(--color-text);
 		display: grid;
-		font-size: 0.9rem;
-		gap: 0.35rem 1rem;
-		grid-template-columns: minmax(9.5rem, max-content) 1fr minmax(4.5rem, max-content);
+		gap: 0 1rem;
+		grid-template-columns: 1fr minmax(4.5rem, max-content);
 		padding: 0.55rem 0.85rem;
 	}
 
-	.row-date {
-		color: var(--color-text-muted);
-		white-space: nowrap;
+	.row-main {
+		display: grid;
+		gap: 0.15rem;
+		min-width: 0;
 	}
 
 	.row-title {
@@ -254,19 +281,15 @@
 		color: var(--color-text-muted);
 		display: flex;
 		flex-wrap: wrap;
+		font-size: 0.75rem;
+		font-weight: 300;
 		gap: 0.3rem 0.45rem;
-		grid-column: 2;
-		font-size: 0.8rem;
 	}
 
 	.row-proceeds {
+		align-self: center;
 		color: var(--color-accent-strong);
 		white-space: nowrap;
-	}
-
-	.sale-row .row-proceeds {
-		grid-column: 3;
-		grid-row: 1;
 	}
 
 	.empty {
@@ -291,29 +314,12 @@
 		}
 
 		.sale-row {
-			grid-template-columns: 1fr minmax(4rem, max-content);
-			grid-template-areas:
-				'date proceeds'
-				'title proceeds'
-				'meta proceeds';
-		}
-
-		.row-date {
-			grid-area: date;
-		}
-
-		.row-title {
-			grid-area: title;
-		}
-
-		.row-meta {
-			grid-area: meta;
+			align-items: flex-start;
+			gap: 0.5rem;
 		}
 
 		.row-proceeds {
-			align-self: center;
-			grid-area: proceeds;
-			grid-row: auto;
+			align-self: flex-start;
 		}
 	}
 </style>
