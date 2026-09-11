@@ -214,7 +214,7 @@
 		display: flex;
 		gap: var(--gap-action-row);
 		grid-column: 1 / -1;
-		justify-content: center;
+		justify-content: flex-end;
 	}
 
 	.secondary-link {
