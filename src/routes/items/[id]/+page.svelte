@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
-	import { t } from '$lib/i18n/index.svelte';
+	import { getLocale, t } from '$lib/i18n/index.svelte';
 	import ItemInfoBlock from '$lib/components/item-info-block.svelte';
 
 	let { data, form } = $props();
@@ -134,7 +134,7 @@
 				<h2 id="sale-title">{t('item.saleTitle')}</h2>
 				{#if data.item.soldAt}
 					<p class="sold-summary">
-						{t('item.soldSummary', { date: new Date(data.item.soldAt).toLocaleDateString(), channel: saleChannelLabel(data.item.saleChannel ?? 'other') })}
+						{t('item.soldSummary', { date: new Date(data.item.soldAt).toLocaleDateString(getLocale()), channel: saleChannelLabel(data.item.saleChannel ?? 'other') })}
 						{#if data.item.saleProceedsCents !== null}
 							{t('item.proceedsPrefix', { proceeds: formatPrice(data.item.saleProceedsCents) })}
 						{/if}
@@ -166,6 +166,15 @@
 									required
 									data-testid="item-proceeds"
 								/>
+							</label>
+							<label>
+								<span>{t('item.marketDay')}</span>
+								<select name="marketDayId" data-testid="item-market-day">
+									<option value="">{t('item.noMarketDay')}</option>
+									{#each data.marketDays as marketDay}
+										<option value={marketDay.id}>{marketDay.name}</option>
+									{/each}
+								</select>
 							</label>
 						</div>
 						{#if form?.saleStatusError}

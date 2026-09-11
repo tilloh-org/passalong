@@ -132,6 +132,9 @@
 				<a href="/market-days" onclick={() => setMenuOpen(false)} data-testid="nav-market-days-link">
 					{t('nav.marketDays')}
 				</a>
+				<a href="/sales" onclick={() => setMenuOpen(false)} data-testid="nav-sale-history-link">
+					{t('nav.saleHistory')}
+				</a>
 				{#if data.header?.standPath}
 					<a href={data.header.standPath} onclick={() => setMenuOpen(false)} data-testid="nav-stand-link">
 						{t('nav.myStand')}

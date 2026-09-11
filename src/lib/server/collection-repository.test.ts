@@ -888,7 +888,8 @@ describe('collection repository', () => {
 		// assume
 		expect(migratedDatabase.prepare('SELECT version FROM schema_migrations').all()).toEqual([
 			{ version: '2026082601_tenant_schema_foundation' },
-			{ version: '2026083101_item_scoped_image_keys' }
+			{ version: '2026083101_item_scoped_image_keys' },
+			{ version: '2026090901_market_days' }
 		]);
 		expect(
 			migratedDatabase
@@ -936,7 +937,8 @@ describe('collection repository', () => {
 		// assume
 		expect(reopenedDatabase.prepare('SELECT version FROM schema_migrations').all()).toEqual([
 			{ version: '2026082601_tenant_schema_foundation' },
-			{ version: '2026083101_item_scoped_image_keys' }
+			{ version: '2026083101_item_scoped_image_keys' },
+			{ version: '2026090901_market_days' }
 		]);
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM items').get()).toEqual({ count: 1 });
@@ -1194,7 +1196,7 @@ describe('collection repository', () => {
 		expect(otherTenantImage).toMatchObject({ storageKey: 'same-content.png', position: 0, isCover: true });
 	});
 
-	it('migrates legacy items to carry sale fields while preserving every row', () => {
+	it('migrates legacy items to carry sale and market-day fields while preserving every row', () => {
 		// arrange
 		const databasePath = createDatabasePath();
 		const legacyDatabase = new Database(databasePath);
@@ -1254,7 +1256,7 @@ describe('collection repository', () => {
 
 		// assume
 		expect(itemColumns).toEqual(
-			expect.arrayContaining(['sale_channel', 'sold_at', 'sale_proceeds_cents'])
+			expect.arrayContaining(['sale_channel', 'sold_at', 'sale_proceeds_cents', 'market_day_id'])
 		);
 		expect(legacyItemCount).toEqual({ count: 1 });
 		expect(foreignKeyErrors).toEqual([]);
@@ -1264,7 +1266,8 @@ describe('collection repository', () => {
 				title: 'Sold legacy item',
 				saleChannel: null,
 				soldAt: null,
-				saleProceedsCents: null
+				saleProceedsCents: null,
+				marketDayId: null
 			})
 		]);
 	});
@@ -1326,6 +1329,84 @@ describe('collection repository', () => {
 		expect(foreignSaleError).toMatchObject({ message: 'item was not found' });
 		expect(invalidChannelError).toMatchObject({ message: 'channel is not a supported sale channel' });
 		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
+	});
+
+	it('lists owner-scoped sales and filters them by channel, category and proceeds range', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const marketDay = repository.createMarketDay(
+			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			owner
+		);
+		const firstItem = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			owner
+		);
+		const secondItem = repository.createItem(
+			{ collectionId: collection.id, title: 'Book', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			owner
+		);
+		repository.markItemSold(firstItem.id, { channel: 'flea-market', soldAt: '2026-05-16T10:00:00.000Z', proceedsCents: 750, marketDayId: marketDay.id }, owner);
+		repository.markItemSold(secondItem.id, { channel: 'online-marketplace', soldAt: '2026-05-17T10:00:00.000Z', proceedsCents: 250 }, owner);
+
+		// act
+		const allSales = repository.getSaleHistory(owner, { channel: null, category: null, proceedsMinCents: null, proceedsMaxCents: null });
+		const marketplaceSales = repository.getSaleHistory(owner, { channel: 'online-marketplace', category: null, proceedsMinCents: null, proceedsMaxCents: null });
+		const decorSales = repository.getSaleHistory(owner, { channel: null, category: 'decor', proceedsMinCents: null, proceedsMaxCents: null });
+		const cheapSales = repository.getSaleHistory(owner, { channel: null, category: null, proceedsMinCents: 200, proceedsMaxCents: 500 });
+		const emptyRangeSales = repository.getSaleHistory(owner, { channel: null, category: null, proceedsMinCents: 800, proceedsMaxCents: 900 });
+		const foreignSales = repository.getSaleHistory({ userId: 'other-user', tenantId: 'other-tenant' }, { channel: null, category: null, proceedsMinCents: null, proceedsMaxCents: null });
+
+		// assume
+		expect(allSales).toEqual([
+			expect.objectContaining({ itemId: secondItem.id, itemTitle: 'Book', saleChannel: 'online-marketplace', saleProceedsCents: 250, marketDayId: null, marketDayName: null }),
+			expect.objectContaining({ itemId: firstItem.id, itemTitle: 'Vase', saleChannel: 'flea-market', saleProceedsCents: 750, marketDayId: marketDay.id, marketDayName: 'May market' })
+		]);
+		expect(marketplaceSales).toEqual([expect.objectContaining({ itemId: secondItem.id })]);
+		expect(decorSales).toEqual([expect.objectContaining({ itemId: firstItem.id })]);
+		expect(cheapSales).toEqual([expect.objectContaining({ itemId: secondItem.id })]);
+		expect(emptyRangeSales).toEqual([]);
+		expect(foreignSales).toEqual([]);
+	});
+
+	it('rejects duplicate sales and clears the market day when reopening an item', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const firstMarketDay = repository.createMarketDay(
+			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			owner
+		);
+		const item = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			owner
+		);
+		repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-05-16T10:00:00.000Z', proceedsCents: 750, marketDayId: firstMarketDay.id }, owner);
+		let duplicateSaleError: unknown;
+
+		// act
+		try {
+			repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-05-16T10:01:00.000Z', proceedsCents: 700, marketDayId: firstMarketDay.id }, owner);
+		} catch (error) {
+			duplicateSaleError = error;
+		}
+		const reopenedItem = repository.unmarkItemSold(item.id, owner);
+
+		// assume
+		expect(duplicateSaleError).toMatchObject({ message: 'item is already sold' });
+
+		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null, marketDayId: null });
 	});
 
 	it('aggregates sale statistics per channel and month for the owning tenant only', () => {

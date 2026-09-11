@@ -202,12 +202,17 @@ describe('instance-admin actions', () => {
 			isFunctional: false },
 			scope
 		);
+		const marketDay = repository.createMarketDay(
+			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			scope
+		);
 		const actions = await loadDetailActions();
 		const url = new URL('http://localhost/');
 		const saleParameters = {
 			itemId: item.id,
 			channel: 'flea-market',
-			proceedsEuros: '7,50'
+			proceedsEuros: '7,50',
+			marketDayId: marketDay.id
 		};
 		const saleForm = new URLSearchParams(saleParameters);
 
@@ -249,7 +254,8 @@ describe('instance-admin actions', () => {
 		expect(itemAfterSale).toMatchObject({
 			saleChannel: 'flea-market',
 			soldAt: expect.any(String),
-			saleProceedsCents: 750
+			saleProceedsCents: 750,
+			marketDayId: marketDay.id
 		});
 		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
 	});
@@ -422,6 +428,10 @@ describe('instance-admin actions', () => {
 		const actions = await loadProfileActions();
 		const url = new URL('http://localhost/');
 		const collection = repository.createCollection({ name: 'Garage' }, scope);
+		repository.createMarketDay(
+			{ name: 'Spring market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			scope
+		);
 		const item = repository.createItem(
 			{
 				collectionId: collection.id,
