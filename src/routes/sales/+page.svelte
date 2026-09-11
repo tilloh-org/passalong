@@ -213,7 +213,8 @@
 		align-items: center;
 		display: flex;
 		gap: var(--gap-action-row);
-		justify-content: flex-end;
+		grid-column: 1 / -1;
+		justify-content: center;
 	}
 
 	.secondary-link {
