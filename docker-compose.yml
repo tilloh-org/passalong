@@ -5,7 +5,7 @@ services:
     container_name: passalong
     restart: unless-stopped
     ports:
-      - "${PASSALONG_PORT:-4242}:4242"
+      - '${PASSALONG_PORT:-4242}:4242'
     volumes:
       - passalong-data:/data
     environment:
@@ -17,7 +17,7 @@ services:
       BODY_SIZE_LIMIT: 6M
       PASSALONG_BOOTSTRAP: ${PASSALONG_BOOTSTRAP:-}
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4242"]
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4242']
       interval: 30s
       timeout: 5s
       retries: 3

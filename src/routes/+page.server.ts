@@ -9,22 +9,20 @@ import {
 	type ItemFilters,
 	type ItemImage,
 	type ItemStatusFilter,
-	type SaleChannel,
 	type SessionScope
 } from '$lib/server/collection-repository';
-import { readFileSync } from 'node:fs';
-import { isAbsolute, join, relative } from 'node:path';
 import { hasSameOrigin } from '$lib/server/csrf';
-import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
-import { getMediaRoot } from '$lib/server/media-root';
-import { saveUploadedImage } from '$lib/server/media-storage';
-import { hashPassword, needsPasswordRehash, validatePassword, verifyPassword } from '$lib/server/password';
+import {
+	hashPassword,
+	needsPasswordRehash,
+	validatePassword,
+	verifyPassword
+} from '$lib/server/password';
 import { getCollectionRepository } from '$lib/server/repository';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
 import type { Actions, PageServerLoad } from './$types';
 
 const sessionCookieName = 'passalong_session';
-const millisecondsPerSecond = 1000;
 const secondsPerMinute = 60;
 const minutesPerHour = 60;
 const hoursPerDay = 24;
@@ -43,11 +41,6 @@ const httpStatus = {
 const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
-const pngFileExtension = '.png';
-const jpegFileExtension = '.jpg';
-const pngMimeType = 'image/png';
-const jpegMimeType = 'image/jpeg';
-const webpMimeType = 'image/webp';
 
 interface ItemWithImages extends Item {
 	images: ItemImage[];
@@ -70,9 +63,18 @@ function parseItemFilters(searchParams: URLSearchParams): ItemFilters {
 	const categoryParam = searchParams.get('category');
 	const conditionParam = searchParams.get('condition');
 	const statusParam = searchParams.get('status');
-	const category = categoryParam && (itemCategories as readonly string[]).includes(categoryParam) ? (categoryParam as ItemCategory) : null;
-	const condition = conditionParam && (itemConditions as readonly string[]).includes(conditionParam) ? (conditionParam as ItemCondition) : null;
-	const status = statusParam && (itemStatusFilters as readonly string[]).includes(statusParam) ? (statusParam as ItemStatusFilter) : null;
+	const category =
+		categoryParam && (itemCategories as readonly string[]).includes(categoryParam)
+			? (categoryParam as ItemCategory)
+			: null;
+	const condition =
+		conditionParam && (itemConditions as readonly string[]).includes(conditionParam)
+			? (conditionParam as ItemCondition)
+			: null;
+	const status =
+		statusParam && (itemStatusFilters as readonly string[]).includes(statusParam)
+			? (statusParam as ItemStatusFilter)
+			: null;
 	return { ...emptyItemFilters, query, category, condition, status };
 }
 
@@ -99,12 +101,15 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	const isInstanceAdmin = scope ? repository.isInstanceAdmin(scope) : false;
 	const requestedCollectionId = url.searchParams.get('collection');
 	const collectionId = requestedCollectionId ?? collections[firstCollectionIndex]?.id;
-	const collection = scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
+	const collection =
+		scope && collectionId ? repository.getCollectionForOwner(collectionId, scope) : null;
 	const appliedFilters = parseItemFilters(url.searchParams);
 	const items =
 		collection && scope
 			? hasActiveFilters(appliedFilters)
-				? repository.searchItemsForOwner(collection.id, appliedFilters, scope).map(enrichItemWithImages(scope))
+				? repository
+						.searchItemsForOwner(collection.id, appliedFilters, scope)
+						.map(enrichItemWithImages(scope))
 				: repository.listItemsForOwner(collection.id, scope).map(enrichItemWithImages(scope))
 			: [];
 	const profile = scope ? repository.getProfile(scope) : null;
@@ -132,7 +137,9 @@ export const actions: Actions = {
 		}
 		const repository = getCollectionRepository();
 		if (repository.hasAccounts()) {
-			return fail(httpStatus.conflict, { registerError: 'Der erste Zugang wurde bereits erstellt. Bitte melde dich an.' });
+			return fail(httpStatus.conflict, {
+				registerError: 'Der erste Zugang wurde bereits erstellt. Bitte melde dich an.'
+			});
 		}
 
 		const formData = await request.formData();
@@ -164,7 +171,9 @@ export const actions: Actions = {
 		try {
 			const rateLimit = repository.getLoginAttemptStatus(username, requestIp);
 			if (rateLimit.blocked) {
-				return fail(httpStatus.tooManyRequests, { loginError: `Zu viele Anmeldeversuche. Bitte warte ${rateLimit.retryAfterSeconds} Sekunden.` });
+				return fail(httpStatus.tooManyRequests, {
+					loginError: `Zu viele Anmeldeversuche. Bitte warte ${rateLimit.retryAfterSeconds} Sekunden.`
+				});
 			}
 			let user;
 			try {
@@ -172,7 +181,11 @@ export const actions: Actions = {
 			} catch {
 				user = null;
 			}
-			if (!user || !(await verifyPassword(password, user.passwordHash)) || user.passwordResetRequired) {
+			if (
+				!user ||
+				!(await verifyPassword(password, user.passwordHash)) ||
+				user.passwordResetRequired
+			) {
 				repository.recordLoginFailure(username, requestIp);
 				return fail(httpStatus.unauthorized, { loginError: invalidCredentialsError });
 			}
@@ -214,11 +227,15 @@ export const actions: Actions = {
 				await hashPassword(password)
 			);
 			if (!scope) {
-				return fail(httpStatus.badRequest, { resetError: 'Der Zurücksetzungscode ist ungültig oder abgelaufen.' });
+				return fail(httpStatus.badRequest, {
+					resetError: 'Der Zurücksetzungscode ist ungültig oder abgelaufen.'
+				});
 			}
 			setSessionCookie(cookies, scope, url);
 		} catch {
-			return fail(httpStatus.badRequest, { resetError: 'Der Zurücksetzungscode ist ungültig oder abgelaufen.' });
+			return fail(httpStatus.badRequest, {
+				resetError: 'Der Zurücksetzungscode ist ungültig oder abgelaufen.'
+			});
 		}
 		redirect(httpStatus.seeOther, '/');
 	},
@@ -229,7 +246,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { createCollectionError: 'Bitte melde dich zuerst an.' });
+			return fail(httpStatus.unauthorized, {
+				createCollectionError: 'Bitte melde dich zuerst an.'
+			});
 		}
 
 		const formData = await request.formData();
@@ -254,7 +273,9 @@ export const actions: Actions = {
 		const repository = getCollectionRepository();
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { addItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				addItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const collectionId = getFormText(formData, 'collectionId');
@@ -283,8 +304,11 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { addItemError: getErrorMessage(error) });
 		}
 
-		redirect(httpStatus.seeOther, `/?collection=${encodeURIComponent(collectionId)}&created=${encodeURIComponent(createdItemId)}`);
-		},
+		redirect(
+			httpStatus.seeOther,
+			`/?collection=${encodeURIComponent(collectionId)}&created=${encodeURIComponent(createdItemId)}`
+		);
+	},
 
 	quickSellItem: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -292,18 +316,27 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
 		try {
-			const item = getCollectionRepository().getItemForOwner(getFormText(formData, 'itemId'), scope);
+			const item = getCollectionRepository().getItemForOwner(
+				getFormText(formData, 'itemId'),
+				scope
+			);
 			if (!item) {
 				throw new Error('item was not found');
 			}
 			getCollectionRepository().markItemSold(
 				item.id,
-				{ channel: 'flea-market', soldAt: new Date().toISOString(), proceedsCents: item.priceCents },
+				{
+					channel: 'flea-market',
+					soldAt: new Date().toISOString(),
+					proceedsCents: item.priceCents
+				},
 				scope
 			);
 		} catch (error) {
@@ -403,31 +436,6 @@ function setSessionCookie(cookies: Cookies, scope: SessionScope, url: URL): void
  */
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : 'Die Eingabe konnte nicht gespeichert werden.';
-}
-
-const imageErrorMessage = 'Das Bild konnte nicht verarbeitet werden. Bitte prüfe Format und Größe.';
-const imageRemoveErrorMessage = 'Das Bild konnte nicht entfernt werden.';
-const userFacingImageMessages = [
-	'upload is not a supported image type',
-	'upload is empty',
-	'image exceeds the allowed size',
-	'upload is not a supported image',
-	'image was not found',
-	'item was not found'
-] as const;
-
-/**
- * Map image-action failures to fixed user-facing messages without leaking
- * internal storage or SQLite details.
- *
- * @param {unknown} error - The thrown value.
- * @returns {string} A safe, fixed user-facing message.
- */
-function imageActionError(error: unknown): string {
-	if (error instanceof Error && (userFacingImageMessages as readonly string[]).includes(error.message)) {
-		return error.message;
-	}
-	return imageErrorMessage;
 }
 
 const saleStatusErrorByInternalMessage: Record<string, string> = {

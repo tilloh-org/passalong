@@ -4,7 +4,11 @@
 	let { data, form } = $props();
 
 	const avatarFallback = $derived((data.profile.displayName ?? 'P').slice(0, 1).toUpperCase());
-	const standUrl = $derived(data.activeCollection ? `${page.url.origin}/stand/${encodeURIComponent(data.activeCollection.id)}` : '');
+	const standUrl = $derived(
+		data.activeCollection
+			? `${page.url.origin}/stand/${encodeURIComponent(data.activeCollection.id)}`
+			: ''
+	);
 
 	let avatarFile: File | undefined = $state();
 	let importFile: File | undefined = $state();
@@ -50,14 +54,18 @@
 	const avatarReady = $derived(Boolean(avatarFile));
 	const importReady = $derived(Boolean(importFile));
 	const standIntroChanged = $derived(standIntroDraft !== standIntroBaseline);
-	const deleteAccountReady = $derived(deleteAccountDraft.trim().toLowerCase() === data.profile.username);
+	const deleteAccountReady = $derived(
+		deleteAccountDraft.trim().toLowerCase() === data.profile.username
+	);
 
 	function openDeleteAccountDialog(): void {
 		deleteAccountDraft = '';
 		if (!deleteAccountDialog?.open) {
 			deleteAccountDialog?.showModal();
 			queueMicrotask(() => {
-				deleteAccountDialog?.querySelector<HTMLInputElement>('[data-testid="delete-account-input"]')?.focus();
+				deleteAccountDialog
+					?.querySelector<HTMLInputElement>('[data-testid="delete-account-input"]')
+					?.focus();
 			});
 		}
 	}
@@ -93,7 +101,12 @@
 						<span class="avatar-fallback">{avatarFallback}</span>
 					{/if}
 				</div>
-				<form method="POST" action="?/uploadAvatar" enctype="multipart/form-data" class="avatar-form">
+				<form
+					method="POST"
+					action="?/uploadAvatar"
+					enctype="multipart/form-data"
+					class="avatar-form"
+				>
 					<input
 						name="avatar"
 						id="avatar-file"
@@ -104,12 +117,18 @@
 						required
 						onchange={onAvatarFileChange}
 					/>
-					<label class="file-button" for="avatar-file">{avatarFile ? `🖼 ${avatarFile.name}` : t('profile.chooseImage')}</label>
-					<button type="submit" disabled={!avatarReady} aria-disabled={!avatarReady}>{t('profile.saveAvatar')}</button>
+					<label class="file-button" for="avatar-file"
+						>{avatarFile ? `🖼 ${avatarFile.name}` : t('profile.chooseImage')}</label
+					>
+					<button type="submit" disabled={!avatarReady} aria-disabled={!avatarReady}
+						>{t('profile.saveAvatar')}</button
+					>
 				</form>
 				{#if data.profile.avatarStorageKey}
 					<form method="POST" action="?/removeAvatar" class="avatar-remove-form">
-						<button type="submit" class="danger" data-testid="remove-avatar">{t('profile.removeAvatar')}</button>
+						<button type="submit" class="danger" data-testid="remove-avatar"
+							>{t('profile.removeAvatar')}</button
+						>
 					</form>
 				{/if}
 				{#if form?.avatarError}
@@ -118,7 +137,12 @@
 			</div>
 
 			<div class="details-column">
-				<form method="POST" action="?/updateProfile" class="panel" data-testid="profile-details-form">
+				<form
+					method="POST"
+					action="?/updateProfile"
+					class="panel"
+					data-testid="profile-details-form"
+				>
 					<h2>{t('profile.detailsTitle')}</h2>
 					<label>
 						<span>{t('profile.username')}</span>
@@ -126,7 +150,12 @@
 					</label>
 					<label>
 						<span>{t('profile.displayName')}</span>
-						<input name="displayName" value={data.profile.displayName} required data-testid="display-name-input" />
+						<input
+							name="displayName"
+							value={data.profile.displayName}
+							required
+							data-testid="display-name-input"
+						/>
 					</label>
 					{#if form?.updateProfileError}
 						<p class="form-error" role="alert">{form.updateProfileError}</p>
@@ -135,7 +164,11 @@
 				</form>
 
 				{#if data.activeCollection}
-					<section class="panel stand-panel" aria-labelledby="stand-title" data-testid="stand-panel">
+					<section
+						class="panel stand-panel"
+						aria-labelledby="stand-title"
+						data-testid="stand-panel"
+					>
 						<h2 id="stand-title">{t('profile.standTitle')}</h2>
 						<p class="stand-hint">
 							{t('profile.standHint')}
@@ -149,39 +182,55 @@
 									rows="3"
 									placeholder={t('profile.standIntroPlaceholder')}
 									data-testid="stand-intro-input"
-									bind:value={standIntroDraft}>{data.activeCollection.standIntro}</textarea>
+									bind:value={standIntroDraft}>{data.activeCollection.standIntro}</textarea
+								>
 							</label>
 							<p class="stand-hint">{t('profile.standIntroHint')}</p>
-						{#if form?.standIntroError}
-							<p class="form-error" role="alert">{form.standIntroError}</p>
-						{/if}
-						<button type="submit" data-testid="save-stand-intro" disabled={!standIntroChanged} aria-disabled={!standIntroChanged}>{t('profile.saveStandIntro')}</button>
-					</form>
+							{#if form?.standIntroError}
+								<p class="form-error" role="alert">{form.standIntroError}</p>
+							{/if}
+							<button
+								type="submit"
+								data-testid="save-stand-intro"
+								disabled={!standIntroChanged}
+								aria-disabled={!standIntroChanged}>{t('profile.saveStandIntro')}</button
+							>
+						</form>
 
-					<hr class="stand-divider" />
+						<hr class="stand-divider" />
 
-					<div class="stand-actions">
-						<button type="button" class="secondary" onclick={() => copyStandLink()} data-testid="copy-stand-link">
-							{t('profile.copyStandLink')}
-						</button>
-						<a
-							class="stand-open"
-							href={`/stand/${encodeURIComponent(data.activeCollection.id)}`}
-							target="_blank"
-							rel="noopener"
-							data-testid="open-stand-link"
-						>
-							{t('profile.openStand')}
-						</a>
-					</div>
+						<div class="stand-actions">
+							<button
+								type="button"
+								class="secondary"
+								onclick={() => copyStandLink()}
+								data-testid="copy-stand-link"
+							>
+								{t('profile.copyStandLink')}
+							</button>
+							<a
+								class="stand-open"
+								href={`/stand/${encodeURIComponent(data.activeCollection.id)}`}
+								target="_blank"
+								rel="noopener"
+								data-testid="open-stand-link"
+							>
+								{t('profile.openStand')}
+							</a>
+						</div>
 					</section>
-			{/if}
+				{/if}
 
 				<form method="POST" action="?/changePassword" class="panel" data-testid="password-form">
 					<h2>{t('profile.changePasswordTitle')}</h2>
 					<label>
 						<span>{t('profile.currentPassword')}</span>
-						<input name="currentPassword" type="password" autocomplete="current-password" required />
+						<input
+							name="currentPassword"
+							type="password"
+							autocomplete="current-password"
+							required
+						/>
 					</label>
 					<label>
 						<span>{t('profile.newPassword')}</span>
@@ -194,14 +243,20 @@
 							required
 						/>
 					</label>
-					<p class="password-hint">{t('profile.passwordHint', { count: data.minimumPasswordLength })}</p>
+					<p class="password-hint">
+						{t('profile.passwordHint', { count: data.minimumPasswordLength })}
+					</p>
 					{#if form?.changePasswordError}
 						<p class="form-error" role="alert">{form.changePasswordError}</p>
 					{/if}
 					<button type="submit" data-testid="save-password">{t('profile.savePassword')}</button>
 				</form>
 
-				<section class="panel import-panel" aria-labelledby="import-title" data-testid="import-panel">
+				<section
+					class="panel import-panel"
+					aria-labelledby="import-title"
+					data-testid="import-panel"
+				>
 					<h2 id="import-title">{t('profile.importTitle')}</h2>
 					<p class="import-hint">
 						{t('profile.importHint')}
@@ -218,7 +273,12 @@
 					{#if form && 'importAccountError' in form && form.importAccountError}
 						<p class="form-error" role="alert">{form.importAccountError}</p>
 					{/if}
-					<form method="POST" action="?/importAccountData" enctype="multipart/form-data" data-testid="import-form">
+					<form
+						method="POST"
+						action="?/importAccountData"
+						enctype="multipart/form-data"
+						data-testid="import-form"
+					>
 						<input
 							name="accountArchive"
 							id="account-archive-file"
@@ -229,25 +289,47 @@
 							required
 							onchange={onImportFileChange}
 						/>
-						<label class="file-button" for="account-archive-file">{importFile ? `📦 ${importFile.name}` : t('profile.chooseArchive')}</label>
-						<button type="submit" data-testid="import-submit" disabled={!importReady} aria-disabled={!importReady}>{t('profile.runImport')}</button>
+						<label class="file-button" for="account-archive-file"
+							>{importFile ? `📦 ${importFile.name}` : t('profile.chooseArchive')}</label
+						>
+						<button
+							type="submit"
+							data-testid="import-submit"
+							disabled={!importReady}
+							aria-disabled={!importReady}>{t('profile.runImport')}</button
+						>
 					</form>
 				</section>
 
-				<section class="panel logout-panel" aria-labelledby="logout-title" data-testid="logout-panel">
+				<section
+					class="panel logout-panel"
+					aria-labelledby="logout-title"
+					data-testid="logout-panel"
+				>
 					<h2 id="logout-title">{t('profile.sessionTitle')}</h2>
 					<p class="logout-hint">{t('profile.sessionHint')}</p>
 					<form method="POST" action="?/logout" class="logout-form">
-						<button type="submit" class="danger logout-btn" data-testid="profile-logout">{t('profile.logout')}</button>
+						<button type="submit" class="danger logout-btn" data-testid="profile-logout"
+							>{t('profile.logout')}</button
+						>
 					</form>
 				</section>
 
-			<section class="panel delete-account-panel" aria-labelledby="delete-account-title" data-testid="delete-account-panel">
+				<section
+					class="panel delete-account-panel"
+					aria-labelledby="delete-account-title"
+					data-testid="delete-account-panel"
+				>
 					<h2 id="delete-account-title">{t('profile.deleteAccountTitle')}</h2>
 					<p class="delete-account-hint">
 						{t('profile.deleteAccountHint')}
 					</p>
-					<button type="button" class="danger delete-account-trigger" data-testid="delete-account-trigger" onclick={() => openDeleteAccountDialog()}>
+					<button
+						type="button"
+						class="danger delete-account-trigger"
+						data-testid="delete-account-trigger"
+						onclick={() => openDeleteAccountDialog()}
+					>
 						{t('profile.deleteAccountTitle')}
 					</button>
 				</section>
@@ -260,20 +342,36 @@
 				>
 					<div class="dialog-head">
 						<h3 id="delete-account-dialog-title">{t('profile.deleteAccountConfirmTitle')}</h3>
-						<button type="button" class="secondary" onclick={() => deleteAccountDialog?.close()}>{t('profile.close')}</button>
+						<button type="button" class="secondary" onclick={() => deleteAccountDialog?.close()}
+							>{t('profile.close')}</button
+						>
 					</div>
 					<p class="dialog-hint">
 						{t('profile.deleteAccountDialogHint')}
 					</p>
-					<div class="delete-account-warning" role="note" aria-label={t('profile.deleteAccountWarningLabel')}>
+					<div
+						class="delete-account-warning"
+						role="note"
+						aria-label={t('profile.deleteAccountWarningLabel')}
+					>
 						<span aria-hidden="true">⚠️</span>
 						<span>{t('profile.deleteAccountWarning')}</span>
 					</div>
 					<div class="delete-account-export">
 						<p class="delete-account-export-hint">{t('profile.deleteAccountExportHint')}</p>
-						<a class="secondary delete-account-export-link" href="/profile/export" download data-testid="export-account-archive">{t('profile.downloadZipExport')}</a>
+						<a
+							class="secondary delete-account-export-link"
+							href="/profile/export"
+							download
+							data-testid="export-account-archive">{t('profile.downloadZipExport')}</a
+						>
 					</div>
-					<form method="POST" action="?/deleteAccount" class="delete-account-form" data-testid="delete-account-form">
+					<form
+						method="POST"
+						action="?/deleteAccount"
+						class="delete-account-form"
+						data-testid="delete-account-form"
+					>
 						<label>
 							<span>{t('profile.confirmUsername')}</span>
 							<input
@@ -291,7 +389,13 @@
 						{#if form?.deleteAccountError}
 							<p class="form-error" role="alert">{form.deleteAccountError}</p>
 						{/if}
-						<button type="submit" class="danger" data-testid="delete-account-submit" disabled={!deleteAccountReady} aria-disabled={!deleteAccountReady}>{t('profile.deleteAccountFinal')}</button>
+						<button
+							type="submit"
+							class="danger"
+							data-testid="delete-account-submit"
+							disabled={!deleteAccountReady}
+							aria-disabled={!deleteAccountReady}>{t('profile.deleteAccountFinal')}</button
+						>
 					</form>
 				</dialog>
 			</div>
@@ -299,7 +403,11 @@
 
 		{#if data.isInstanceAdmin}
 			<hr class="admin-divider" />
-			<section class="panel admin-area-panel" aria-labelledby="admin-area-title" data-testid="admin-area-panel">
+			<section
+				class="panel admin-area-panel"
+				aria-labelledby="admin-area-title"
+				data-testid="admin-area-panel"
+			>
 				<h2 id="admin-area-title">{t('profile.adminAreaTitle')}</h2>
 				<p class="admin-area-hint">{t('profile.adminAreaHint')}</p>
 				<a class="admin-area-link" href="/admin" data-testid="instance-admin-link">
@@ -307,7 +415,6 @@
 				</a>
 			</section>
 		{/if}
-
 	</section>
 </main>
 

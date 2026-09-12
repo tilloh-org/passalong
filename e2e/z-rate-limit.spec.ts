@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { sharedTestAccount } from './test-account';
 
 test.describe('Login rate limiting', () => {
 	test('locks further login attempts after the configured failure limit', async ({ page }) => {
@@ -14,7 +13,10 @@ test.describe('Login rate limiting', () => {
 				form: { username: 'x', password: 'not-a-password' },
 				headers: { Origin: 'http://localhost:4173' }
 			});
-			failedLoginAttempts.push({ actionStatus: (await response.json()).status, responseStatus: response.status() });
+			failedLoginAttempts.push({
+				actionStatus: (await response.json()).status,
+				responseStatus: response.status()
+			});
 		}
 		const blockedResponse = await page.request.post('/?/login', {
 			form: { username: 'x', password: 'not-a-password' },

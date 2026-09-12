@@ -1,7 +1,6 @@
 import { mkdtempSync, rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionRepository, type SessionScope } from '$lib/server/collection-repository';
 import { hashSessionToken } from '$lib/server/session-token';
@@ -76,11 +75,17 @@ function createActionFixtureWithOwner(): ActionFixture {
 		mediaRoot,
 		rawSessionToken,
 		scope,
-		loadActions: async () => (await import('../../routes/+page.server')).actions as unknown as PageServerActions,
-		loadDetailActions: async () => (await import('../../routes/items/[id]/+page.server')).actions as unknown as PageServerActions,
-		loadProfileActions: async () => (await import('../../routes/profile/+page.server')).actions as unknown as PageServerActions,
-		loadInstanceAdminActions: async () => (await import('../../routes/admin/+page.server')).actions as unknown as PageServerActions,
-		loadPage: async () => (await import('../../routes/+page.server')).load as unknown as (input: unknown) => unknown
+		loadActions: async () =>
+			(await import('../../routes/+page.server')).actions as unknown as PageServerActions,
+		loadDetailActions: async () =>
+			(await import('../../routes/items/[id]/+page.server'))
+				.actions as unknown as PageServerActions,
+		loadProfileActions: async () =>
+			(await import('../../routes/profile/+page.server')).actions as unknown as PageServerActions,
+		loadInstanceAdminActions: async () =>
+			(await import('../../routes/admin/+page.server')).actions as unknown as PageServerActions,
+		loadPage: async () =>
+			(await import('../../routes/+page.server')).load as unknown as (input: unknown) => unknown
 	};
 }
 
@@ -93,46 +98,47 @@ function buildTestPng(): Buffer {
 	return Buffer.concat([testPngHeader, Buffer.from('test-png-payload')]);
 }
 
-/**
- * Build the SvelteKit-style action input for an upload request.
- *
- * @param {FormData} formData - Submitted multipart form values.
- * @param {string | undefined} rawSessionToken - Session cookie value or undefined.
- * @returns {unknown} Action input with cookies, request, and url.
- */
-function actionInput(formData: FormData, rawSessionToken?: string): object {
-	const url = new URL('http://localhost/');
-	return {
-		cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
-		request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
-		url
-	};
-}
-
 describe('instance-admin actions', () => {
 	it('rejects reset issuance from an authenticated account without the instance-admin role', async () => {
 		// arrange
-		const { repository, databasePath, loadDetailActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const { repository, databasePath, loadDetailActions, scope, rawSessionToken, mediaRoot } =
+			createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Garage' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Bicycle', priceCents: 5000, category: 'hobby', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Bicycle',
+				priceCents: 5000,
+				category: 'hobby',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			scope
 		);
 		const actions = await loadDetailActions();
 		const url = new URL('http://localhost/');
 		const formData = new FormData();
 		formData.set('itemId', item.id);
-		formData.append('image', new File([new Uint8Array(buildTestPng())], 'photo.png', { type: 'image/png' }));
+		formData.append(
+			'image',
+			new File([new Uint8Array(buildTestPng())], 'photo.png', { type: 'image/png' })
+		);
 
 		// act
 		let redirectOutcome: unknown;
 		try {
 			await actions.uploadItemImage({
-				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
-				request: new Request('http://localhost/', { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+				},
+				request: new Request('http://localhost/', {
+					body: formData,
+					headers: { Origin: url.origin },
+					method: 'POST'
+				}),
 				url
 			} as never);
 		} catch (error) {
@@ -141,7 +147,10 @@ describe('instance-admin actions', () => {
 		const storedImages = repository.listItemImages(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: `/items/${encodeURIComponent(item.id)}` });
+		expect(redirectOutcome).toMatchObject({
+			status: 303,
+			location: `/items/${encodeURIComponent(item.id)}`
+		});
 		expect(storedImages).toHaveLength(1);
 		expect(storedImages[0]).toMatchObject({ isCover: true, position: 0 });
 		expect(existsSync(join(mediaRoot, storedImages[0].storageKey))).toBe(true);
@@ -150,13 +159,21 @@ describe('instance-admin actions', () => {
 
 	it('stores several uploaded images at once with the first as cover', async () => {
 		// arrange
-		const { repository, loadDetailActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const { repository, loadDetailActions, scope, rawSessionToken, mediaRoot } =
+			createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			scope
 		);
 		const actions = await loadDetailActions();
@@ -165,15 +182,27 @@ describe('instance-admin actions', () => {
 		formData.set('itemId', item.id);
 		const sidePng = buildTestPng();
 		sidePng[sidePng.length - 1] = (sidePng[sidePng.length - 1] + 1) % 256;
-		formData.append('image', new File([new Uint8Array(buildTestPng())], 'front.png', { type: 'image/png' }));
-		formData.append('image', new File([new Uint8Array(sidePng)], 'side.png', { type: 'image/png' }));
+		formData.append(
+			'image',
+			new File([new Uint8Array(buildTestPng())], 'front.png', { type: 'image/png' })
+		);
+		formData.append(
+			'image',
+			new File([new Uint8Array(sidePng)], 'side.png', { type: 'image/png' })
+		);
 
 		// act
 		let redirectOutcome: unknown;
 		try {
 			await actions.uploadItemImage({
-				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
-				request: new Request('http://localhost/', { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+				},
+				request: new Request('http://localhost/', {
+					body: formData,
+					headers: { Origin: url.origin },
+					method: 'POST'
+				}),
 				url
 			} as never);
 		} catch (error) {
@@ -182,7 +211,10 @@ describe('instance-admin actions', () => {
 		const storedImages = repository.listItemImages(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: `/items/${encodeURIComponent(item.id)}` });
+		expect(redirectOutcome).toMatchObject({
+			status: 303,
+			location: `/items/${encodeURIComponent(item.id)}`
+		});
 		expect(storedImages).toHaveLength(2);
 		expect(storedImages.map((image) => image.position)).toEqual([0, 1]);
 		expect(storedImages.filter((image) => image.isCover)).toHaveLength(1);
@@ -193,17 +225,32 @@ describe('instance-admin actions', () => {
 
 	it('marks an owned item sold through the form action and rejects anonymous callers', async () => {
 		// arrange
-		const { repository, loadDetailActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const { repository, loadDetailActions, scope, rawSessionToken } =
+			createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			scope
 		);
 		const marketDay = repository.createMarketDay(
-			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			{
+				name: 'May market',
+				date: '2026-05-16',
+				startTime: null,
+				endTime: null,
+				location: '',
+				notes: ''
+			},
 			scope
 		);
 		const actions = await loadDetailActions();
@@ -221,14 +268,16 @@ describe('instance-admin actions', () => {
 		let anonymousOutcome: unknown;
 		try {
 			await actions.markItemSold({
-				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+				},
 				request: new Request(url, {
 					body: saleForm,
 					headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
 					method: 'POST'
 				}),
 				url
-		} as never);
+			} as never);
 		} catch (error) {
 			redirectOutcome = error;
 		}
@@ -249,15 +298,25 @@ describe('instance-admin actions', () => {
 		const reopenedItem = repository.unmarkItemSold(item.id, scope);
 
 		// assume
-		expect(redirectOutcome).toMatchObject({ status: 303, location: `/items/${encodeURIComponent(item.id)}` });
-		expect(anonymousOutcome).toMatchObject({ status: 401, data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
+		expect(redirectOutcome).toMatchObject({
+			status: 303,
+			location: `/items/${encodeURIComponent(item.id)}`
+		});
+		expect(anonymousOutcome).toMatchObject({
+			status: 401,
+			data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' }
+		});
 		expect(itemAfterSale).toMatchObject({
 			saleChannel: 'flea-market',
 			soldAt: expect.any(String),
 			saleProceedsCents: 750,
 			marketDayId: marketDay.id
 		});
-		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
+		expect(reopenedItem).toMatchObject({
+			saleChannel: null,
+			soldAt: null,
+			saleProceedsCents: null
+		});
 	});
 
 	it('exposes owner-scoped sale statistics through the page load for authenticated sessions', async () => {
@@ -265,19 +324,32 @@ describe('instance-admin actions', () => {
 		const { repository, loadPage, scope, rawSessionToken } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			scope
 		);
-		repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, scope);
+		repository.markItemSold(
+			item.id,
+			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
+			scope
+		);
 		const load = await loadPage();
 		const url = new URL('http://localhost/');
 
 		// act
 		const authenticatedData = (await load({
-			cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+			cookies: {
+				get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+			},
 			url
 		} as never)) as { saleStatistics?: { soldItemCount: number; totalProceedsCents: number } };
 		const anonymousData = (await load({
@@ -299,10 +371,17 @@ describe('instance-admin actions', () => {
 		const { repository, loadActions, scope, rawSessionToken } = createActionFixtureWithOwner();
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			scope
 		);
 		const actions = await loadActions();
@@ -313,7 +392,9 @@ describe('instance-admin actions', () => {
 		let anonymousOutcome: unknown;
 		try {
 			await actions.quickSellItem({
-				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+				},
 				request: new Request(url, {
 					body: new URLSearchParams({ itemId: item.id }),
 					headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
@@ -341,14 +422,18 @@ describe('instance-admin actions', () => {
 
 		// assume
 		expect(redirectOutcome).toMatchObject({ status: 303, location: '/' });
-		expect(anonymousOutcome).toMatchObject({ status: 401, data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
+		expect(anonymousOutcome).toMatchObject({
+			status: 401,
+			data: { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' }
+		});
 		expect(itemAfterSale).toMatchObject({ saleChannel: 'flea-market', saleProceedsCents: 800 });
 		expect(itemAfterSale.soldAt).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/));
 	});
 
 	it('updates the profile display name through the profile action and rejects anonymous callers', async () => {
 		// arrange
-		const { repository, loadProfileActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const { repository, loadProfileActions, scope, rawSessionToken } =
+			createActionFixtureWithOwner();
 		const actions = await loadProfileActions();
 		const url = new URL('http://localhost/');
 		const formData = new FormData();
@@ -356,42 +441,64 @@ describe('instance-admin actions', () => {
 
 		// act
 		let redirectOutcome: unknown;
-		let anonymousOutcome: unknown;
 		try {
 			await actions.updateProfile({
-				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
-				request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+				},
+				request: new Request(url, {
+					body: formData,
+					headers: { Origin: url.origin },
+					method: 'POST'
+				}),
 				url
 			} as never);
 		} catch (error) {
 			redirectOutcome = error;
 		}
-		anonymousOutcome = await actions.updateProfile({
+		const anonymousOutcome = await actions.updateProfile({
 			cookies: { get: () => undefined },
-			request: new Request(url, { body: new FormData(), headers: { Origin: url.origin }, method: 'POST' }),
+			request: new Request(url, {
+				body: new FormData(),
+				headers: { Origin: url.origin },
+				method: 'POST'
+			}),
 			url
 		} as never);
 
 		// assume
 		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profile' });
 		expect(repository.getProfile(scope)).toMatchObject({ displayName: 'Avery Updated' });
-		expect(anonymousOutcome).toMatchObject({ status: 401, data: { updateProfileError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' } });
+		expect(anonymousOutcome).toMatchObject({
+			status: 401,
+			data: { updateProfileError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' }
+		});
 	});
 
 	it('stores and removes the profile avatar with the previous file cleaned up', async () => {
 		// arrange
-		const { repository, loadProfileActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const { repository, loadProfileActions, scope, rawSessionToken, mediaRoot } =
+			createActionFixtureWithOwner();
 		const actions = await loadProfileActions();
 		const url = new URL('http://localhost/');
 		const formData = new FormData();
-		formData.set('avatar', new File([new Uint8Array(buildTestPng())], 'avatar.png', { type: 'image/png' }));
+		formData.set(
+			'avatar',
+			new File([new Uint8Array(buildTestPng())], 'avatar.png', { type: 'image/png' })
+		);
 
 		// act
 		let redirectOutcome: unknown;
 		try {
 			await actions.uploadAvatar({
-				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
-				request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+				},
+				request: new Request(url, {
+					body: formData,
+					headers: { Origin: url.origin },
+					method: 'POST'
+				}),
 				url
 			} as never);
 		} catch (error) {
@@ -408,8 +515,14 @@ describe('instance-admin actions', () => {
 		let removeOutcome: unknown;
 		try {
 			await actions.removeAvatar({
-				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
-				request: new Request(url, { body: new FormData(), headers: { Origin: url.origin }, method: 'POST' }),
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+				},
+				request: new Request(url, {
+					body: new FormData(),
+					headers: { Origin: url.origin },
+					method: 'POST'
+				}),
 				url
 			} as never);
 		} catch (error) {
@@ -424,12 +537,20 @@ describe('instance-admin actions', () => {
 
 	it('deletes the authenticated account only after the username is confirmed', async () => {
 		// arrange
-		const { repository, loadProfileActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const { repository, loadProfileActions, scope, rawSessionToken, mediaRoot } =
+			createActionFixtureWithOwner();
 		const actions = await loadProfileActions();
 		const url = new URL('http://localhost/');
 		const collection = repository.createCollection({ name: 'Garage' }, scope);
 		repository.createMarketDay(
-			{ name: 'Spring market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			{
+				name: 'Spring market',
+				date: '2026-05-16',
+				startTime: null,
+				endTime: null,
+				location: '',
+				notes: ''
+			},
 			scope
 		);
 		const item = repository.createItem(
@@ -453,7 +574,10 @@ describe('instance-admin actions', () => {
 
 		// act
 		const rejectedOutcome = await actions.deleteAccount({
-			cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined), delete: () => undefined },
+			cookies: {
+				get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined),
+				delete: () => undefined
+			},
 			request: new Request(url, {
 				body: new URLSearchParams({ confirmUsername: 'someone-else' }),
 				headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
@@ -474,7 +598,10 @@ describe('instance-admin actions', () => {
 		let redirectOutcome: unknown;
 		try {
 			await actions.deleteAccount({
-				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined), delete: () => undefined },
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined),
+					delete: () => undefined
+				},
 				request: new Request(url, {
 					body: new URLSearchParams({ confirmUsername: currentUsername }),
 					headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
@@ -497,7 +624,14 @@ describe('instance-admin actions', () => {
 
 	it('restores an instance backup as instance admin and rejects non-admins with 404', async () => {
 		// arrange
-		const { repository, databasePath, loadInstanceAdminActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const {
+			repository,
+			databasePath,
+			loadInstanceAdminActions,
+			scope,
+			rawSessionToken,
+			mediaRoot
+		} = createActionFixtureWithOwner();
 		const actions = await loadInstanceAdminActions();
 		const url = new URL('http://localhost/');
 		repository.createCollection({ name: 'Flohmarkt' }, scope);
@@ -508,12 +642,22 @@ describe('instance-admin actions', () => {
 
 		// act — admin restores
 		const formData = new FormData();
-		formData.set('backupArchive', new File([new Uint8Array(archive.zip)], 'backup.zip', { type: 'application/zip' }));
+		formData.set(
+			'backupArchive',
+			new File([new Uint8Array(archive.zip)], 'backup.zip', { type: 'application/zip' })
+		);
 		let adminOutcome: unknown;
 		try {
 			await actions.restoreBackup({
-				cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined), set: () => undefined },
-				request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined),
+					set: () => undefined
+				},
+				request: new Request(url, {
+					body: formData,
+					headers: { Origin: url.origin },
+					method: 'POST'
+				}),
 				url
 			} as never);
 		} catch (error) {
@@ -529,7 +673,8 @@ describe('instance-admin actions', () => {
 
 	it('rejects a corrupted backup archive with a 400 and an unchanged instance', async () => {
 		// arrange
-		const { repository, databasePath, loadInstanceAdminActions, scope, rawSessionToken, mediaRoot } = createActionFixtureWithOwner();
+		const { databasePath, loadInstanceAdminActions, rawSessionToken, mediaRoot } =
+			createActionFixtureWithOwner();
 		const actions = await loadInstanceAdminActions();
 		const url = new URL('http://localhost/');
 		const { createInstanceBackup } = await import('$lib/server/backup');
@@ -539,20 +684,36 @@ describe('instance-admin actions', () => {
 
 		// act
 		const formData = new FormData();
-		formData.set('backupArchive', new File([new Uint8Array(readFileSync(archivePath))], 'backup.zip', { type: 'application/zip' }));
+		formData.set(
+			'backupArchive',
+			new File([new Uint8Array(readFileSync(archivePath))], 'backup.zip', {
+				type: 'application/zip'
+			})
+		);
 		const outcome = await actions.restoreBackup({
-			cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined), set: () => undefined },
-			request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
+			cookies: {
+				get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined),
+				set: () => undefined
+			},
+			request: new Request(url, {
+				body: formData,
+				headers: { Origin: url.origin },
+				method: 'POST'
+			}),
 			url
 		} as never);
 
 		// assume
-		expect(outcome).toMatchObject({ status: 400, data: { backupError: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.' } });
+		expect(outcome).toMatchObject({
+			status: 400,
+			data: { backupError: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.' }
+		});
 	});
 
 	it('changes the password through the profile action and rejects a wrong current password', async () => {
 		// arrange
-		const { repository, loadProfileActions, scope, rawSessionToken } = createActionFixtureWithOwner();
+		const { repository, loadProfileActions, scope, rawSessionToken } =
+			createActionFixtureWithOwner();
 		const actions = await loadProfileActions();
 		const url = new URL('http://localhost/');
 		const currentPassword = 'initial-owner-password-2026';
@@ -569,19 +730,30 @@ describe('instance-admin actions', () => {
 		// act — the wrong attempt runs first so the session is still valid
 		const wrongPasswordOutcome = await actions.changePassword({
 			cookies: cookiesMock,
-			request: new Request(url, { body: new URLSearchParams({ ...passwordParameters, currentPassword: 'wrong' }), headers: { Origin: url.origin, 'Content-Type': 'application/x-www-form-urlencoded' }, method: 'POST' }),
+			request: new Request(url, {
+				body: new URLSearchParams({ ...passwordParameters, currentPassword: 'wrong' }),
+				headers: { Origin: url.origin, 'Content-Type': 'application/x-www-form-urlencoded' },
+				method: 'POST'
+			}),
 			url
 		} as never);
 
 		// assume
-		expect(wrongPasswordOutcome).toMatchObject({ status: 400, data: { changePasswordError: 'Das aktuelle Passwort ist nicht korrekt.' } });
+		expect(wrongPasswordOutcome).toMatchObject({
+			status: 400,
+			data: { changePasswordError: 'Das aktuelle Passwort ist nicht korrekt.' }
+		});
 
 		// act — the successful change revokes all sessions and issues a fresh cookie
 		let redirectOutcome: unknown;
 		try {
 			await actions.changePassword({
 				cookies: cookiesMock,
-				request: new Request(url, { body: new URLSearchParams(passwordParameters), headers: { Origin: url.origin, 'Content-Type': 'application/x-www-form-urlencoded' }, method: 'POST' }),
+				request: new Request(url, {
+					body: new URLSearchParams(passwordParameters),
+					headers: { Origin: url.origin, 'Content-Type': 'application/x-www-form-urlencoded' },
+					method: 'POST'
+				}),
 				url
 			} as never);
 		} catch (error) {

@@ -1,12 +1,7 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
-	import type {
-		ExpenseCategory,
-		ItemCategory,
-		SaleChannel,
-		SaleStatistics
-	} from '$lib/server/collection-repository';
+	import type { ExpenseCategory } from '$lib/server/collection-repository';
 
 	let { data } = $props();
 

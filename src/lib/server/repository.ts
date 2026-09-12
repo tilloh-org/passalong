@@ -12,7 +12,8 @@ let databasePath: string | undefined;
  */
 export function getCollectionRepository(): CollectionRepository {
 	if (!repository) {
-		const resolvedPath = process.env.PASSALONG_DATABASE_PATH ?? join(process.cwd(), 'data', 'passalong.sqlite');
+		const resolvedPath =
+			process.env.PASSALONG_DATABASE_PATH ?? join(process.cwd(), 'data', 'passalong.sqlite');
 		databasePath = resolvedPath;
 		mkdirSync(dirname(resolvedPath), { recursive: true });
 		repository = createCollectionRepository({ databasePath: resolvedPath });
@@ -27,7 +28,8 @@ export function getCollectionRepository(): CollectionRepository {
  */
 export function getDatabasePath(): string {
 	if (!databasePath) {
-		databasePath = process.env.PASSALONG_DATABASE_PATH ?? join(process.cwd(), 'data', 'passalong.sqlite');
+		databasePath =
+			process.env.PASSALONG_DATABASE_PATH ?? join(process.cwd(), 'data', 'passalong.sqlite');
 	}
 	return databasePath;
 }

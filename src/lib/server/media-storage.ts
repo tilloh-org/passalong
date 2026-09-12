@@ -35,7 +35,9 @@ const supportedTypes = [
 		hasSignature(payload: Buffer): boolean {
 			return (
 				payload.subarray(0, webpContainerSignature.length).equals(webpContainerSignature) &&
-				payload.subarray(webpFormatMarkerOffset, webpFormatMarkerOffset + webpFormatMarkerLength).toString('latin1') === webpFormatMarker
+				payload
+					.subarray(webpFormatMarkerOffset, webpFormatMarkerOffset + webpFormatMarkerLength)
+					.toString('latin1') === webpFormatMarker
 			);
 		}
 	}
@@ -74,7 +76,9 @@ export async function saveUploadedImage(
 	const destination = join(mediaRoot, storageKey);
 
 	await mkdir(dirname(destination), { recursive: true });
-	await writeFile(destination, payload, { flag: payloadAlreadyExists(mediaRoot, storageKey) ? 'w' : 'wx' });
+	await writeFile(destination, payload, {
+		flag: payloadAlreadyExists(mediaRoot, storageKey) ? 'w' : 'wx'
+	});
 	return storageKey;
 }
 
