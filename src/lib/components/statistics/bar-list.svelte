@@ -46,7 +46,9 @@
 			<li>
 				<div class="bar-row">
 					<span class="bar-label">{entry.label}</span>
-					<span class="bar-value">{formatPrice(entry.valueCents)} €</span>
+					<span class="bar-value" class:negative={accent === 'expenses'}
+						>{accent === 'expenses' ? '-' : ''}{formatPrice(entry.valueCents)} €</span
+					>
 				</div>
 				<div class="bar-track">
 					<div class="bar-fill" style={`width: ${barWidth(entry.valueCents, maximum)}%`}></div>
@@ -92,6 +94,11 @@
 	.bar-value {
 		color: var(--color-text-muted);
 		white-space: nowrap;
+	}
+
+	.bar-value.negative {
+		color: var(--color-danger);
+		font-weight: 700;
 	}
 
 	.bar-track {

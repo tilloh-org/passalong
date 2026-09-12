@@ -2,9 +2,9 @@
 	import { formatPrice } from '$lib/utils/format';
 
 	/**
-	 * One slice of the donut chart.
+	 * One slice of the pie chart.
 	 */
-	interface DonutSlice {
+	interface PieSlice {
 		/** Localized slice label. */
 		label: string;
 		/** Slice value in cents. */
@@ -18,16 +18,32 @@
 		testId,
 		centerLabel,
 		centerValueCents,
+		centerCount,
+		mode = 'money',
 		emptyLabel
 	}: {
-		slices: DonutSlice[];
+		slices: PieSlice[];
 		testId: string;
-		/** Label in the donut hole (e.g. "Erlös"). */
+		/** Label under the center total (e.g. "Gesamt"). */
 		centerLabel?: string;
-		/** Value in the donut hole in cents. */
+		/** Monetary total in the pie center in cents (money mode). */
 		centerValueCents?: number;
+		/** Count total in the pie center (count mode, rendered as "{count}x"). */
+		centerCount?: number;
+		/** How slice values render: euros ("10,00 €") or counts ("2x"). */
+		mode?: 'money' | 'count';
 		emptyLabel?: string;
 	} = $props();
+
+	/**
+	 * Format one slice value according to the chart mode.
+	 *
+	 * @param {number} valueCents - The raw slice value.
+	 * @returns {string} The formatted legend value.
+	 */
+	function sliceValue(valueCents: number): string {
+		return mode === 'count' ? `${valueCents}x` : `${formatPrice(valueCents)} €`;
+	}
 
 	/** Palette for up to eight slices, repeated afterwards. */
 	const palette = [
@@ -50,11 +66,11 @@
 	);
 
 	/**
-	 * Build the conic-gradient CSS for the donut ring.
+	 * Build the conic-gradient CSS for the pie.
 	 *
 	 * @returns {string} The conic-gradient background value.
 	 */
-	const ringStyle = $derived.by(() => {
+	const pieStyle = $derived.by(() => {
 		let cursor = 0;
 		const stops: string[] = [];
 		slices.forEach((slice, index) => {
@@ -71,19 +87,23 @@
 </script>
 
 {#if slices.length > 0}
-	<div class="donut-wrap" data-testid={testId}>
+	<div class="pie-wrap" data-testid={testId}>
 		<div
-			class="donut"
-			style={ringStyle}
+			class="pie"
+			style={pieStyle}
 			role="img"
 			aria-label={slices
-				.map((slice) => `${slice.label}: ${formatPrice(slice.valueCents)} €`)
+				.map((slice) => `${slice.label}: ${sliceValue(slice.valueCents)}`)
 				.join(', ')}
 		>
-			<div class="hole">
-				{#if centerValueCents !== undefined}
-					<span class="hole-label">{centerLabel}</span>
-					<strong class="hole-value">{formatPrice(centerValueCents)} €</strong>
+			<div class="pie-center">
+				{#if centerCount !== undefined}
+					<strong class="pie-total">{centerCount}x</strong>
+				{:else if centerValueCents !== undefined}
+					<strong class="pie-total">{formatPrice(centerValueCents)} €</strong>
+				{/if}
+				{#if centerLabel}
+					<span class="pie-center-label">{centerLabel}</span>
 				{/if}
 			</div>
 		</div>
@@ -97,7 +117,7 @@
 					></span>
 					<div class="legend-text">
 						<span class="legend-label">{slice.label}</span>
-						<span class="legend-value">{formatPrice(slice.valueCents)} €</span>
+						<span class="legend-value">{sliceValue(slice.valueCents)}</span>
 						{#if slice.countLabel}
 							<span class="legend-count">{slice.countLabel}</span>
 						{/if}
@@ -111,46 +131,44 @@
 {/if}
 
 <style>
-	.donut-wrap {
+	.pie-wrap {
 		display: grid;
 		gap: 1rem;
 		justify-items: start;
 	}
 
-	.donut {
-		max-width: 11rem;
-	}
-
-	.donut {
+	.pie {
 		aspect-ratio: 1;
 		border-radius: 50%;
+		box-shadow: var(--shadow-card);
+		max-width: 11rem;
 		position: relative;
 		width: 100%;
 	}
 
-	.hole {
+	.pie-center {
 		align-items: center;
-		background: var(--color-surface);
-		border-radius: 50%;
 		display: flex;
 		flex-direction: column;
-		gap: 0.15rem;
-		inset: 22%;
+		gap: 0.1rem;
+		inset: 0;
 		justify-content: center;
 		position: absolute;
 		text-align: center;
+		text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 	}
 
-	.hole-label {
-		color: var(--color-text-muted);
+	.pie-total {
+		color: #fff;
+		font-size: 1.3rem;
+	}
+
+	.pie-center-label {
+		color: rgba(255, 255, 255, 0.75);
 		font-size: 0.68rem;
 		font-weight: 700;
+		letter-spacing: 0.06em;
 		text-transform: uppercase;
-	}
-
-	.hole-value {
-		color: var(--color-accent-strong);
-		font-size: 1rem;
 	}
 
 	.legend {
@@ -168,12 +186,6 @@
 		min-width: 0;
 	}
 
-	.legend-text {
-		display: grid;
-		gap: 0.1rem;
-		min-width: 0;
-	}
-
 	.swatch {
 		align-self: center;
 		border-radius: 3px;
@@ -181,6 +193,12 @@
 		flex-shrink: 0;
 		height: 0.7rem;
 		width: 0.7rem;
+	}
+
+	.legend-text {
+		display: grid;
+		gap: 0.1rem;
+		min-width: 0;
 	}
 
 	.legend-label {

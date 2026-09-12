@@ -130,7 +130,7 @@ test.describe('Market days', () => {
 		const settlementRow = page
 			.getByTestId('settlement-item')
 			.filter({ hasText: `${marketDayName} (verschoben)` });
-		await expect(settlementRow).toContainText('Ausgaben: 15,00 €');
+		await expect(settlementRow).toContainText('Ausgaben: -15,00 €');
 
 		// assume — the settlement shows the per-day expense bars (no sales yet, so no proceeds donut)
 		await expect(settlementRow.locator('[data-testid^=settlement-expenses-]')).toBeVisible();
@@ -149,7 +149,7 @@ test.describe('Market days', () => {
 		);
 		await expect(
 			page.getByTestId('settlement-item').filter({ hasText: `${marketDayName} (verschoben)` })
-		).toContainText('Ausgaben: 18,00 €');
+		).toContainText('Ausgaben: -18,00 €');
 
 		// act — delete the expense
 		await page.getByTestId('expenses-delete').click();

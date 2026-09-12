@@ -1,6 +1,7 @@
 <script lang="ts">
 	import BarList from '$lib/components/statistics/bar-list.svelte';
-	import DonutChart from '$lib/components/statistics/donut-chart.svelte';
+	import ChartToggle from '$lib/components/statistics/chart-toggle.svelte';
+	import PieChart from '$lib/components/statistics/pie-chart.svelte';
 	import SummaryCards from '$lib/components/statistics/summary-cards.svelte';
 	import TrendChart from '$lib/components/statistics/trend-chart.svelte';
 	import { formatPrice } from '$lib/utils/format';
@@ -8,6 +9,12 @@
 	import type { ExpenseCategory } from '$lib/server/collection-repository';
 
 	let { data } = $props();
+
+	/** Whether the money-category card shows bars or the pie chart. */
+	let categoryMoneyChart: 'bars' | 'pie' = $state('bars');
+
+	/** Whether the sales-count-category card shows bars or the pie chart. */
+	let categoryCountChart: 'bars' | 'pie' = $state('pie');
 
 	/**
 	 * Translate a technical sale-channel identifier for display.
@@ -97,7 +104,8 @@
 			},
 			{
 				label: t('statistics.expensesTotal'),
-				value: formatPrice(data.statistics.totalExpensesCents),
+				value: `-${formatPrice(data.statistics.totalExpensesCents)}`,
+				negative: true,
 				meta:
 					data.statistics.expensesByCategory.length === 1
 						? t('statistics.bucketsOne')
@@ -129,32 +137,82 @@
 		<div class="chart-grid">
 			<section class="chart-card" aria-labelledby="channel-title">
 				<h2 id="channel-title">{t('portfolio.byChannel')}</h2>
-				<DonutChart
+				<PieChart
 					slices={data.statistics.proceedsByChannel.map((entry) => ({
 						label: saleChannelLabel(entry.channel),
 						valueCents: entry.totalProceedsCents,
 						countLabel: soldCountLabel(entry.soldItemCount)
 					}))}
 					testId="statistics-channels"
-					centerLabel={t('statistics.proceedsShort')}
+					centerLabel={t('statistics.totalLabel')}
 					centerValueCents={data.statistics.totalProceedsCents}
 					emptyLabel={t('statistics.empty')}
 				/>
 			</section>
 
-			<section class="chart-card" aria-labelledby="category-title">
-				<h2 id="category-title">{t('saleHistory.byCategory')}</h2>
-				<DonutChart
-					slices={data.statistics.proceedsByCategory.map((entry) => ({
-						label: categoryLabel(entry.category),
-						valueCents: entry.totalProceedsCents,
-						countLabel: soldCountLabel(entry.soldItemCount)
-					}))}
-					testId="statistics-categories"
-					centerLabel={t('statistics.proceedsShort')}
-					centerValueCents={data.statistics.totalProceedsCents}
-					emptyLabel={t('statistics.empty')}
+			<section class="chart-card" aria-labelledby="category-money-title">
+				<h2 id="category-money-title">{t('statistics.proceedsPerCategory')}</h2>
+				<ChartToggle
+					testId="statistics-categories-money-toggle"
+					value={categoryMoneyChart}
+					onchange={(next) => (categoryMoneyChart = next)}
 				/>
+				{#if categoryMoneyChart === 'pie'}
+					<PieChart
+						slices={data.statistics.proceedsByCategory.map((entry) => ({
+							label: categoryLabel(entry.category),
+							valueCents: entry.totalProceedsCents,
+							countLabel: soldCountLabel(entry.soldItemCount)
+						}))}
+						testId="statistics-categories"
+						centerLabel={t('statistics.totalLabel')}
+						centerValueCents={data.statistics.totalProceedsCents}
+						emptyLabel={t('statistics.empty')}
+					/>
+				{:else}
+					<BarList
+						entries={data.statistics.proceedsByCategory.map((entry) => ({
+							label: categoryLabel(entry.category),
+							valueCents: entry.totalProceedsCents,
+							countLabel: soldCountLabel(entry.soldItemCount)
+						}))}
+						testId="statistics-categories"
+						emptyLabel={t('statistics.empty')}
+					/>
+				{/if}
+			</section>
+
+			<section class="chart-card" aria-labelledby="category-count-title">
+				<h2 id="category-count-title">{t('statistics.salesPerCategory')}</h2>
+				<ChartToggle
+					testId="statistics-categories-count-toggle"
+					value={categoryCountChart}
+					onchange={(next) => (categoryCountChart = next)}
+				/>
+				{#if categoryCountChart === 'pie'}
+					<PieChart
+						mode="count"
+						slices={data.statistics.proceedsByCategory.map((entry) => ({
+							label: categoryLabel(entry.category),
+							valueCents: entry.soldItemCount,
+							countLabel: soldCountLabel(entry.soldItemCount)
+						}))}
+						testId="statistics-category-counts"
+						centerLabel={t('statistics.totalLabel')}
+						centerCount={data.statistics.soldItemCount}
+						emptyLabel={t('statistics.empty')}
+					/>
+				{:else}
+					<BarList
+						entries={data.statistics.proceedsByCategory.map((entry) => ({
+							label: categoryLabel(entry.category),
+							valueCents: entry.soldItemCount,
+							countLabel: soldCountLabel(entry.soldItemCount)
+						}))}
+						testId="statistics-category-counts"
+						emptyLabel={t('statistics.empty')}
+					/>
+				{/if}
 			</section>
 
 			<section class="chart-card" aria-labelledby="market-day-title">

@@ -11,7 +11,7 @@
 
 <script lang="ts">
 	import BarList from '$lib/components/statistics/bar-list.svelte';
-	import DonutChart from '$lib/components/statistics/donut-chart.svelte';
+	import PieChart from '$lib/components/statistics/pie-chart.svelte';
 	import { t, getLocale } from '$lib/i18n/index.svelte';
 	import { formatPrice } from '$lib/utils/format';
 	import type { Expense, ExpenseCategory, MarketDay } from '$lib/server/collection-repository';
@@ -306,7 +306,7 @@
 									proceeds: formatPrice(settlement.totalProceedsCents)
 								})}</span
 							>
-							<span
+							<span class="negative"
 								>{t('settlement.expenses', {
 									expenses: formatPrice(settlement.totalExpensesCents)
 								})}</span
@@ -318,14 +318,14 @@
 						{#if settlement.proceedsByCategory.length > 0 || settlement.expensesByCategory.length > 0}
 							<div class="settlement-charts">
 								{#if settlement.proceedsByCategory.length > 0}
-									<DonutChart
+									<PieChart
 										slices={settlement.proceedsByCategory.map((entry) => ({
 											label: categoryLabel(entry.category),
 											valueCents: entry.totalProceedsCents,
 											countLabel: soldCountLabel(entry.soldItemCount)
 										}))}
 										testId={`settlement-donut-${settlement.marketDayId}`}
-										centerLabel={t('statistics.proceedsShort')}
+										centerLabel={t('statistics.totalLabel')}
 										centerValueCents={settlement.totalProceedsCents}
 									/>
 								{/if}
@@ -877,7 +877,7 @@
 		color: var(--color-ok);
 	}
 
-	.settlement-numbers strong.negative {
+	.settlement-numbers .negative {
 		color: var(--color-danger);
 	}
 
