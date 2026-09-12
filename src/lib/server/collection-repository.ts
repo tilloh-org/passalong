@@ -167,6 +167,12 @@ export interface SaleMonthProceeds {
 	totalProceedsCents: number;
 }
 
+export interface SaleDayProceeds {
+	day: string;
+	soldItemCount: number;
+	totalProceedsCents: number;
+}
+
 export interface SaleCategoryProceeds {
 	category: ItemCategory;
 	soldItemCount: number;
@@ -371,7 +377,9 @@ export interface CollectionRepository {
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
 	getSaleHistory(scope: SessionScope, filters: SaleHistoryFilters): SaleHistoryEntry[];
-		getSaleStatistics(scope: SessionScope, period?: SaleStatisticsPeriod): SaleStatistics;	getPublicStandView(collectionId: string): PublicStandView | null;
+	getSaleStatistics(scope: SessionScope, period?: SaleStatisticsPeriod): SaleStatistics;
+	getProceedsByDay(scope: SessionScope, period: SaleStatisticsPeriod | null): SaleDayProceeds[];
+	getPublicStandView(collectionId: string): PublicStandView | null;
 	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
 	searchPublicStandItems(collectionId: string, filters: ItemFilters): PublicStandItem[];
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
@@ -1447,6 +1455,29 @@ export function createCollectionRepository(
 				proceedsByMarketDay,
 				expensesByCategory
 			};
+		},
+
+		getProceedsByDay(scope, period) {
+			const clauses = ['items.tenant_id = ?', 'items.owner_id = ?', 'items.sold_at IS NOT NULL'];
+			const parameters: (string | null)[] = [scope.tenantId, scope.userId];
+			if (period?.fromInclusive) {
+				clauses.push('substr(items.sold_at, 1, 10) >= ?');
+				parameters.push(period.fromInclusive);
+			}
+			if (period?.toInclusive) {
+				clauses.push('substr(items.sold_at, 1, 10) <= ?');
+				parameters.push(period.toInclusive);
+			}
+			return (
+				database
+					.prepare(
+						`SELECT substr(items.sold_at, 1, 10) AS day, COUNT(*) AS sold_item_count, SUM(items.sale_proceeds_cents) AS total_proceeds_cents
+						 FROM items
+						 WHERE ${clauses.join(' AND ')}
+						 GROUP BY day ORDER BY day ASC`
+					)
+					.all(...parameters) as { day: string; sold_item_count: number; total_proceeds_cents: number }[]
+			).map((row) => ({ day: row.day, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
 		},
 
 		getPublicStandView(collectionId) {

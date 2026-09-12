@@ -1399,6 +1399,42 @@ describe('collection repository', () => {
 		expect(foreignStatistics.totalExpensesCents).toBe(0);
 	});
 
+	it('provides a daily proceeds time series for the statistics trend chart', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const firstItem = repository.createItem(
+			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			owner
+		);
+		const secondItem = repository.createItem(
+			{ collectionId: collection.id, title: 'Book', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			owner
+		);
+		repository.markItemSold(firstItem.id, { channel: 'flea-market', soldAt: '2026-05-16T09:00:00.000Z', proceedsCents: 750 }, owner);
+		repository.markItemSold(secondItem.id, { channel: 'private-sale', soldAt: '2026-05-20T09:00:00.000Z', proceedsCents: 250 }, owner);
+
+		// act
+		const series = repository.getProceedsByDay(owner, { fromInclusive: '2026-05-01', toInclusive: null });
+
+		// assume — one bucket per selling day, chronological
+		expect(series).toEqual([
+			{ day: '2026-05-16', soldItemCount: 1, totalProceedsCents: 750 },
+			{ day: '2026-05-20', soldItemCount: 1, totalProceedsCents: 250 }
+		]);
+
+		// act — another owner sees no series
+		const foreignSeries = repository.getProceedsByDay({ userId: 'other-user', tenantId: 'other-tenant' }, null);
+
+		// assume
+		expect(foreignSeries).toEqual([]);
+	});
+
 	it('manages owner-scoped expenses with categories and tenant isolation', () => {
 		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });

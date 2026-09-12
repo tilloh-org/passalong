@@ -310,6 +310,25 @@ test.describe('Core collection', () => {
 		await expect(page).toHaveURL(/from=2026-01-01/);
 		await expect(page.getByTestId('sale-statistics-total')).toContainText('0 Verkäufe');
 
+		// act — check the dedicated statistics page via the nav link
+		await page.getByTestId('nav-statistics-link').click();
+		await expect(page).toHaveURL(/\/statistics/);
+		const totals = page.getByTestId('statistics-totals');
+		await expect(totals).toContainText('Bruttoeinnahmen');
+		await expect(totals).toContainText('9,50 €');
+		await expect(page.getByTestId('statistics-trend')).toContainText('9,50');
+		await expect(page.getByTestId('statistics-categories')).toContainText('Haushalt');
+		await expect(page.getByTestId('statistics-market-days')).toContainText(marketDayName);
+
+		// act — restrict the statistics period to a range without activity
+		await page.getByTestId('statistics-period').getByLabel('Von (Datum)').fill('2026-01-01');
+		await page.getByTestId('statistics-period').getByLabel('Bis (Datum)').fill('2026-01-31');
+		await page.getByTestId('statistics-period').getByRole('button', { name: 'Filtern' }).click();
+
+		// assume — totals and trend both show the empty period
+		await expect(page).toHaveURL(/from=2026-01-01/);
+		await expect(page.getByTestId('statistics-empty')).toBeVisible();
+
 		// act — edit the item through the edit dialog
 		await page.goto(protectedUrl);
 		await expect(page.getByTestId('edit-dialog-trigger')).toBeVisible();
