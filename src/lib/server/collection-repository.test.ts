@@ -1601,32 +1601,110 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const marketDay = repository.createMarketDay(
-			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			{
+				name: 'May market',
+				date: '2026-05-16',
+				startTime: null,
+				endTime: null,
+				location: '',
+				notes: ''
+			},
 			owner
 		);
 		const vase = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const book = repository.createItem(
-			{ collectionId: collection.id, title: 'Book', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Book',
+				priceCents: 300,
+				category: 'books',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const lamp = repository.createItem(
-			{ collectionId: collection.id, title: 'Lamp', priceCents: 1500, category: 'home', condition: 'fair', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Lamp',
+				priceCents: 1500,
+				category: 'home',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
-		repository.markItemSold(vase.id, { channel: 'flea-market', soldAt: '2026-05-16T09:00:00.000Z', proceedsCents: 750, marketDayId: marketDay.id }, owner);
-		repository.markItemSold(book.id, { channel: 'private-sale', soldAt: '2026-05-20T09:00:00.000Z', proceedsCents: 250 }, owner);
-		repository.markItemSold(lamp.id, { channel: 'shop', soldAt: '2026-06-05T09:00:00.000Z', proceedsCents: 1400 }, owner);
-		repository.createExpense({ label: 'Standgebühr', category: 'fee', amountCents: 500, expenseDate: '2026-05-16', marketDayId: marketDay.id }, owner);
-		repository.createExpense({ label: 'Kaffee', category: 'supplies', amountCents: 200, expenseDate: '2026-05-16', marketDayId: null }, owner);
+		repository.markItemSold(
+			vase.id,
+			{
+				channel: 'flea-market',
+				soldAt: '2026-05-16T09:00:00.000Z',
+				proceedsCents: 750,
+				marketDayId: marketDay.id
+			},
+			owner
+		);
+		repository.markItemSold(
+			book.id,
+			{ channel: 'private-sale', soldAt: '2026-05-20T09:00:00.000Z', proceedsCents: 250 },
+			owner
+		);
+		repository.markItemSold(
+			lamp.id,
+			{ channel: 'shop', soldAt: '2026-06-05T09:00:00.000Z', proceedsCents: 1400 },
+			owner
+		);
+		repository.createExpense(
+			{
+				label: 'Standgebühr',
+				category: 'fee',
+				amountCents: 500,
+				expenseDate: '2026-05-16',
+				marketDayId: marketDay.id
+			},
+			owner
+		);
+		repository.createExpense(
+			{
+				label: 'Kaffee',
+				category: 'supplies',
+				amountCents: 200,
+				expenseDate: '2026-05-16',
+				marketDayId: null
+			},
+			owner
+		);
 		const foreignScope = { userId: 'other-user', tenantId: 'other-tenant' };
 
 		// act
 		const allTime = repository.getSaleStatistics(owner);
-		const mayOnly = repository.getSaleStatistics(owner, { fromInclusive: '2026-05-01', toInclusive: '2026-05-31' });
-		const juneOnly = repository.getSaleStatistics(owner, { fromInclusive: '2026-06-01', toInclusive: null });
+		const mayOnly = repository.getSaleStatistics(owner, {
+			fromInclusive: '2026-05-01',
+			toInclusive: '2026-05-31'
+		});
+		const juneOnly = repository.getSaleStatistics(owner, {
+			fromInclusive: '2026-06-01',
+			toInclusive: null
+		});
 		const foreignStatistics = repository.getSaleStatistics(foreignScope);
 
 		// assume — all-time statistics now include category, market day and expense breakdowns
@@ -1652,7 +1730,11 @@ describe('collection repository', () => {
 		expect(mayOnly.totalProceedsCents).toBe(1000);
 		expect(mayOnly.totalExpensesCents).toBe(700);
 		expect(mayOnly.proceedsByMarketDay).toHaveLength(1);
-		expect(juneOnly).toMatchObject({ soldItemCount: 1, totalProceedsCents: 1400, totalExpensesCents: 0 });
+		expect(juneOnly).toMatchObject({
+			soldItemCount: 1,
+			totalProceedsCents: 1400,
+			totalExpensesCents: 0
+		});
 		expect(foreignStatistics.soldItemCount).toBe(0);
 		expect(foreignStatistics.totalExpensesCents).toBe(0);
 	});
@@ -1667,18 +1749,49 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const firstItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const secondItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Book', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Book',
+				priceCents: 300,
+				category: 'books',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
-		repository.markItemSold(firstItem.id, { channel: 'flea-market', soldAt: '2026-05-16T09:00:00.000Z', proceedsCents: 750 }, owner);
-		repository.markItemSold(secondItem.id, { channel: 'private-sale', soldAt: '2026-05-20T09:00:00.000Z', proceedsCents: 250 }, owner);
+		repository.markItemSold(
+			firstItem.id,
+			{ channel: 'flea-market', soldAt: '2026-05-16T09:00:00.000Z', proceedsCents: 750 },
+			owner
+		);
+		repository.markItemSold(
+			secondItem.id,
+			{ channel: 'private-sale', soldAt: '2026-05-20T09:00:00.000Z', proceedsCents: 250 },
+			owner
+		);
 
 		// act
-		const series = repository.getProceedsByDay(owner, { fromInclusive: '2026-05-01', toInclusive: null });
+		const series = repository.getProceedsByDay(owner, {
+			fromInclusive: '2026-05-01',
+			toInclusive: null
+		});
 
 		// assume — one bucket per selling day, chronological
 		expect(series).toEqual([
@@ -1687,7 +1800,10 @@ describe('collection repository', () => {
 		]);
 
 		// act — another owner sees no series
-		const foreignSeries = repository.getProceedsByDay({ userId: 'other-user', tenantId: 'other-tenant' }, null);
+		const foreignSeries = repository.getProceedsByDay(
+			{ userId: 'other-user', tenantId: 'other-tenant' },
+			null
+		);
 
 		// assume
 		expect(foreignSeries).toEqual([]);

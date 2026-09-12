@@ -89,12 +89,16 @@ function createSalesFixture() {
 	return { repository, scope, vase, book, marketDay, rawSessionToken };
 }
 
-function loadWithFilters(token: string | undefined, query: string): Promise<Record<string, unknown>> {
-	return import('../../routes/sales/+page.server').then(({ load }) =>
-		load({
-			cookies: { get: (name: string) => (name === sessionCookieName ? token : undefined) },
-			url: new URL(`http://localhost/sales${query}`)
-		} as never) as Promise<Record<string, unknown>>
+function loadWithFilters(
+	token: string | undefined,
+	query: string
+): Promise<Record<string, unknown>> {
+	return import('../../routes/sales/+page.server').then(
+		({ load }) =>
+			load({
+				cookies: { get: (name: string) => (name === sessionCookieName ? token : undefined) },
+				url: new URL(`http://localhost/sales${query}`)
+			} as never) as Promise<Record<string, unknown>>
 	);
 }
 

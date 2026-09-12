@@ -1525,7 +1525,9 @@ export function createCollectionRepository(
 				)
 				.get(...saleParameters) as { sold_item_count: number; total_proceeds_cents: number };
 			const expenseTotals = database
-				.prepare(`SELECT COALESCE(SUM(amount_cents), 0) AS total_expenses_cents FROM expenses ${expenseFilter}`)
+				.prepare(
+					`SELECT COALESCE(SUM(amount_cents), 0) AS total_expenses_cents FROM expenses ${expenseFilter}`
+				)
 				.get(...expenseParameters) as { total_expenses_cents: number };
 			const proceedsByChannel = (
 				database
@@ -1533,24 +1535,48 @@ export function createCollectionRepository(
 						`SELECT sale_channel AS channel, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
 						 FROM items ${saleFilter} GROUP BY sale_channel ORDER BY total_proceeds_cents DESC, channel ASC`
 					)
-					.all(...saleParameters) as { channel: SaleChannel; sold_item_count: number; total_proceeds_cents: number }[]
-			).map((row) => ({ channel: row.channel, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+					.all(...saleParameters) as {
+					channel: SaleChannel;
+					sold_item_count: number;
+					total_proceeds_cents: number;
+				}[]
+			).map((row) => ({
+				channel: row.channel,
+				soldItemCount: row.sold_item_count,
+				totalProceedsCents: row.total_proceeds_cents
+			}));
 			const proceedsByMonth = (
 				database
 					.prepare(
 						`SELECT ${saleMonthExpression} AS month, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
 						 FROM items ${saleFilter} GROUP BY ${saleMonthExpression} ORDER BY month ASC`
 					)
-					.all(...saleParameters) as { month: string; sold_item_count: number; total_proceeds_cents: number }[]
-			).map((row) => ({ month: row.month, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+					.all(...saleParameters) as {
+					month: string;
+					sold_item_count: number;
+					total_proceeds_cents: number;
+				}[]
+			).map((row) => ({
+				month: row.month,
+				soldItemCount: row.sold_item_count,
+				totalProceedsCents: row.total_proceeds_cents
+			}));
 			const proceedsByCategory = (
 				database
 					.prepare(
 						`SELECT category, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
 						 FROM items ${saleFilter} GROUP BY category ORDER BY total_proceeds_cents DESC, category ASC`
 					)
-					.all(...saleParameters) as { category: ItemCategory; sold_item_count: number; total_proceeds_cents: number }[]
-			).map((row) => ({ category: row.category, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+					.all(...saleParameters) as {
+					category: ItemCategory;
+					sold_item_count: number;
+					total_proceeds_cents: number;
+				}[]
+			).map((row) => ({
+				category: row.category,
+				soldItemCount: row.sold_item_count,
+				totalProceedsCents: row.total_proceeds_cents
+			}));
 			const proceedsByMarketDay = (
 				database
 					.prepare(
@@ -1567,17 +1593,28 @@ export function createCollectionRepository(
 						scope.userId,
 						...(fromInclusive !== null ? [fromInclusive] : []),
 						...(toInclusive !== null ? [toInclusive] : [])
-					) as { market_day_name: string | null; sold_item_count: number; total_proceeds_cents: number }[]
+					) as {
+					market_day_name: string | null;
+					sold_item_count: number;
+					total_proceeds_cents: number;
+				}[]
 			)
 				.filter((row) => row.market_day_name !== null)
-				.map((row) => ({ marketDayName: row.market_day_name, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+				.map((row) => ({
+					marketDayName: row.market_day_name,
+					soldItemCount: row.sold_item_count,
+					totalProceedsCents: row.total_proceeds_cents
+				}));
 			const expensesByCategory = (
 				database
 					.prepare(
 						`SELECT category, SUM(amount_cents) AS total_expenses_cents
 						 FROM expenses ${expenseFilter} GROUP BY category ORDER BY total_expenses_cents DESC, category ASC`
 					)
-					.all(...expenseParameters) as { category: ExpenseCategory; total_expenses_cents: number }[]
+					.all(...expenseParameters) as {
+					category: ExpenseCategory;
+					total_expenses_cents: number;
+				}[]
 			).map((row) => ({ category: row.category, totalExpensesCents: row.total_expenses_cents }));
 			return {
 				soldItemCount: totals.sold_item_count,
@@ -1611,8 +1648,16 @@ export function createCollectionRepository(
 						 WHERE ${clauses.join(' AND ')}
 						 GROUP BY day ORDER BY day ASC`
 					)
-					.all(...parameters) as { day: string; sold_item_count: number; total_proceeds_cents: number }[]
-			).map((row) => ({ day: row.day, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+					.all(...parameters) as {
+					day: string;
+					sold_item_count: number;
+					total_proceeds_cents: number;
+				}[]
+			).map((row) => ({
+				day: row.day,
+				soldItemCount: row.sold_item_count,
+				totalProceedsCents: row.total_proceeds_cents
+			}));
 		},
 
 		getPublicStandView(collectionId) {

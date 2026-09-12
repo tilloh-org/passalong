@@ -379,7 +379,8 @@ const de: Record<string, string> = {
 	'saleHistory.sub':
 		'Alle erfassten Verkäufe auf einen Blick — filterbar nach Kanal, Kategorie und Erlös.',
 	'saleHistory.statistics': 'Statistik',
-	'saleHistory.statisticsTotal': '{count} Verkäufe · {proceeds} € Erlös · {expenses} € Ausgaben · Netto {net} €',
+	'saleHistory.statisticsTotal':
+		'{count} Verkäufe · {proceeds} € Erlös · {expenses} € Ausgaben · Netto {net} €',
 	'saleHistory.byCategory': 'Nach Kategorie',
 	'saleHistory.byMarketDay': 'Nach Markttag',
 	'saleHistory.byPeriod': 'Zeitraum einschränken',
@@ -735,7 +736,8 @@ const en: Record<string, string> = {
 	'saleHistory.sub':
 		'All recorded sales at a glance — filterable by channel, category and proceeds.',
 	'saleHistory.statistics': 'Statistics',
-	'saleHistory.statisticsTotal': '{count} sales · {proceeds} € proceeds · {expenses} € expenses · net {net} €',
+	'saleHistory.statisticsTotal':
+		'{count} sales · {proceeds} € proceeds · {expenses} € expenses · net {net} €',
 	'saleHistory.byCategory': 'By category',
 	'saleHistory.byMarketDay': 'By market day',
 	'saleHistory.byPeriod': 'Restrict the period',

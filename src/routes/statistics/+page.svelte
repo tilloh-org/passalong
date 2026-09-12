@@ -92,22 +92,34 @@
 	}
 
 	/** The largest single-day proceeds value for the trend chart. */
-	const maxDailyProceeds = $derived(Math.max(0, ...data.proceedsByDay.map((entry) => entry.totalProceedsCents)));
+	const maxDailyProceeds = $derived(
+		Math.max(0, ...data.proceedsByDay.map((entry) => entry.totalProceedsCents))
+	);
 
 	/** The largest category proceeds value for the category chart. */
-	const maxCategoryProceeds = $derived(Math.max(0, ...data.statistics.proceedsByCategory.map((entry) => entry.totalProceedsCents)));
+	const maxCategoryProceeds = $derived(
+		Math.max(0, ...data.statistics.proceedsByCategory.map((entry) => entry.totalProceedsCents))
+	);
 
 	/** The largest monthly proceeds value for the month chart. */
-	const maxMonthlyProceeds = $derived(Math.max(0, ...data.statistics.proceedsByMonth.map((entry) => entry.totalProceedsCents)));
+	const maxMonthlyProceeds = $derived(
+		Math.max(0, ...data.statistics.proceedsByMonth.map((entry) => entry.totalProceedsCents))
+	);
 
 	/** The largest expense-category total for the expense chart. */
-	const maxExpenseTotal = $derived(Math.max(0, ...data.statistics.expensesByCategory.map((entry) => entry.totalExpensesCents)));
+	const maxExpenseTotal = $derived(
+		Math.max(0, ...data.statistics.expensesByCategory.map((entry) => entry.totalExpensesCents))
+	);
 
 	/** The largest channel proceeds value for the channel chart. */
-	const maxChannelProceeds = $derived(Math.max(0, ...data.statistics.proceedsByChannel.map((entry) => entry.totalProceedsCents)));
+	const maxChannelProceeds = $derived(
+		Math.max(0, ...data.statistics.proceedsByChannel.map((entry) => entry.totalProceedsCents))
+	);
 
 	/** The largest market-day proceeds value for the market-day chart. */
-	const maxMarketDayProceeds = $derived(Math.max(0, ...data.statistics.proceedsByMarketDay.map((entry) => entry.totalProceedsCents)));
+	const maxMarketDayProceeds = $derived(
+		Math.max(0, ...data.statistics.proceedsByMarketDay.map((entry) => entry.totalProceedsCents))
+	);
 
 	/** Whether the statistics contain any sale or expense activity at all. */
 	const hasActivity = $derived(
@@ -135,15 +147,23 @@
 		<div class="total-card" data-testid="statistics-expenses">
 			<span class="total-label">{t('statistics.expensesTotal')}</span>
 			<strong>{formatPrice(data.statistics.totalExpensesCents)} €</strong>
-			<span class="total-meta">{t('statistics.buckets', { count: data.statistics.expensesByCategory.length })}</span>
+			<span class="total-meta"
+				>{t('statistics.buckets', { count: data.statistics.expensesByCategory.length })}</span
+			>
 		</div>
-		<div class="total-card" class:negative={data.statistics.netResultCents < 0} data-testid="statistics-net">
+		<div
+			class="total-card"
+			class:negative={data.statistics.netResultCents < 0}
+			data-testid="statistics-net"
+		>
 			<span class="total-label">{t('statistics.net')}</span>
 			<strong>{formatPrice(data.statistics.netResultCents)} €</strong>
-			<span class="total-meta">{t('statistics.periodLabel', {
-				from: data.period.fromInclusive ?? t('statistics.periodAny'),
-				to: data.period.toInclusive ?? t('statistics.periodAny')
-			})}</span>
+			<span class="total-meta"
+				>{t('statistics.periodLabel', {
+					from: data.period.fromInclusive ?? t('statistics.periodAny'),
+					to: data.period.toInclusive ?? t('statistics.periodAny')
+				})}</span
+			>
 		</div>
 	</section>
 
@@ -156,7 +176,10 @@
 						<div class="trend-column">
 							<span class="trend-value">{formatPrice(entry.totalProceedsCents)} €</span>
 							<div class="trend-bar-track">
-								<div class="trend-bar" style={`height: ${barWidth(entry.totalProceedsCents, maxDailyProceeds)}%`}></div>
+								<div
+									class="trend-bar"
+									style={`height: ${barWidth(entry.totalProceedsCents, maxDailyProceeds)}%`}
+								></div>
 							</div>
 							<span class="trend-day">{dayLabel(entry.day)}</span>
 						</div>
@@ -178,7 +201,10 @@
 								<span class="statistics-value">{formatPrice(entry.totalProceedsCents)} €</span>
 							</div>
 							<div class="bar-track">
-								<div class="bar-fill" style={`width: ${barWidth(entry.totalProceedsCents, maxChannelProceeds)}%`}></div>
+								<div
+									class="bar-fill"
+									style={`width: ${barWidth(entry.totalProceedsCents, maxChannelProceeds)}%`}
+								></div>
 							</div>
 							<span class="bar-count">{soldCountLabel(entry.soldItemCount)}</span>
 						</li>
@@ -196,7 +222,10 @@
 								<span class="statistics-value">{formatPrice(entry.totalProceedsCents)} €</span>
 							</div>
 							<div class="bar-track">
-								<div class="bar-fill" style={`width: ${barWidth(entry.totalProceedsCents, maxCategoryProceeds)}%`}></div>
+								<div
+									class="bar-fill"
+									style={`width: ${barWidth(entry.totalProceedsCents, maxCategoryProceeds)}%`}
+								></div>
 							</div>
 							<span class="bar-count">{soldCountLabel(entry.soldItemCount)}</span>
 						</li>
@@ -214,7 +243,10 @@
 								<span class="statistics-value">{formatPrice(entry.totalProceedsCents)} €</span>
 							</div>
 							<div class="bar-track">
-								<div class="bar-fill" style={`width: ${barWidth(entry.totalProceedsCents, maxMarketDayProceeds)}%`}></div>
+								<div
+									class="bar-fill"
+									style={`width: ${barWidth(entry.totalProceedsCents, maxMarketDayProceeds)}%`}
+								></div>
 							</div>
 							<span class="bar-count">{soldCountLabel(entry.soldItemCount)}</span>
 						</li>
@@ -232,7 +264,10 @@
 								<span class="statistics-value">{formatPrice(entry.totalExpensesCents)} €</span>
 							</div>
 							<div class="bar-track expense">
-								<div class="bar-fill" style={`width: ${barWidth(entry.totalExpensesCents, maxExpenseTotal)}%`}></div>
+								<div
+									class="bar-fill"
+									style={`width: ${barWidth(entry.totalExpensesCents, maxExpenseTotal)}%`}
+								></div>
 							</div>
 						</li>
 					{/each}
@@ -249,7 +284,10 @@
 								<span class="statistics-value">{formatPrice(entry.totalProceedsCents)} €</span>
 							</div>
 							<div class="bar-track">
-								<div class="bar-fill" style={`width: ${barWidth(entry.totalProceedsCents, maxMonthlyProceeds)}%`}></div>
+								<div
+									class="bar-fill"
+									style={`width: ${barWidth(entry.totalProceedsCents, maxMonthlyProceeds)}%`}
+								></div>
 							</div>
 							<span class="bar-count">{soldCountLabel(entry.soldItemCount)}</span>
 						</li>

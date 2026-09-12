@@ -107,7 +107,9 @@ test.describe('Core collection', () => {
 
 		// assume
 		await expect(
-			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
+			page
+				.getByRole('heading', { name: 'Deine Sammlungen' })
+				.or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
 		).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Scannen' })).toBeVisible();
 
@@ -117,12 +119,19 @@ test.describe('Core collection', () => {
 		await expect(page.getByRole('heading', { name: 'Artikel scannen' })).toBeVisible();
 		await page.getByRole('link', { name: '+ Neu' }).click();
 		await expect(
-			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
+			page
+				.getByRole('heading', { name: 'Deine Sammlungen' })
+				.or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
 		).toBeVisible();
 
 		// act — create the second collection when the onboarding form is shown; on retries the
 		// collection already exists and the test navigates through the switcher instead
-		if (await page.getByLabel('Name der Sammlung').isVisible().catch(() => false)) {
+		if (
+			await page
+				.getByLabel('Name der Sammlung')
+				.isVisible()
+				.catch(() => false)
+		) {
 			await page.getByLabel('Name der Sammlung').fill('Wohnzimmer-Ausmisten');
 			await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
 		} else {
@@ -152,8 +161,15 @@ test.describe('Core collection', () => {
 		}
 
 		// assume — a Leselampe card exists (leftovers from retries carry the same title)
-		await expect(page.getByTestId('item-card').filter({ hasText: 'Leselampe' }).first()).toBeVisible();
-		if (await page.getByTestId('manage-images-link').isVisible().catch(() => false)) {
+		await expect(
+			page.getByTestId('item-card').filter({ hasText: 'Leselampe' }).first()
+		).toBeVisible();
+		if (
+			await page
+				.getByTestId('manage-images-link')
+				.isVisible()
+				.catch(() => false)
+		) {
 			await expect(page.getByTestId('manage-images-link')).toHaveAttribute('href', /\/items\//);
 		}
 
@@ -163,7 +179,9 @@ test.describe('Core collection', () => {
 		// assume — the category pill always shows; the status badge is 'open' on first run
 		// (retries may find the item already sold from the history flow)
 		await expect(itemCard.locator('.kat')).toContainText('Haushalt');
-		await expect(itemCard.locator('.badge.open').or(itemCard.locator('.badge.sold')).first()).toBeVisible();
+		await expect(
+			itemCard.locator('.badge.open').or(itemCard.locator('.badge.sold')).first()
+		).toBeVisible();
 
 		// act — filter the portfolio by search query
 		await page.getByTestId('filter-search-input').fill('Leselampe');
@@ -198,7 +216,12 @@ test.describe('Core collection', () => {
 		const protectedUrl = page.url();
 		await expect(page.getByRole('heading', { name: 'Leselampe' })).toBeVisible();
 		// the sale form appears for open items; retries find the item already sold
-		await expect(page.getByTestId('item-sale-section').or(page.getByTestId('unmark-item-sold').or(page.getByTestId('item-sold-badge'))).first()).toBeVisible();
+		await expect(
+			page
+				.getByTestId('item-sale-section')
+				.or(page.getByTestId('unmark-item-sold').or(page.getByTestId('item-sold-badge')))
+				.first()
+		).toBeVisible();
 		await expect(page.getByTestId('item-flag-pills')).toContainText('Haushalt');
 		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Vollständig');
 		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Funktionsfähig');
@@ -211,7 +234,12 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('item-qr-image')).toBeVisible();
 
 		// act — undo the leftover sale (retries find the item already sold), then reserve
-		if (await page.getByTestId('unmark-item-sold').isVisible().catch(() => false)) {
+		if (
+			await page
+				.getByTestId('unmark-item-sold')
+				.isVisible()
+				.catch(() => false)
+		) {
 			await page.getByTestId('unmark-item-sold').click();
 		}
 		await page.getByTestId('toggle-item-reservation').click();
@@ -226,28 +254,30 @@ test.describe('Core collection', () => {
 			return match ? Number(match[1]) : 0;
 		});
 		if (storedImageCount === 0) {
-		const testPngBytes = Buffer.from(
-			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-			'base64'
-		);
-		const secondPngBytes = Buffer.from(
-			'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/AAAMBAQAY3Y2wAAAAAElFTkSuQmCC',
-			'base64'
-		);
-		await page.getByTestId('images-dialog-trigger').click();
-		await expect(page.getByTestId('images-dialog')).toBeVisible();
-		await page.getByTestId('item-image-input').setInputFiles([
-			{ name: 'leselampe.png', mimeType: 'image/png', buffer: testPngBytes },
-			{ name: 'leselampe-detail.png', mimeType: 'image/png', buffer: secondPngBytes }
-		]);
-		await page.getByRole('button', { name: 'Foto speichern' }).click();
+			const testPngBytes = Buffer.from(
+				'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+				'base64'
+			);
+			const secondPngBytes = Buffer.from(
+				'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/AAAMBAQAY3Y2wAAAAAElFTkSuQmCC',
+				'base64'
+			);
+			await page.getByTestId('images-dialog-trigger').click();
+			await expect(page.getByTestId('images-dialog')).toBeVisible();
+			await page.getByTestId('item-image-input').setInputFiles([
+				{ name: 'leselampe.png', mimeType: 'image/png', buffer: testPngBytes },
+				{ name: 'leselampe-detail.png', mimeType: 'image/png', buffer: secondPngBytes }
+			]);
+			await page.getByRole('button', { name: 'Foto speichern' }).click();
 		}
 
 		// assume — both stored; cover auto-assigned to the first upload
 		await page.getByTestId('images-dialog-trigger').click();
 		await expect(page.getByTestId('images-dialog')).toBeVisible();
 		// retries may carry extra stored images; a cover must exist either way
-		await expect(page.getByTestId('item-image-key').filter({ hasText: 'Titelbild' }).first()).toBeVisible();
+		await expect(
+			page.getByTestId('item-image-key').filter({ hasText: 'Titelbild' }).first()
+		).toBeVisible();
 		await expect(page.locator('img.cover')).toBeVisible();
 
 		// act — pick the second image as cover inside the preview dialog (only when a second image exists)
@@ -307,7 +337,7 @@ test.describe('Core collection', () => {
 		await expect(page).toHaveURL(/proceedsMin=20/);
 		await expect(page.getByTestId('sale-history-empty')).toBeVisible();
 
-// act — check the dedicated statistics page via the nav link
+		// act — check the dedicated statistics page via the nav link
 		await page.getByTestId('nav-statistics-link').click();
 		await expect(page).toHaveURL(/\/statistics/);
 		const totals = page.getByTestId('statistics-totals');
