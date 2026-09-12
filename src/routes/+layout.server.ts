@@ -20,7 +20,9 @@ export const load: LayoutServerLoad = ({ cookies, url }) => {
 	const collections = scope ? getCollectionRepository().listCollectionsForOwner(scope) : [];
 	const requestedCollectionId = url.searchParams.get('collection');
 	const activeCollection =
-		(requestedCollectionId ? collections.find((collection) => collection.id === requestedCollectionId) : null) ??
+		(requestedCollectionId
+			? collections.find((collection) => collection.id === requestedCollectionId)
+			: null) ??
 		collections[firstCollectionIndex] ??
 		null;
 	return {

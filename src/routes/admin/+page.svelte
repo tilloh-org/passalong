@@ -49,7 +49,9 @@
 			{#if form && 'passwordResetSecret' in form && form.passwordResetSecret}
 				<section class="issued-reset-secret" aria-labelledby="issued-reset-secret-title">
 					<h3 id="issued-reset-secret-title">{t('admin.oneTimeResetCode')}</h3>
-					<code class="reset-secret" data-testid="issued-password-reset-secret">{form.passwordResetSecret}</code>
+					<code class="reset-secret" data-testid="issued-password-reset-secret"
+						>{form.passwordResetSecret}</code
+					>
 					<p>{t('admin.resetSecretHint')}</p>
 				</section>
 			{/if}
@@ -70,7 +72,12 @@
 					<p class="backup-hint">
 						{t('admin.restoreHint')}
 					</p>
-					<form method="POST" action="?/restoreBackup" enctype="multipart/form-data" data-testid="restore-form">
+					<form
+						method="POST"
+						action="?/restoreBackup"
+						enctype="multipart/form-data"
+						data-testid="restore-form"
+					>
 						<input
 							name="backupArchive"
 							id="backup-file"
@@ -81,11 +88,19 @@
 							required
 							onchange={onRestoreFileChange}
 						/>
-						<label class="file-button" for="backup-file">{restoreFile ? `📦 ${restoreFile.name}` : t('admin.chooseBackupFile')}</label>
+						<label class="file-button" for="backup-file"
+							>{restoreFile ? `📦 ${restoreFile.name}` : t('admin.chooseBackupFile')}</label
+						>
 						{#if form?.backupError}
 							<p class="form-error" role="alert">{form.backupError}</p>
 						{/if}
-						<button type="submit" class="danger" data-testid="restore-submit" disabled={!restoreReady} aria-disabled={!restoreReady}>{t('admin.runRestore')}</button>
+						<button
+							type="submit"
+							class="danger"
+							data-testid="restore-submit"
+							disabled={!restoreReady}
+							aria-disabled={!restoreReady}>{t('admin.runRestore')}</button
+						>
 					</form>
 				</div>
 			</div>

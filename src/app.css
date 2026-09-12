@@ -52,38 +52,38 @@
 	--shadow-drawer: -20px 0 44px rgba(14, 42, 58, 0.28);
 }
 
-[data-theme="dark"] {
-		--color-bg: #0f1a22;
-		--color-text: #e8f0f4;
-		--color-text-muted: #9db4c0;
-		--color-text-faint: #7492a1;
-		--color-border: rgba(255, 255, 255, 0.12);
-		--color-accent: #2a6a86;
-		--color-accent-strong: #7fa8bd;
-		--color-accent-soft: rgba(42, 106, 134, 0.18);
-		--color-surface: #16242e;
-		--color-surface-strong: #1a2a33;
-		--color-input: #1a2a33;
-		--color-danger: #ef5350;
-		--color-danger-soft: rgba(239, 83, 80, 0.14);
-		--color-ok: #66bb6a;
-		--color-ok-soft: rgba(102, 187, 106, 0.14);
-		--color-ok-border: rgba(102, 187, 106, 0.3);
-		--color-warn: #e0a458;
-		--color-warn-soft: rgba(224, 164, 88, 0.16);
-		--focus-ring: rgba(127, 168, 189, 0.4);
-		--scrim: rgba(0, 0, 0, 0.55);
-		--glass: rgba(15, 26, 34, 0.72);
+[data-theme='dark'] {
+	--color-bg: #0f1a22;
+	--color-text: #e8f0f4;
+	--color-text-muted: #9db4c0;
+	--color-text-faint: #7492a1;
+	--color-border: rgba(255, 255, 255, 0.12);
+	--color-accent: #2a6a86;
+	--color-accent-strong: #7fa8bd;
+	--color-accent-soft: rgba(42, 106, 134, 0.18);
+	--color-surface: #16242e;
+	--color-surface-strong: #1a2a33;
+	--color-input: #1a2a33;
+	--color-danger: #ef5350;
+	--color-danger-soft: rgba(239, 83, 80, 0.14);
+	--color-ok: #66bb6a;
+	--color-ok-soft: rgba(102, 187, 106, 0.14);
+	--color-ok-border: rgba(102, 187, 106, 0.3);
+	--color-warn: #e0a458;
+	--color-warn-soft: rgba(224, 164, 88, 0.16);
+	--focus-ring: rgba(127, 168, 189, 0.4);
+	--scrim: rgba(0, 0, 0, 0.55);
+	--glass: rgba(15, 26, 34, 0.72);
 
-		--shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
-		--shadow-tile: 0 4px 14px rgba(0, 0, 0, 0.3);
-		--shadow-tile-hover: 0 16px 40px rgba(0, 0, 0, 0.45);
-		--shadow-btn: 0 6px 18px rgba(0, 0, 0, 0.35);
-		--shadow-btn-hover: 0 10px 26px rgba(0, 0, 0, 0.45);
-		--shadow-cta: 0 4px 14px rgba(0, 0, 0, 0.4);
-		--shadow-logo: 0 8px 20px rgba(0, 0, 0, 0.5);
-		--shadow-drawer: -20px 0 44px rgba(0, 0, 0, 0.55);
-	}
+	--shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
+	--shadow-tile: 0 4px 14px rgba(0, 0, 0, 0.3);
+	--shadow-tile-hover: 0 16px 40px rgba(0, 0, 0, 0.45);
+	--shadow-btn: 0 6px 18px rgba(0, 0, 0, 0.35);
+	--shadow-btn-hover: 0 10px 26px rgba(0, 0, 0, 0.45);
+	--shadow-cta: 0 4px 14px rgba(0, 0, 0, 0.4);
+	--shadow-logo: 0 8px 20px rgba(0, 0, 0, 0.5);
+	--shadow-drawer: -20px 0 44px rgba(0, 0, 0, 0.55);
+}
 
 * {
 	box-sizing: border-box;
@@ -115,7 +115,7 @@ body {
 		color 0.4s ease;
 }
 
-[data-theme="dark"] body {
+[data-theme='dark'] body {
 	background:
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.12), transparent 60%),
 		radial-gradient(900px 500px at -10% 20%, rgba(224, 164, 88, 0.08), transparent 55%),
@@ -129,7 +129,16 @@ body::before {
 	inset: 0 0 auto;
 	height: 6px;
 	z-index: 70;
-	background: linear-gradient(90deg, var(--deep), var(--mid), var(--ice), var(--amber), var(--ice), var(--mid), var(--deep));
+	background: linear-gradient(
+		90deg,
+		var(--deep),
+		var(--mid),
+		var(--ice),
+		var(--amber),
+		var(--ice),
+		var(--mid),
+		var(--deep)
+	);
 	background-size: 200% 100%;
 	animation: passalong-wave 14s linear infinite;
 }

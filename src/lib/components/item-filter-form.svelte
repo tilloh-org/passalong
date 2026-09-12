@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
-	import type { ItemCategory, ItemCondition, ItemStatusFilter } from '$lib/server/collection-repository';
+	import type {
+		ItemCategory,
+		ItemCondition,
+		ItemStatusFilter
+	} from '$lib/server/collection-repository';
 
 	/**
 	 * Buyer/owner item filter form, shared by the portfolio page and the
@@ -66,9 +70,9 @@
 	const statusFilterLabel = (status: string) => t(`statusFilter.${status}`);
 </script>
 
-<form class="item-filters" method="GET" action={action} data-testid={testId('-filter-form')}>
+<form class="item-filters" method="GET" {action} data-testid={testId('-filter-form')}>
 	{#each Object.entries(hiddenFields) as [name, value] (name)}
-		<input type="hidden" name={name} value={value} />
+		<input type="hidden" {name} {value} />
 	{/each}
 	<label class="filter-search">
 		<span>{t('portfolio.search')}</span>
@@ -85,7 +89,9 @@
 		<select name="category" data-testid={testId('-category-select')}>
 			<option value="">{t('portfolio.all')}</option>
 			{#each categoryOptions as category}
-				<option value={category} selected={appliedFilters.category === category}>{categoryLabel(category)}</option>
+				<option value={category} selected={appliedFilters.category === category}
+					>{categoryLabel(category)}</option
+				>
 			{/each}
 		</select>
 	</label>
@@ -94,7 +100,9 @@
 		<select name="condition" data-testid={testId('-condition-select')}>
 			<option value="">{t('portfolio.all')}</option>
 			{#each conditionOptions as condition}
-				<option value={condition} selected={appliedFilters.condition === condition}>{conditionLabel(condition)}</option>
+				<option value={condition} selected={appliedFilters.condition === condition}
+					>{conditionLabel(condition)}</option
+				>
 			{/each}
 		</select>
 	</label>
@@ -103,14 +111,20 @@
 		<select name="status" data-testid={testId('-status-select')}>
 			<option value="">{t('portfolio.all')}</option>
 			{#each statusOptions as status}
-				<option value={status} selected={appliedFilters.status === status}>{statusFilterLabel(status)}</option>
+				<option value={status} selected={appliedFilters.status === status}
+					>{statusFilterLabel(status)}</option
+				>
 			{/each}
 		</select>
 	</label>
 	<div class="filter-actions">
-		<button type="submit" class="filter-apply" data-testid={testId('-apply')}>{t('portfolio.applyFilters')}</button>
+		<button type="submit" class="filter-apply" data-testid={testId('-apply')}
+			>{t('portfolio.applyFilters')}</button
+		>
 		{#if hasActive}
-			<a class="filter-reset" href={resetHref} data-testid={testId('-reset')}>{t('portfolio.resetFilters')}</a>
+			<a class="filter-reset" href={resetHref} data-testid={testId('-reset')}
+				>{t('portfolio.resetFilters')}</a
+			>
 		{/if}
 	</div>
 </form>

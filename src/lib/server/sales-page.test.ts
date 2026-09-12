@@ -24,28 +24,63 @@ function createSalesFixture() {
 	});
 	const collection = repository.createCollection({ name: 'Market stock' }, scope);
 	const marketDay = repository.createMarketDay(
-		{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+		{
+			name: 'May market',
+			date: '2026-05-16',
+			startTime: null,
+			endTime: null,
+			location: '',
+			notes: ''
+		},
 		scope
 	);
 	const vase = repository.createItem(
-		{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+		{
+			collectionId: collection.id,
+			title: 'Vase',
+			priceCents: 800,
+			category: 'decor',
+			condition: 'good',
+			internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false
+		},
 		scope
 	);
 	const book = repository.createItem(
-		{ collectionId: collection.id, title: 'Book', priceCents: 300, category: 'books', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+		{
+			collectionId: collection.id,
+			title: 'Book',
+			priceCents: 300,
+			category: 'books',
+			condition: 'good',
+			internalNotes: '',
+			externalDescription: '',
+			isComplete: false,
+			isFunctional: false
+		},
 		scope
 	);
-	repository.markItemSold(vase.id, {
-		channel: 'flea-market',
-		soldAt: '2026-05-16T10:00:00.000Z',
-		proceedsCents: 750,
-		marketDayId: marketDay.id
-	}, scope);
-	repository.markItemSold(book.id, {
-		channel: 'online-marketplace',
-		soldAt: '2026-05-17T10:00:00.000Z',
-		proceedsCents: 250
-	}, scope);
+	repository.markItemSold(
+		vase.id,
+		{
+			channel: 'flea-market',
+			soldAt: '2026-05-16T10:00:00.000Z',
+			proceedsCents: 750,
+			marketDayId: marketDay.id
+		},
+		scope
+	);
+	repository.markItemSold(
+		book.id,
+		{
+			channel: 'online-marketplace',
+			soldAt: '2026-05-17T10:00:00.000Z',
+			proceedsCents: 250
+		},
+		scope
+	);
 	const rawSessionToken = 'authenticated-sales-session-token';
 	repository.createSessionForUser(scope, hashSessionToken(rawSessionToken));
 	process.env.PASSALONG_DATABASE_PATH = databasePath;
@@ -99,7 +134,10 @@ describe('sales page', () => {
 		expect(data).toMatchObject({
 			filters: { channel: null, category: null, proceedsMinCents: null, proceedsMaxCents: null },
 			summary: { soldItemCount: 2, totalProceedsCents: 1000 },
-			sales: [expect.objectContaining({ itemId: book.id }), expect.objectContaining({ itemId: vase.id })]
+			sales: [
+				expect.objectContaining({ itemId: book.id }),
+				expect.objectContaining({ itemId: vase.id })
+			]
 		});
 	});
 
@@ -142,8 +180,16 @@ describe('sales page', () => {
 		const invertedRange = await loadWithFilters(rawSessionToken, '?proceedsMin=5&proceedsMax=2');
 
 		// assume
-		expect(invalidAmount).toMatchObject({ invalidRange: true, sales: [], summary: { soldItemCount: 0 } });
-		expect(invertedRange).toMatchObject({ invalidRange: true, sales: [], summary: { soldItemCount: 0 } });
+		expect(invalidAmount).toMatchObject({
+			invalidRange: true,
+			sales: [],
+			summary: { soldItemCount: 0 }
+		});
+		expect(invertedRange).toMatchObject({
+			invalidRange: true,
+			sales: [],
+			summary: { soldItemCount: 0 }
+		});
 	});
 
 	it('ignores unknown channel and category filter values', async () => {

@@ -158,7 +158,11 @@ export const actions: Actions = {
 		}
 		const formData = await request.formData();
 		try {
-			getCollectionRepository().updateMarketDay(getFormText(formData, 'marketDayId'), parseMarketDayInput(formData), scope);
+			getCollectionRepository().updateMarketDay(
+				getFormText(formData, 'marketDayId'),
+				parseMarketDayInput(formData),
+				scope
+			);
 		} catch {
 			return fail(httpStatus.badRequest, { marketDayError: marketDayInputError });
 		}
@@ -232,7 +236,8 @@ export const actions: Actions = {
 					label: getFormText(formData, 'label'),
 					category: categoryText as ExpenseCategory,
 					amountCents,
-					expenseDate: getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
+					expenseDate:
+						getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
 					marketDayId: getOptionalFormText(formData, 'marketDayId')
 				},
 				scope
@@ -263,7 +268,8 @@ export const actions: Actions = {
 					label: getFormText(formData, 'label'),
 					category: categoryText as ExpenseCategory,
 					amountCents,
-					expenseDate: getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
+					expenseDate:
+						getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
 					marketDayId: getOptionalFormText(formData, 'marketDayId')
 				},
 				scope

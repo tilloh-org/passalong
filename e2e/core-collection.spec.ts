@@ -2,7 +2,9 @@ import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 
 test.describe('Core collection', () => {
-	test('rejects cross-site registration and completes the authenticated collection flow', async ({ page }) => {
+	test('rejects cross-site registration and completes the authenticated collection flow', async ({
+		page
+	}) => {
 		// arrange
 		const registrations = [
 			{ username: 'avery', displayName: 'Avery', password: 'correct-horse-battery-staple' },
@@ -13,8 +15,14 @@ test.describe('Core collection', () => {
 		await page.goto('/');
 
 		// assume
-		const onboardingVisible = await page.getByRole('heading', { name: 'Ersten Zugang erstellen' }).isVisible().catch(() => false);
-		const loginVisible = await page.getByRole('heading', { name: 'Anmelden' }).isVisible().catch(() => false);
+		const onboardingVisible = await page
+			.getByRole('heading', { name: 'Ersten Zugang erstellen' })
+			.isVisible()
+			.catch(() => false);
+		const loginVisible = await page
+			.getByRole('heading', { name: 'Anmelden' })
+			.isVisible()
+			.catch(() => false);
 		expect(onboardingVisible || loginVisible).toBe(true);
 		if (onboardingVisible) {
 			// act
@@ -73,7 +81,9 @@ test.describe('Core collection', () => {
 		// assume — a fresh account sees the collection onboarding; a retry after a
 		// mid-test failure lands on the portfolio heading with leftover data instead
 		await expect(
-			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
+			page
+				.getByRole('heading', { name: 'Deine Sammlungen' })
+				.or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
 		).toBeVisible();
 
 		// act
@@ -121,8 +131,12 @@ test.describe('Core collection', () => {
 		await addItemForm.getByLabel('Preis (€)').fill('12,00');
 		await addItemForm.getByLabel('Kategorie').selectOption('home');
 		await addItemForm.getByLabel('Zustand').selectOption('good');
-		await addItemForm.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Warme Leselampe mit flexiblem Arm.');
-		await addItemForm.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Vor dem Inserieren die Glühbirne austauschen.');
+		await addItemForm
+			.getByLabel('Externe Beschreibung (für Käufer sichtbar)')
+			.fill('Warme Leselampe mit flexiblem Arm.');
+		await addItemForm
+			.getByLabel('Interne Notizen (nur für dich sichtbar)')
+			.fill('Vor dem Inserieren die Glühbirne austauschen.');
 		await page.getByTestId('item-complete-checkbox').check();
 		await page.getByTestId('item-functional-checkbox').check();
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
@@ -274,7 +288,10 @@ test.describe('Core collection', () => {
 		await page.getByTestId('edit-dialog-trigger').click();
 		await expect(page.getByTestId('edit-dialog')).toBeVisible();
 		await page.getByLabel('Artikelname').fill('Leselampe (gebraucht)');
-		await page.getByTestId('edit-dialog').getByRole('button', { name: 'Änderungen speichern' }).click();
+		await page
+			.getByTestId('edit-dialog')
+			.getByRole('button', { name: 'Änderungen speichern' })
+			.click();
 
 		// assume
 		await expect(page.getByRole('heading', { name: 'Leselampe (gebraucht)' })).toBeVisible();
@@ -302,7 +319,10 @@ test.describe('Core collection', () => {
 		}, 'Arbeitszimmer');
 		await page.goto('/');
 		await expect(page.getByTestId('collection-switcher')).toBeVisible();
-		await page.getByTestId('collection-switcher').getByRole('link', { name: 'Arbeitszimmer' }).click();
+		await page
+			.getByTestId('collection-switcher')
+			.getByRole('link', { name: 'Arbeitszimmer' })
+			.click();
 		await expect(page).toHaveURL(/collection=/);
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
@@ -312,8 +332,12 @@ test.describe('Core collection', () => {
 		await secondCollectionItemForm.getByLabel('Preis (€)').fill('80,00');
 		await secondCollectionItemForm.getByLabel('Kategorie').selectOption('furniture');
 		await secondCollectionItemForm.getByLabel('Zustand').selectOption('fair');
-		await secondCollectionItemForm.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill('Großer Arbeitstisch mit Schublade.');
-		await secondCollectionItemForm.getByLabel('Interne Notizen (nur für dich sichtbar)').fill('Nur per Abholung anbieten.');
+		await secondCollectionItemForm
+			.getByLabel('Externe Beschreibung (für Käufer sichtbar)')
+			.fill('Großer Arbeitstisch mit Schublade.');
+		await secondCollectionItemForm
+			.getByLabel('Interne Notizen (nur für dich sichtbar)')
+			.fill('Nur per Abholung anbieten.');
 		await page.getByTestId('item-complete-checkbox').check();
 		await page.getByTestId('item-functional-checkbox').check();
 		await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
@@ -377,7 +401,6 @@ test.describe('Core collection', () => {
 		await expect(page).toHaveURL(/\/profile/);
 		await expect(page.getByTestId('profile-avatar')).toBeVisible();
 
-
 		// act — verify the protected detail page requires login again
 		await page.context().clearCookies();
 		await page.goto(protectedUrl);
@@ -395,8 +418,12 @@ test.describe('Core collection', () => {
 		await page.getByTestId('instance-admin-link').click();
 		await expect(page).toHaveURL(/\/admin/);
 		const instanceAdministrationForm = page.locator('form[action="?/createPasswordReset"]');
-		await instanceAdministrationForm.getByLabel('Benutzername des Kontos').fill(winningAccount.username);
-		await instanceAdministrationForm.getByRole('button', { name: 'Zurücksetzungscode erzeugen' }).click();
+		await instanceAdministrationForm
+			.getByLabel('Benutzername des Kontos')
+			.fill(winningAccount.username);
+		await instanceAdministrationForm
+			.getByRole('button', { name: 'Zurücksetzungscode erzeugen' })
+			.click();
 		const resetSecret = await page.getByTestId('issued-password-reset-secret').textContent();
 
 		// assume

@@ -13,7 +13,9 @@
 	 */
 	const saleChannelLabel = (channel: string) => t(`channel.${channel}`);
 
-	const saleChannelOptions = (['flea-market', 'online-marketplace', 'shop', 'private-sale', 'other'] as const).map((value) => ({
+	const saleChannelOptions = (
+		['flea-market', 'online-marketplace', 'shop', 'private-sale', 'other'] as const
+	).map((value) => ({
 		value,
 		label: saleChannelLabel(value)
 	}));
@@ -37,9 +39,15 @@
 	<section class="detail-card" aria-labelledby="item-title">
 		<div class="media-column">
 			{#if coverImageKey}
-				<img class="cover" src={`/media/${encodeURIComponent(coverImageKey)}`} alt={data.item.title} />
+				<img
+					class="cover"
+					src={`/media/${encodeURIComponent(coverImageKey)}`}
+					alt={data.item.title}
+				/>
 			{:else}
-				<div class="cover placeholder" aria-hidden="true">{data.item.title.slice(0, 1).toUpperCase()}</div>
+				<div class="cover placeholder" aria-hidden="true">
+					{data.item.title.slice(0, 1).toUpperCase()}
+				</div>
 			{/if}
 		</div>
 
@@ -47,101 +55,134 @@
 			<ItemInfoBlock item={data.item} variant="internal" />
 			{#if data.item.soldAt}
 				<p class="sold-badge" data-testid="item-sold-badge">
-					{t('item.soldOnChannel', { channel: saleChannelLabel(data.item.saleChannel ?? 'other') })}{data.item.saleProceedsCents !== null ? ` ${t('item.soldWithProceeds', { proceeds: formatPrice(data.item.saleProceedsCents) })}` : ''}
+					{t('item.soldOnChannel', {
+						channel: saleChannelLabel(data.item.saleChannel ?? 'other')
+					})}{data.item.saleProceedsCents !== null
+						? ` ${t('item.soldWithProceeds', { proceeds: formatPrice(data.item.saleProceedsCents) })}`
+						: ''}
 				</p>
 			{/if}
 
 			<section class="panel" aria-labelledby="photos-title">
-					<h2 id="photos-title">{t('item.photosTitle')}</h2>
-					{#if data.images.length}
-						<div class="cover-preview">
-							{#if coverImageKey}
-								<img
-									class="cover-thumb"
-									src={`/media/${encodeURIComponent(coverImageKey)}`}
-									alt={t('item.coverAlt', { name: data.item.title })}
-								/>
-							{:else}
-								<div class="cover-thumb placeholder" aria-hidden="true">{data.item.title.slice(0, 1).toUpperCase()}</div>
-							{/if}
-							<span class="cover-count" data-testid="item-image-count">{data.images.length === 1 ? t('item.photoCount', { count: data.images.length }) : t('item.photoCountPlural', { count: data.images.length })}</span>
-						</div>
-					{:else}
-						<p class="empty">{t('item.noPhotos')}</p>
-					{/if}
-				</section>
-
-				<dialog class="images-dialog" bind:this={imagesDialog} aria-label={t('item.photosDialogLabel')} data-testid="images-dialog">
-					<div class="dialog-head">
-						<h3>{t('item.managePhotos')}</h3>
-						<button type="button" class="secondary" onclick={() => imagesDialog?.close()}>{t('profile.close')}</button>
+				<h2 id="photos-title">{t('item.photosTitle')}</h2>
+				{#if data.images.length}
+					<div class="cover-preview">
+						{#if coverImageKey}
+							<img
+								class="cover-thumb"
+								src={`/media/${encodeURIComponent(coverImageKey)}`}
+								alt={t('item.coverAlt', { name: data.item.title })}
+							/>
+						{:else}
+							<div class="cover-thumb placeholder" aria-hidden="true">
+								{data.item.title.slice(0, 1).toUpperCase()}
+							</div>
+						{/if}
+						<span class="cover-count" data-testid="item-image-count"
+							>{data.images.length === 1
+								? t('item.photoCount', { count: data.images.length })
+								: t('item.photoCountPlural', { count: data.images.length })}</span
+						>
 					</div>
-					<p class="dialog-hint">{t('item.setCoverHint')}</p>
-					<form method="POST" action="?/uploadItemImage" enctype="multipart/form-data" class="dialog-upload">
-						<input name="itemId" type="hidden" value={data.item.id} />
-						<input
-							name="image"
-							id="item-image-file"
-							type="file"
-							accept="image/png,image/jpeg,image/webp"
-							multiple
-							data-testid="item-image-input"
-							class="visually-hidden-input"
-							required
-						/>
-						<label class="file-button" for="item-image-file">
-							{t('item.choosePhoto')}
-						</label>
-						<button type="submit">{t('item.savePhoto')}</button>
-						</form>
-					{#if form?.uploadImageError}
-						<p class="form-error" role="alert">{form.uploadImageError}</p>
-					{/if}
-					<ul class="image-list">
-						{#each data.images as image (image.id)}
-							<li class:image-selected={image.isCover}>
-								<img
-									class="thumb"
-									src={`/media/${encodeURIComponent(image.storageKey)}`}
-									alt={t('item.photoAlt', { name: data.item.title })}
-									loading="lazy"
-								/>
-								<div class="image-actions">
-									<span class="image-name" data-testid="item-image-key">
-										{image.isCover ? t('item.coverImage') : t('item.imageNumber', { number: image.position + 1 })}
-									</span>
-									<div class="image-buttons">
-										{#if !image.isCover}
-											<form method="POST" action="?/setItemCover">
-												<input name="itemId" type="hidden" value={data.item.id} />
-												<input name="imageId" type="hidden" value={image.id} />
-												<button type="submit" class="secondary" data-testid="set-item-cover">{t('item.setAsCover')}</button>
-											</form>
-										{/if}
-										<form method="POST" action="?/removeItemImage">
+				{:else}
+					<p class="empty">{t('item.noPhotos')}</p>
+				{/if}
+			</section>
+
+			<dialog
+				class="images-dialog"
+				bind:this={imagesDialog}
+				aria-label={t('item.photosDialogLabel')}
+				data-testid="images-dialog"
+			>
+				<div class="dialog-head">
+					<h3>{t('item.managePhotos')}</h3>
+					<button type="button" class="secondary" onclick={() => imagesDialog?.close()}
+						>{t('profile.close')}</button
+					>
+				</div>
+				<p class="dialog-hint">{t('item.setCoverHint')}</p>
+				<form
+					method="POST"
+					action="?/uploadItemImage"
+					enctype="multipart/form-data"
+					class="dialog-upload"
+				>
+					<input name="itemId" type="hidden" value={data.item.id} />
+					<input
+						name="image"
+						id="item-image-file"
+						type="file"
+						accept="image/png,image/jpeg,image/webp"
+						multiple
+						data-testid="item-image-input"
+						class="visually-hidden-input"
+						required
+					/>
+					<label class="file-button" for="item-image-file">
+						{t('item.choosePhoto')}
+					</label>
+					<button type="submit">{t('item.savePhoto')}</button>
+				</form>
+				{#if form?.uploadImageError}
+					<p class="form-error" role="alert">{form.uploadImageError}</p>
+				{/if}
+				<ul class="image-list">
+					{#each data.images as image (image.id)}
+						<li class:image-selected={image.isCover}>
+							<img
+								class="thumb"
+								src={`/media/${encodeURIComponent(image.storageKey)}`}
+								alt={t('item.photoAlt', { name: data.item.title })}
+								loading="lazy"
+							/>
+							<div class="image-actions">
+								<span class="image-name" data-testid="item-image-key">
+									{image.isCover
+										? t('item.coverImage')
+										: t('item.imageNumber', { number: image.position + 1 })}
+								</span>
+								<div class="image-buttons">
+									{#if !image.isCover}
+										<form method="POST" action="?/setItemCover">
 											<input name="itemId" type="hidden" value={data.item.id} />
 											<input name="imageId" type="hidden" value={image.id} />
-											<button type="submit" class="danger" data-testid="remove-item-image">{t('item.remove')}</button>
+											<button type="submit" class="secondary" data-testid="set-item-cover"
+												>{t('item.setAsCover')}</button
+											>
 										</form>
-									</div>
+									{/if}
+									<form method="POST" action="?/removeItemImage">
+										<input name="itemId" type="hidden" value={data.item.id} />
+										<input name="imageId" type="hidden" value={image.id} />
+										<button type="submit" class="danger" data-testid="remove-item-image"
+											>{t('item.remove')}</button
+										>
+									</form>
 								</div>
-							</li>
-						{/each}
-					</ul>
-				</dialog>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			</dialog>
 
-				<section class="panel" aria-labelledby="sale-title">
+			<section class="panel" aria-labelledby="sale-title">
 				<h2 id="sale-title">{t('item.saleTitle')}</h2>
 				{#if data.item.soldAt}
 					<p class="sold-summary">
-						{t('item.soldSummary', { date: new Date(data.item.soldAt).toLocaleDateString(getLocale()), channel: saleChannelLabel(data.item.saleChannel ?? 'other') })}
+						{t('item.soldSummary', {
+							date: new Date(data.item.soldAt).toLocaleDateString(getLocale()),
+							channel: saleChannelLabel(data.item.saleChannel ?? 'other')
+						})}
 						{#if data.item.saleProceedsCents !== null}
 							{t('item.proceedsPrefix', { proceeds: formatPrice(data.item.saleProceedsCents) })}
 						{/if}
 					</p>
 					<form method="POST" action="?/unmarkItemSold">
 						<input name="itemId" type="hidden" value={data.item.id} />
-						<button type="submit" class="danger" data-testid="unmark-item-sold">{t('item.undoSale')}</button>
+						<button type="submit" class="danger" data-testid="unmark-item-sold"
+							>{t('item.undoSale')}</button
+						>
 					</form>
 				{:else}
 					<form method="POST" action="?/markItemSold" data-testid="item-sale-section">
@@ -181,35 +222,54 @@
 							<p class="form-error" role="alert">{form.saleStatusError}</p>
 						{/if}
 						<button type="submit" data-testid="mark-item-sold">{t('item.markSold')}</button>
-						</form>
-						{/if}
-						</section>
-						</div>
-						</section>
+					</form>
+				{/if}
+			</section>
+		</div>
+	</section>
 
-						<section class="actions-row" aria-label={t('item.actionsLabel')} data-testid="item-actions">
-						<form method="POST" action="?/deleteItem" class="action-form">
-						<input name="itemId" type="hidden" value={data.item.id} />
-						<button type="submit" class="action-btn danger-btn" data-testid="delete-item">{t('item.deleteItem')}</button>
-						</form>
-						<button type="button" class="action-btn blue-btn" onclick={() => imagesDialog?.showModal()} data-testid="images-dialog-trigger">
-						{t('item.imagesButton', { count: data.images.length })}
-						</button>
-						<button type="button" class="action-btn blue-btn" onclick={() => editDialog?.showModal()} data-testid="edit-dialog-trigger">
-						{t('item.edit')}
-						</button>
-						<form method="POST" action="?/setItemReservation" class="action-form">
-						<input name="itemId" type="hidden" value={data.item.id} />
-						<button type="submit" class="action-btn amber-btn" data-testid="toggle-item-reservation">
-						{data.item.reservedAt ? t('item.removeReservation') : t('item.reserve')}
-						</button>
-						</form>
-						</section>
+	<section class="actions-row" aria-label={t('item.actionsLabel')} data-testid="item-actions">
+		<form method="POST" action="?/deleteItem" class="action-form">
+			<input name="itemId" type="hidden" value={data.item.id} />
+			<button type="submit" class="action-btn danger-btn" data-testid="delete-item"
+				>{t('item.deleteItem')}</button
+			>
+		</form>
+		<button
+			type="button"
+			class="action-btn blue-btn"
+			onclick={() => imagesDialog?.showModal()}
+			data-testid="images-dialog-trigger"
+		>
+			{t('item.imagesButton', { count: data.images.length })}
+		</button>
+		<button
+			type="button"
+			class="action-btn blue-btn"
+			onclick={() => editDialog?.showModal()}
+			data-testid="edit-dialog-trigger"
+		>
+			{t('item.edit')}
+		</button>
+		<form method="POST" action="?/setItemReservation" class="action-form">
+			<input name="itemId" type="hidden" value={data.item.id} />
+			<button type="submit" class="action-btn amber-btn" data-testid="toggle-item-reservation">
+				{data.item.reservedAt ? t('item.removeReservation') : t('item.reserve')}
+			</button>
+		</form>
+	</section>
 
-	<dialog class="edit-dialog" bind:this={editDialog} aria-label={t('item.editDialogLabel')} data-testid="edit-dialog">
+	<dialog
+		class="edit-dialog"
+		bind:this={editDialog}
+		aria-label={t('item.editDialogLabel')}
+		data-testid="edit-dialog"
+	>
 		<div class="dialog-head">
 			<h3>{t('item.editDialogTitle')}</h3>
-			<button type="button" class="secondary" onclick={() => editDialog?.close()}>{t('profile.close')}</button>
+			<button type="button" class="secondary" onclick={() => editDialog?.close()}
+				>{t('profile.close')}</button
+			>
 		</div>
 		<form method="POST" action="?/updateItem">
 			<input name="itemId" type="hidden" value={data.item.id} />
@@ -220,13 +280,21 @@
 				</label>
 				<label>
 					<span>{t('portfolio.price')}</span>
-					<input name="priceEuros" type="text" inputmode="decimal" value={formatPrice(data.item.priceCents)} required />
+					<input
+						name="priceEuros"
+						type="text"
+						inputmode="decimal"
+						value={formatPrice(data.item.priceCents)}
+						required
+					/>
 				</label>
 				<label>
 					<span>{t('portfolio.category')}</span>
 					<select name="category" aria-label={t('portfolio.category')}>
 						{#each data.categoryOptions as category}
-							<option value={category} selected={category === data.item.category}>{t(`category.${category}`)}</option>
+							<option value={category} selected={category === data.item.category}
+								>{t(`category.${category}`)}</option
+							>
 						{/each}
 					</select>
 				</label>
@@ -234,7 +302,9 @@
 					<span>{t('portfolio.condition')}</span>
 					<select name="condition" aria-label={t('portfolio.condition')}>
 						{#each data.conditionOptions as condition}
-							<option value={condition} selected={condition === data.item.condition}>{t(`condition.${condition}`)}</option>
+							<option value={condition} selected={condition === data.item.condition}
+								>{t(`condition.${condition}`)}</option
+							>
 						{/each}
 					</select>
 				</label>
@@ -267,13 +337,13 @@
 	<section class="qr-panel" aria-labelledby="qr-title" data-testid="item-qr-panel">
 		<h2 id="qr-title">{t('item.qrTitle')} <span class="qr-hint">{t('item.qrHint')}</span></h2>
 		<div class="qr-body">
-			<img
-				class="qr-image"
-				src={qrCodeDataUrl}
-				alt={t('item.qrAlt')}
-				data-testid="item-qr-image"
-			/>
-			<a class="qr-download" href={qrCodeDataUrl} download="qr-{data.item.id}.png" data-testid="item-qr-download">
+			<img class="qr-image" src={qrCodeDataUrl} alt={t('item.qrAlt')} data-testid="item-qr-image" />
+			<a
+				class="qr-download"
+				href={qrCodeDataUrl}
+				download="qr-{data.item.id}.png"
+				data-testid="item-qr-download"
+			>
 				{t('item.downloadQr')}
 			</a>
 		</div>

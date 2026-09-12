@@ -4,27 +4,47 @@ import { expect, test } from '@playwright/test';
 import { sharedTestAccount } from './test-account';
 
 test.describe('Public stand page', () => {
-	test('shows unsold items to anonymous visitors without internal data and 404s unknown ids', async ({ page }) => {
+	test('shows unsold items to anonymous visitors without internal data and 404s unknown ids', async ({
+		page
+	}) => {
 		// arrange
 		await page.goto('/');
-		const setupVisible = await page.getByRole('heading', { name: 'Ersten Zugang erstellen' }).isVisible();
+		const setupVisible = await page
+			.getByRole('heading', { name: 'Ersten Zugang erstellen' })
+			.isVisible();
 		if (setupVisible) {
-			await page.locator('form[action="?/register"]').getByLabel('Benutzername').fill(sharedTestAccount.username);
-			await page.locator('form[action="?/register"]').getByLabel('Dein Name').fill(sharedTestAccount.displayName);
-			await page.locator('form[action="?/register"]').getByLabel('Passwort').fill(sharedTestAccount.recoveredPassword);
+			await page
+				.locator('form[action="?/register"]')
+				.getByLabel('Benutzername')
+				.fill(sharedTestAccount.username);
+			await page
+				.locator('form[action="?/register"]')
+				.getByLabel('Dein Name')
+				.fill(sharedTestAccount.displayName);
+			await page
+				.locator('form[action="?/register"]')
+				.getByLabel('Passwort')
+				.fill(sharedTestAccount.recoveredPassword);
 			await page.getByRole('button', { name: 'Zugang erstellen' }).click();
 		} else {
 			const stateFile = 'e2e/.auth-owner.json';
 			if (existsSync(stateFile)) {
-				const saved = JSON.parse(readFileSync(stateFile, 'utf8')) as { cookies?: { name: string; value: string; domain: string; path: string }[] };
-				const cookies = (saved.cookies ?? []).filter((cookie) => cookie.name === 'passalong_session');
+				const saved = JSON.parse(readFileSync(stateFile, 'utf8')) as {
+					cookies?: { name: string; value: string; domain: string; path: string }[];
+				};
+				const cookies = (saved.cookies ?? []).filter(
+					(cookie) => cookie.name === 'passalong_session'
+				);
 				if (cookies.length) {
 					await page.context().addCookies(cookies);
 				}
 			}
 			const loginForm = page.locator('form[action="?/login"]');
 			await loginForm.getByLabel('Benutzername').fill(sharedTestAccount.username);
-			for (const password of [sharedTestAccount.initialPassword, sharedTestAccount.recoveredPassword]) {
+			for (const password of [
+				sharedTestAccount.initialPassword,
+				sharedTestAccount.recoveredPassword
+			]) {
 				await loginForm.getByLabel('Passwort').fill(password);
 				await loginForm.getByRole('button', { name: 'Anmelden' }).click();
 				const stillLoggedOut = await page
@@ -37,9 +57,16 @@ test.describe('Public stand page', () => {
 			}
 		}
 		await expect(
-			page.getByRole('heading', { name: 'Deine Sammlungen' }).or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
+			page
+				.getByRole('heading', { name: 'Deine Sammlungen' })
+				.or(page.getByRole('heading', { name: 'Portfolio', level: 1 }))
 		).toBeVisible();
-		if (await page.getByLabel('Name der Sammlung').isVisible().catch(() => false)) {
+		if (
+			await page
+				.getByLabel('Name der Sammlung')
+				.isVisible()
+				.catch(() => false)
+		) {
 			await page.getByLabel('Name der Sammlung').fill('Flohmarkt-Stand');
 			await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
 		} else {
@@ -48,7 +75,10 @@ test.describe('Public stand page', () => {
 				headers: { Origin: 'http://localhost:4173' }
 			});
 			await page.goto('/');
-			await page.getByTestId('collection-switcher').getByRole('link', { name: 'Flohmarkt-Stand' }).click();
+			await page
+				.getByTestId('collection-switcher')
+				.getByRole('link', { name: 'Flohmarkt-Stand' })
+				.click();
 		}
 
 		// act
@@ -78,9 +108,13 @@ test.describe('Public stand page', () => {
 		const standCards = anonymousPage.getByTestId('stand-item');
 		await expect(standCards.filter({ hasText: 'Vase' })).toContainText('8,00');
 		await expect(standCards.filter({ hasText: 'Vase' })).not.toContainText('Nur abends abgeben');
-		await expect(standCards.filter({ hasText: 'Vase' })).toContainText('Handgefertigte Keramikvase');
+		await expect(standCards.filter({ hasText: 'Vase' })).toContainText(
+			'Handgefertigte Keramikvase'
+		);
 		await expect(standCards.filter({ hasText: 'Buch' })).toContainText('3,00');
-		await expect(standCards.filter({ hasText: 'Buch' }).getByTestId('stand-item-description')).toHaveCount(0);
+		await expect(
+			standCards.filter({ hasText: 'Buch' }).getByTestId('stand-item-description')
+		).toHaveCount(0);
 
 		// act — favorite the first card, verify persistence across reload, then toggle off
 		const firstCard = anonymousPage.getByTestId('stand-item').first();
@@ -94,22 +128,32 @@ test.describe('Public stand page', () => {
 		// assume — the favorites dialog lists the marked item with name and price
 		await anonymousPage.getByTestId('favorites-bar-trigger').click();
 		await expect(anonymousPage.getByTestId('favorites-dialog')).toBeVisible();
-		await expect(anonymousPage.getByTestId('favorites-stand-name')).toContainText('Flohmarkt-Stand');
+		await expect(anonymousPage.getByTestId('favorites-stand-name')).toContainText(
+			'Flohmarkt-Stand'
+		);
 		await expect(anonymousPage.getByTestId('favorites-item')).toHaveCount(1);
-		await expect(anonymousPage.getByTestId('favorites-item').first()).toContainText(firstCardTitle!);
+		await expect(anonymousPage.getByTestId('favorites-item').first()).toContainText(
+			firstCardTitle!
+		);
 		await anonymousPage.keyboard.press('Escape');
 
 		// act — reload the page
 		await anonymousPage.reload();
-		await expect(anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle')).toHaveAttribute('aria-pressed', 'true');
+		await expect(
+			anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle')
+		).toHaveAttribute('aria-pressed', 'true');
 		await expect(anonymousPage.getByTestId('favorites-badge')).toHaveText('1');
 		await anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle').click();
-		await expect(anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle')).toHaveAttribute('aria-pressed', 'false');
+		await expect(
+			anonymousPage.getByTestId('stand-item').first().getByTestId('favorite-toggle')
+		).toHaveAttribute('aria-pressed', 'false');
 		await expect(anonymousPage.getByTestId('favorites-bar-trigger')).toBeVisible();
 		await expect(anonymousPage.getByTestId('favorites-badge')).toHaveCount(0);
 
 		// act
-		const unknownResponse = await anonymousPage.request.get('/stand/00000000-0000-0000-0000-000000000000');
+		const unknownResponse = await anonymousPage.request.get(
+			'/stand/00000000-0000-0000-0000-000000000000'
+		);
 
 		// assume
 		expect(unknownResponse.status()).toBe(404);
@@ -120,7 +164,9 @@ test.describe('Public stand page', () => {
 		await expect(anonymousPage.getByTestId('stand-item-hint')).toContainText('Flohmarkt-Stand');
 		await expect(anonymousPage.locator('.item-title')).toHaveText(firstCardTitle!);
 		await expect(anonymousPage.locator('.back-link')).toBeVisible();
-		const itemNotFound = await anonymousPage.request.get('/stand/00000000-0000-0000-0000-000000000000/00000000-0000-0000-0000-000000000001');
+		const itemNotFound = await anonymousPage.request.get(
+			'/stand/00000000-0000-0000-0000-000000000000/00000000-0000-0000-0000-000000000001'
+		);
 
 		// assume — unknown collection/item ids stay 404 on the public detail page
 		expect(itemNotFound.status()).toBe(404);
@@ -166,7 +212,9 @@ test.describe('Public stand page', () => {
 		await expect(anonymousPage.getByTestId('stand-owner-avatar')).toBeVisible();
 
 		// assume — the avatar image resolves anonymously under the same media route
-		const avatarMediaResponse = await anonymousPage.request.get(`/media/${decodeURIComponent(avatarKey)}`);
+		const avatarMediaResponse = await anonymousPage.request.get(
+			`/media/${decodeURIComponent(avatarKey)}`
+		);
 		expect(avatarMediaResponse.status()).toBe(200);
 		anonymousContext.close?.();
 	});

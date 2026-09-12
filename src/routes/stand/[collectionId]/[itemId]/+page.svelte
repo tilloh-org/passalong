@@ -19,12 +19,21 @@
 		{#if data.item.images.length}
 			<div class="media-column">
 				{#each data.item.images.filter((image) => image.isCover) as cover (cover.storageKey)}
-					<img class="cover" src={`/media/${encodeURIComponent(cover.storageKey)}`} alt={data.item.title} />
+					<img
+						class="cover"
+						src={`/media/${encodeURIComponent(cover.storageKey)}`}
+						alt={data.item.title}
+					/>
 				{/each}
 				{#if data.item.images.length > 1}
 					<div class="gallery" data-testid="stand-item-gallery">
 						{#each data.item.images.filter((image) => !image.isCover) as image (image.storageKey)}
-							<img class="thumb" src={`/media/${encodeURIComponent(image.storageKey)}`} alt={data.item.title} loading="lazy" />
+							<img
+								class="thumb"
+								src={`/media/${encodeURIComponent(image.storageKey)}`}
+								alt={data.item.title}
+								loading="lazy"
+							/>
 						{/each}
 					</div>
 				{/if}

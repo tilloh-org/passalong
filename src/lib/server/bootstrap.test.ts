@@ -92,7 +92,9 @@ describe('bootstrap configuration', () => {
 
 		// assume
 		expect(thrown).toBeInstanceOf(Error);
-		expect((thrown as Error).message).toBe('PASSALONG_BOOTSTRAP must not repeat account usernames.');
+		expect((thrown as Error).message).toBe(
+			'PASSALONG_BOOTSTRAP must not repeat account usernames.'
+		);
 		expect((thrown as Error).message).not.toContain(password);
 	});
 
@@ -176,13 +178,18 @@ describe('bootstrap configuration', () => {
 		const databasePath = createDatabasePath();
 
 		// act
-		await provisionBootstrapConfiguration(createCollectionRepository({ databasePath }), configuration);
+		await provisionBootstrapConfiguration(
+			createCollectionRepository({ databasePath }),
+			configuration
+		);
 
 		const database = new Database(databasePath, { readonly: true });
 
 		// assume
 		expect(database.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
-		expect(database.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual({ count: 1 });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual({
+			count: 1
+		});
 		database.close();
 	});
 
@@ -249,14 +256,18 @@ describe('bootstrap configuration', () => {
 		const provisioning = provisionBootstrapConfiguration(repository, configuration);
 
 		// assume
-		await expect(provisioning).rejects.toThrow(
-			'test bootstrap insert failure'
-		);
+		await expect(provisioning).rejects.toThrow('test bootstrap insert failure');
 
 		const unchangedDatabase = new Database(databasePath, { readonly: true });
-		expect(unchangedDatabase.prepare('SELECT COUNT(*) AS count FROM tenants').get()).toEqual({ count: 0 });
-		expect(unchangedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 0 });
-		expect(unchangedDatabase.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual({ count: 0 });
+		expect(unchangedDatabase.prepare('SELECT COUNT(*) AS count FROM tenants').get()).toEqual({
+			count: 0
+		});
+		expect(unchangedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({
+			count: 0
+		});
+		expect(unchangedDatabase.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual(
+			{ count: 0 }
+		);
 		unchangedDatabase.close();
 	});
 
@@ -293,7 +304,10 @@ describe('bootstrap configuration', () => {
 		);
 
 		// act
-		const secondProvisioning = provisionBootstrapConfiguration(repository, secondAdministratorConfiguration);
+		const secondProvisioning = provisionBootstrapConfiguration(
+			repository,
+			secondAdministratorConfiguration
+		);
 
 		// assume
 		await expect(secondProvisioning).rejects.toThrow(
@@ -354,7 +368,9 @@ describe('bootstrap configuration', () => {
 
 		// assume
 		expect(thrown).toBeInstanceOf(Error);
-		expect((thrown as Error).message).toBe('Bootstrap configuration conflicts with an existing account.');
+		expect((thrown as Error).message).toBe(
+			'Bootstrap configuration conflicts with an existing account.'
+		);
 		expect((thrown as Error).message).not.toContain(changedPassword);
 		expect(repository.getBootstrapAccount('blake')).toBeNull();
 	});

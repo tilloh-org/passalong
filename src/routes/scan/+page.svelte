@@ -33,9 +33,11 @@
 			return;
 		}
 
-		const detectorConstructor = (window as Window & {
-			BarcodeDetector?: new (options: { formats: string[] }) => BarcodeDetectorLike;
-		}).BarcodeDetector;
+		const detectorConstructor = (
+			window as Window & {
+				BarcodeDetector?: new (options: { formats: string[] }) => BarcodeDetectorLike;
+			}
+		).BarcodeDetector;
 
 		if (!detectorConstructor) {
 			scanStatus = t('scan.statusNoDetector');
@@ -58,10 +60,10 @@
 			cameraActive = true;
 			scanStatus = t('scan.statusActive');
 			void scanLoop();
-			} catch {
-				await stopScanner();
-				scanStatus = t('scan.statusCameraFailed');
-			}
+		} catch {
+			await stopScanner();
+			scanStatus = t('scan.statusCameraFailed');
+		}
 	}
 
 	/**
@@ -166,7 +168,12 @@
 			<button type="button" class="primary" onclick={() => void startScanner()}>
 				{t('scan.startCamera')}
 			</button>
-			<button type="button" class="secondary" onclick={() => void stopScanner()} disabled={!cameraActive}>
+			<button
+				type="button"
+				class="secondary"
+				onclick={() => void stopScanner()}
+				disabled={!cameraActive}
+			>
 				{t('scan.stopCamera')}
 			</button>
 		</div>

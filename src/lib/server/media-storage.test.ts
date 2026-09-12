@@ -9,7 +9,9 @@ const temporaryDirectories: string[] = [];
 afterEach(async () => {
 	// act
 	const directories = temporaryDirectories.splice(0);
-	await Promise.all(directories.map((directory) => rm(directory, { recursive: true, force: true })));
+	await Promise.all(
+		directories.map((directory) => rm(directory, { recursive: true, force: true }))
+	);
 
 	// assume
 	expect(temporaryDirectories).toEqual([]);
@@ -50,7 +52,9 @@ test('rejects uploads that are not a supported image type', async () => {
 	const mediaRoot = await createMediaRoot();
 
 	// act
-	const rejection = await captureRejection(() => saveUploadedImage(mediaRoot, 'application/pdf', buildMinimalPng()));
+	const rejection = await captureRejection(() =>
+		saveUploadedImage(mediaRoot, 'application/pdf', buildMinimalPng())
+	);
 
 	// assume
 	expect(rejection).toMatchObject({ message: 'upload is not a supported image type' });
@@ -61,7 +65,9 @@ test('rejects empty uploads', async () => {
 	const mediaRoot = await createMediaRoot();
 
 	// act
-	const rejection = await captureRejection(() => saveUploadedImage(mediaRoot, 'image/png', Buffer.alloc(0)));
+	const rejection = await captureRejection(() =>
+		saveUploadedImage(mediaRoot, 'image/png', Buffer.alloc(0))
+	);
 
 	// assume
 	expect(rejection).toMatchObject({ message: 'upload is empty' });
@@ -73,7 +79,9 @@ test('rejects payloads that exceed the maximum image size', async () => {
 	const oversizedPayload = Buffer.alloc(maximumImageBytes + 1, 0x47);
 
 	// act
-	const rejection = await captureRejection(() => saveUploadedImage(mediaRoot, 'image/png', oversizedPayload));
+	const rejection = await captureRejection(() =>
+		saveUploadedImage(mediaRoot, 'image/png', oversizedPayload)
+	);
 
 	// assume
 	expect(rejection).toMatchObject({ message: 'image exceeds the allowed size' });
@@ -85,9 +93,15 @@ test('rejects payloads whose bytes do not match the declared image type', async 
 	const textPayload = Buffer.from('not an image at all');
 
 	// act
-	const pngRejection = await captureRejection(() => saveUploadedImage(mediaRoot, 'image/png', textPayload));
-	const jpegRejection = await captureRejection(() => saveUploadedImage(mediaRoot, 'image/jpeg', textPayload));
-	const webpRejection = await captureRejection(() => saveUploadedImage(mediaRoot, 'image/webp', textPayload));
+	const pngRejection = await captureRejection(() =>
+		saveUploadedImage(mediaRoot, 'image/png', textPayload)
+	);
+	const jpegRejection = await captureRejection(() =>
+		saveUploadedImage(mediaRoot, 'image/jpeg', textPayload)
+	);
+	const webpRejection = await captureRejection(() =>
+		saveUploadedImage(mediaRoot, 'image/webp', textPayload)
+	);
 
 	// assume
 	expect(pngRejection).toMatchObject({ message: 'upload is not a supported image' });
@@ -133,9 +147,17 @@ function buildMinimalPng(): Buffer {
 }
 
 function buildMinimalJpeg(): Buffer {
-	return Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.from('minimal-jpeg-content-for-tests')]);
+	return Buffer.concat([
+		Buffer.from([0xff, 0xd8, 0xff]),
+		Buffer.from('minimal-jpeg-content-for-tests')
+	]);
 }
 
 function buildMinimalWebp(): Buffer {
-	return Buffer.concat([Buffer.from('RIFF'), Buffer.from([0x24, 0x00, 0x00, 0x00]), Buffer.from('WEBP'), Buffer.from('VP8 minimal-webp-content')]);
+	return Buffer.concat([
+		Buffer.from('RIFF'),
+		Buffer.from([0x24, 0x00, 0x00, 0x00]),
+		Buffer.from('WEBP'),
+		Buffer.from('VP8 minimal-webp-content')
+	]);
 }

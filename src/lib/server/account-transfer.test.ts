@@ -33,7 +33,9 @@ function createTransferFixture(): {
 	const mediaDirectory = mkdtempSync(join(tmpdir(), 'passalong-transfer-media-'));
 	temporaryDirectories.push(databaseDirectory, mediaDirectory);
 	const mediaRoot = join(mediaDirectory, 'media');
-	const repository = createCollectionRepository({ databasePath: join(databaseDirectory, 'passalong.sqlite') });
+	const repository = createCollectionRepository({
+		databasePath: join(databaseDirectory, 'passalong.sqlite')
+	});
 	const scope = repository.createInitialAdmin({
 		username: 'transfer-user',
 		displayName: 'Transfer User',
@@ -55,8 +57,15 @@ describe('account transfer archives', () => {
 	it('exports account data without database ids and imports it additively', async () => {
 		// arrange
 		const sourceFixture = createTransferFixture();
-		const sourceCollection = sourceFixture.repository.createCollection({ name: 'Garage' }, sourceFixture.scope);
-		sourceFixture.repository.updateStandIntro(sourceCollection.id, 'Source intro', sourceFixture.scope);
+		const sourceCollection = sourceFixture.repository.createCollection(
+			{ name: 'Garage' },
+			sourceFixture.scope
+		);
+		sourceFixture.repository.updateStandIntro(
+			sourceCollection.id,
+			'Source intro',
+			sourceFixture.scope
+		);
 		const sourceItem = sourceFixture.repository.createItem(
 			{
 				collectionId: sourceCollection.id,
@@ -71,20 +80,39 @@ describe('account transfer archives', () => {
 			},
 			sourceFixture.scope
 		);
-		const sourceImageKey = await saveUploadedImage(sourceFixture.mediaRoot, 'image/png', buildTestPng());
-		const sourceImage = sourceFixture.repository.addItemImage(sourceItem.id, sourceImageKey, sourceFixture.scope);
+		const sourceImageKey = await saveUploadedImage(
+			sourceFixture.mediaRoot,
+			'image/png',
+			buildTestPng()
+		);
+		const sourceImage = sourceFixture.repository.addItemImage(
+			sourceItem.id,
+			sourceImageKey,
+			sourceFixture.scope
+		);
 		sourceFixture.repository.setItemCover(sourceItem.id, sourceImage.id, sourceFixture.scope);
 
-		const exportArchive = await createAccountExport(sourceFixture.repository, sourceFixture.scope, sourceFixture.mediaRoot);
+		const exportArchive = await createAccountExport(
+			sourceFixture.repository,
+			sourceFixture.scope,
+			sourceFixture.mediaRoot
+		);
 		const zipEntries = parseZip(exportArchive.zip);
 		expect(zipEntries.has('manifest.json')).toBe(true);
 		const manifest = exportArchive.manifest;
 		const manifestText = JSON.stringify(exportArchive.manifest);
 
 		const targetFixture = createTransferFixture();
-		const targetAvatarKey = await saveUploadedImage(targetFixture.mediaRoot, 'image/png', buildTestPng());
+		const targetAvatarKey = await saveUploadedImage(
+			targetFixture.mediaRoot,
+			'image/png',
+			buildTestPng()
+		);
 		targetFixture.repository.setProfileAvatar(targetFixture.scope, targetAvatarKey);
-		const targetCollection = targetFixture.repository.createCollection({ name: 'Existing collection' }, targetFixture.scope);
+		const targetCollection = targetFixture.repository.createCollection(
+			{ name: 'Existing collection' },
+			targetFixture.scope
+		);
 		targetFixture.repository.createItem(
 			{
 				collectionId: targetCollection.id,
@@ -122,17 +150,31 @@ describe('account transfer archives', () => {
 			itemsImported: 1,
 			imagesImported: 1
 		});
-		expect(targetFixture.repository.getProfile(targetFixture.scope)).toMatchObject({ avatarStorageKey: targetAvatarKey });
+		expect(targetFixture.repository.getProfile(targetFixture.scope)).toMatchObject({
+			avatarStorageKey: targetAvatarKey
+		});
 		expect(targetFixture.repository.listCollectionsForOwner(targetFixture.scope)).toHaveLength(2);
 		const importedCollection = targetFixture.repository
 			.listCollectionsForOwner(targetFixture.scope)
 			.find((collection) => collection.standIntro === 'Source intro');
 		expect(importedCollection).toBeDefined();
 		expect(importedCollection?.name).toBe('Garage');
-		expect(targetFixture.repository.listItemsForOwner(importedCollection!.id, targetFixture.scope)).toHaveLength(1);
-		const importedItem = targetFixture.repository.listItemsForOwner(importedCollection!.id, targetFixture.scope)[0];
-		expect(importedItem).toMatchObject({ title: 'Bike bell', internalNotes: 'source note', externalDescription: 'source description' });
-		const importedImages = targetFixture.repository.listItemImages(importedItem.id, targetFixture.scope);
+		expect(
+			targetFixture.repository.listItemsForOwner(importedCollection!.id, targetFixture.scope)
+		).toHaveLength(1);
+		const importedItem = targetFixture.repository.listItemsForOwner(
+			importedCollection!.id,
+			targetFixture.scope
+		)[0];
+		expect(importedItem).toMatchObject({
+			title: 'Bike bell',
+			internalNotes: 'source note',
+			externalDescription: 'source description'
+		});
+		const importedImages = targetFixture.repository.listItemImages(
+			importedItem.id,
+			targetFixture.scope
+		);
 		expect(importedImages).toHaveLength(1);
 		expect(importedImages[0].isCover).toBe(true);
 		expect(existsSync(join(targetFixture.mediaRoot, importedImages[0].storageKey))).toBe(true);

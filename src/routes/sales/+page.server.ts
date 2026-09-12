@@ -95,12 +95,13 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 		proceedsMax === 'invalid' ||
 		(proceedsMin !== null && proceedsMax !== null && proceedsMin > proceedsMax);
 	const filters: SaleHistoryFilters = {
-		channel: requestedChannel && (saleChannels as readonly string[]).includes(requestedChannel)
-			? requestedChannel as SaleChannel
-			: null,
+		channel:
+			requestedChannel && (saleChannels as readonly string[]).includes(requestedChannel)
+				? (requestedChannel as SaleChannel)
+				: null,
 		category:
 			requestedCategory && (itemCategories as readonly string[]).includes(requestedCategory)
-				? requestedCategory as ItemCategory
+				? (requestedCategory as ItemCategory)
 				: null,
 		proceedsMinCents: proceedsMin === 'invalid' ? null : proceedsMin,
 		proceedsMaxCents: proceedsMax === 'invalid' ? null : proceedsMax

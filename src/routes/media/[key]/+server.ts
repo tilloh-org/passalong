@@ -1,7 +1,11 @@
 import { error } from '@sveltejs/kit';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
-import { itemCategories, itemConditions, type SessionScope } from '$lib/server/collection-repository';
+import {
+	itemCategories,
+	itemConditions,
+	type SessionScope
+} from '$lib/server/collection-repository';
 import { getMediaRoot } from '$lib/server/media-root';
 import { getCollectionRepository } from '$lib/server/repository';
 import { hashSessionToken } from '$lib/server/session-token';
@@ -30,7 +34,8 @@ export const GET: RequestHandler = ({ cookies, params }) => {
 	const sessionToken = cookies.get(sessionCookieName) ?? '';
 	const scope = sessionToken ? repository.getSession(hashSessionToken(sessionToken)) : null;
 	const image = scope ? repository.findImageMetadataForTenant(params.key, scope) : null;
-	const isProfileAvatar = scope && !image ? repository.findProfileAvatarForTenant(params.key, scope) : false;
+	const isProfileAvatar =
+		scope && !image ? repository.findProfileAvatarForTenant(params.key, scope) : false;
 	let storageKey: string;
 	let isPublic = false;
 	if (image || isProfileAvatar) {
@@ -69,7 +74,11 @@ export const GET: RequestHandler = ({ cookies, params }) => {
  */
 function isPathInsideMediaRoot(storagePath: string): boolean {
 	const pathRelativeToMediaRoot = relative(getMediaRoot(), storagePath);
-	return pathRelativeToMediaRoot.length > 0 && !pathRelativeToMediaRoot.startsWith('..') && !isAbsolute(pathRelativeToMediaRoot);
+	return (
+		pathRelativeToMediaRoot.length > 0 &&
+		!pathRelativeToMediaRoot.startsWith('..') &&
+		!isAbsolute(pathRelativeToMediaRoot)
+	);
 }
 
 /**

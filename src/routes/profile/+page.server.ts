@@ -24,7 +24,8 @@ const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const invalidCredentialsError = 'Das aktuelle Passwort ist nicht korrekt.';
 const maximumAvatarBytes = 2 * 1024 * 1024;
 const supportedAvatarTypes = ['image/png', 'image/jpeg', 'image/webp'] as const;
-const genericProfileError = 'Die Änderung konnte nicht gespeichert werden. Bitte prüfe die Angaben.';
+const genericProfileError =
+	'Die Änderung konnte nicht gespeichert werden. Bitte prüfe die Angaben.';
 
 /**
  * Resolve a cookie token to an active tenant/user scope.
@@ -57,7 +58,6 @@ function setSessionCookie(cookies: Cookies, scope: SessionScope, url: URL): void
 		maxAge: sessionMaxAgeSeconds
 	});
 }
-
 
 /**
  * Read a string value from form data and normalize absent values to an empty string.
@@ -105,12 +105,16 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { updateProfileError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				updateProfileError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
 		try {
-			getCollectionRepository().updateProfile(scope, { displayName: getFormText(formData, 'displayName') });
+			getCollectionRepository().updateProfile(scope, {
+				displayName: getFormText(formData, 'displayName')
+			});
 		} catch (error) {
 			return fail(httpStatus.badRequest, { updateProfileError: profileActionError(error) });
 		}
@@ -124,7 +128,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { avatarError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				avatarError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
@@ -136,7 +142,9 @@ export const actions: Actions = {
 			return fail(httpStatus.badRequest, { avatarError: 'Das Bild ist zu groß (maximal 2 MB).' });
 		}
 		if (!(supportedAvatarTypes as readonly string[]).includes(upload.type)) {
-			return fail(httpStatus.badRequest, { avatarError: 'Das Bild entspricht nicht einem unterstützten Format.' });
+			return fail(httpStatus.badRequest, {
+				avatarError: 'Das Bild entspricht nicht einem unterstützten Format.'
+			});
 		}
 
 		try {
@@ -160,7 +168,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { avatarError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				avatarError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		try {
@@ -182,22 +192,31 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { deleteAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				deleteAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
 		const confirmUsername = getFormText(formData, 'confirmUsername');
 		const profile = getCollectionRepository().getProfile(scope);
 		if (!profile) {
-			return fail(httpStatus.unauthorized, { deleteAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				deleteAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 		if (confirmUsername.toLowerCase() !== profile.username) {
-			return fail(httpStatus.badRequest, { deleteAccountError: 'Bitte gib deinen Benutzernamen zur Bestätigung ein.' });
+			return fail(httpStatus.badRequest, {
+				deleteAccountError: 'Bitte gib deinen Benutzernamen zur Bestätigung ein.'
+			});
 		}
 
 		try {
 			const artifacts = getCollectionRepository().deleteAccount(scope);
-			for (const storageKey of [...artifacts.itemImageStorageKeys, artifacts.avatarStorageKey].filter((value): value is string => Boolean(value))) {
+			for (const storageKey of [
+				...artifacts.itemImageStorageKeys,
+				artifacts.avatarStorageKey
+			].filter((value): value is string => Boolean(value))) {
 				await removeStoredMedia(getMediaRoot(), storageKey);
 			}
 			cookies.delete(sessionCookieName, { path: '/' });
@@ -214,12 +233,17 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { changePasswordError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				changePasswordError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 		const formData = await request.formData();
 		try {
 			const currentPasswordHash = getCollectionRepository().getPasswordHashForScope(scope);
-			if (!currentPasswordHash || !(await verifyPassword(getFormText(formData, 'currentPassword'), currentPasswordHash))) {
+			if (
+				!currentPasswordHash ||
+				!(await verifyPassword(getFormText(formData, 'currentPassword'), currentPasswordHash))
+			) {
 				return fail(httpStatus.badRequest, { changePasswordError: invalidCredentialsError });
 			}
 			const password = getFormText(formData, 'password');
@@ -240,13 +264,17 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { importAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				importAccountError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
 		const upload = formData.get('accountArchive');
 		if (!(upload instanceof File) || upload.size === 0) {
-			return fail(httpStatus.badRequest, { importAccountError: 'Bitte wähle ein Export-Archiv aus.' });
+			return fail(httpStatus.badRequest, {
+				importAccountError: 'Bitte wähle ein Export-Archiv aus.'
+			});
 		}
 
 		try {
@@ -268,14 +296,22 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { standIntroError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				standIntroError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
 		try {
-			getCollectionRepository().updateStandIntro(getFormText(formData, 'collectionId'), getFormText(formData, 'standIntro'), scope);
+			getCollectionRepository().updateStandIntro(
+				getFormText(formData, 'collectionId'),
+				getFormText(formData, 'standIntro'),
+				scope
+			);
 		} catch (error) {
-			return fail(httpStatus.badRequest, { standIntroError: 'Die Einleitung konnte nicht gespeichert werden.' });
+			return fail(httpStatus.badRequest, {
+				standIntroError: 'Die Einleitung konnte nicht gespeichert werden.'
+			});
 		}
 
 		redirect(httpStatus.seeOther, '/profile');

@@ -9,10 +9,13 @@
 
 	const appliedFilters = $derived(data.appliedFilters);
 	const hasActiveFilters = $derived(
-		Boolean(appliedFilters.query || appliedFilters.category || appliedFilters.condition || appliedFilters.status)
+		Boolean(
+			appliedFilters.query ||
+			appliedFilters.category ||
+			appliedFilters.condition ||
+			appliedFilters.status
+		)
 	);
-
-
 
 	let resetPanelOpen = $state(false);
 
@@ -61,7 +64,6 @@
 </svelte:head>
 
 <main>
-
 	{#if form && 'csrfError' in form && form.csrfError}
 		<p class="form-error" role="alert">{form.csrfError}</p>
 	{/if}
@@ -84,7 +86,13 @@
 					</label>
 					<label>
 						<span>{t('portfolio.password')}</span>
-						<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
+						<input
+							name="password"
+							type="password"
+							autocomplete="new-password"
+							minlength={minimumPasswordLength}
+							required
+						/>
 					</label>
 					{#if form?.registerError}
 						<p class="form-error" role="alert">{form.registerError}</p>
@@ -109,7 +117,11 @@
 					{/if}
 					<button type="submit">{t('portfolio.login')}</button>
 				</form>
-				<button class="reset-toggle" type="button" onclick={() => (resetPanelOpen = !resetPanelOpen)}>
+				<button
+					class="reset-toggle"
+					type="button"
+					onclick={() => (resetPanelOpen = !resetPanelOpen)}
+				>
 					{t('portfolio.changePasswordWithCode')}
 				</button>
 				{#if resetPanelOpen}
@@ -124,7 +136,13 @@
 						</label>
 						<label>
 							<span>{t('portfolio.newPassword')}</span>
-							<input name="password" type="password" autocomplete="new-password" minlength={minimumPasswordLength} required />
+							<input
+								name="password"
+								type="password"
+								autocomplete="new-password"
+								minlength={minimumPasswordLength}
+								required
+							/>
 						</label>
 						{#if form && 'resetError' in form && form.resetError}
 							<p class="form-error" role="alert">{form.resetError}</p>
@@ -167,9 +185,16 @@
 		</section>
 
 		{#if data.collections.length > 1}
-			<nav class="collection-switcher" aria-label={t('portfolio.switchCollection')} data-testid="collection-switcher">
+			<nav
+				class="collection-switcher"
+				aria-label={t('portfolio.switchCollection')}
+				data-testid="collection-switcher"
+			>
 				{#each data.collections as collection (collection.id)}
-					<a href={`/?collection=${encodeURIComponent(collection.id)}`} aria-current={collection.id === data.collection.id ? 'page' : undefined}>
+					<a
+						href={`/?collection=${encodeURIComponent(collection.id)}`}
+						aria-current={collection.id === data.collection.id ? 'page' : undefined}
+					>
 						{collection.name}
 					</a>
 				{/each}
@@ -192,7 +217,13 @@
 						<div class="form-grid">
 							<label>
 								<span>{t('portfolio.price')}</span>
-								<input name="priceEuros" type="text" inputmode="decimal" placeholder={t('portfolio.priceExample')} required />
+								<input
+									name="priceEuros"
+									type="text"
+									inputmode="decimal"
+									placeholder={t('portfolio.priceExample')}
+									required
+								/>
 							</label>
 							<label>
 								<span>{t('portfolio.category')}</span>
@@ -213,7 +244,10 @@
 						</div>
 						<label>
 							<span>{t('portfolio.externalDescription')}</span>
-							<textarea name="externalDescription" rows="3" data-testid="item-external-description-input"></textarea>
+							<textarea
+								name="externalDescription"
+								rows="3"
+								data-testid="item-external-description-input"></textarea>
 						</label>
 						<label>
 							<span>{t('portfolio.internalNotes')}</span>
@@ -221,11 +255,21 @@
 						</label>
 						<div class="flag-checkboxes">
 							<label class="checkbox">
-								<input name="isComplete" type="checkbox" value="1" data-testid="item-complete-checkbox" />
+								<input
+									name="isComplete"
+									type="checkbox"
+									value="1"
+									data-testid="item-complete-checkbox"
+								/>
 								<span>{t('portfolio.isComplete')}</span>
 							</label>
 							<label class="checkbox">
-								<input name="isFunctional" type="checkbox" value="1" data-testid="item-functional-checkbox" />
+								<input
+									name="isFunctional"
+									type="checkbox"
+									value="1"
+									data-testid="item-functional-checkbox"
+								/>
 								<span>{t('portfolio.isFunctional')}</span>
 							</label>
 						</div>
@@ -234,7 +278,11 @@
 						{/if}
 						<button type="submit">{t('portfolio.addItem')}</button>
 						{#if data.createdItemId}
-							<a class="manage-images-link" href={`/items/${encodeURIComponent(data.createdItemId)}`} data-testid="manage-images-link">
+							<a
+								class="manage-images-link"
+								href={`/items/${encodeURIComponent(data.createdItemId)}`}
+								data-testid="manage-images-link"
+							>
 								{t('portfolio.manageImages')}
 							</a>
 						{/if}
@@ -243,98 +291,122 @@
 			</div>
 
 			<div class="items-column">
-			{#if data.saleStatistics && data.saleStatistics.soldItemCount > 0}
-				<section class="sale-statistics" aria-labelledby="sale-statistics-title" data-testid="sale-statistics">
-					<p class="eyebrow">{t('portfolio.saleStatisticsEyebrow')}</p>
-					<h2 id="sale-statistics-title">
-						{t('portfolio.soldSummary', { count: data.saleStatistics.soldItemCount, proceeds: formatPrice(data.saleStatistics.totalProceedsCents) })}
-					</h2>
-					<div class="statistics-grid">
-						<div class="statistics-group">
-							<h3>{t('portfolio.byChannel')}</h3>
-							<ul data-testid="sale-statistics-channels">
-								{#each data.saleStatistics.proceedsByChannel as entry}
-									<li>
-										<span>{saleChannelLabel(entry.channel)}</span>
-										<span class="statistics-value">{entry.soldItemCount}× · {formatPrice(entry.totalProceedsCents)} €</span>
-									</li>
-								{/each}
-							</ul>
+				{#if data.saleStatistics && data.saleStatistics.soldItemCount > 0}
+					<section
+						class="sale-statistics"
+						aria-labelledby="sale-statistics-title"
+						data-testid="sale-statistics"
+					>
+						<p class="eyebrow">{t('portfolio.saleStatisticsEyebrow')}</p>
+						<h2 id="sale-statistics-title">
+							{t('portfolio.soldSummary', {
+								count: data.saleStatistics.soldItemCount,
+								proceeds: formatPrice(data.saleStatistics.totalProceedsCents)
+							})}
+						</h2>
+						<div class="statistics-grid">
+							<div class="statistics-group">
+								<h3>{t('portfolio.byChannel')}</h3>
+								<ul data-testid="sale-statistics-channels">
+									{#each data.saleStatistics.proceedsByChannel as entry}
+										<li>
+											<span>{saleChannelLabel(entry.channel)}</span>
+											<span class="statistics-value"
+												>{entry.soldItemCount}× · {formatPrice(entry.totalProceedsCents)} €</span
+											>
+										</li>
+									{/each}
+								</ul>
+							</div>
+							<div class="statistics-group">
+								<h3>{t('portfolio.byMonth')}</h3>
+								<ul data-testid="sale-statistics-months">
+									{#each data.saleStatistics.proceedsByMonth as entry}
+										<li>
+											<span>{formatSaleMonth(entry.month)}</span>
+											<span class="statistics-value"
+												>{entry.soldItemCount}× · {formatPrice(entry.totalProceedsCents)} €</span
+											>
+										</li>
+									{/each}
+								</ul>
+							</div>
 						</div>
-						<div class="statistics-group">
-							<h3>{t('portfolio.byMonth')}</h3>
-							<ul data-testid="sale-statistics-months">
-								{#each data.saleStatistics.proceedsByMonth as entry}
-									<li>
-										<span>{formatSaleMonth(entry.month)}</span>
-										<span class="statistics-value">{entry.soldItemCount}× · {formatPrice(entry.totalProceedsCents)} €</span>
-									</li>
-								{/each}
-							</ul>
+					</section>
+				{/if}
+				<ItemFilterForm
+					action="/"
+					hiddenFields={data.collection ? { collection: data.collection.id } : {}}
+					{appliedFilters}
+					categoryOptions={data.categoryOptions}
+					conditionOptions={data.conditionOptions}
+					hasActive={hasActiveFilters}
+					resetHref={data.collection
+						? `/?collection=${encodeURIComponent(data.collection.id)}`
+						: '/'}
+					testIdPrefix="filter"
+				/>
+				<section class="items" aria-labelledby="items-title">
+					{#if data.items.length}
+						<div class="item-grid">
+							{#each data.items as item (item.id)}
+								<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
+								<article
+									data-testid="item-card"
+									class="tile-link"
+									tabindex="0"
+									onclick={() => goto(`/items/${encodeURIComponent(item.id)}`)}
+									onkeydown={(event) => {
+										if (event.key === 'Enter' || event.key === ' ') {
+											goto(`/items/${encodeURIComponent(item.id)}`);
+										}
+									}}
+								>
+									<div class="tile-media">
+										{#if item.coverImageKey}
+											<img
+												class="item-image photo"
+												src={`/media/${encodeURIComponent(item.coverImageKey)}`}
+												alt={item.title}
+												loading="lazy"
+											/>
+										{:else}
+											<div class="item-image" aria-hidden="true">
+												{item.title.slice(0, 1).toUpperCase()}
+											</div>
+										{/if}
+										<span class="kat">{categoryLabel(item.category)}</span>
+									</div>
+									<div class="item-copy">
+										<h2>{item.title}</h2>
+										<p class="price">{formatPrice(item.priceCents)} €</p>
+									</div>
+									<div class="tile-bottom">
+										{#if item.soldAt}
+											<span class="badge sold" data-testid="item-sold-badge"
+												>{t('portfolio.sold')}{item.saleProceedsCents !== null
+													? ` · ${formatPrice(item.saleProceedsCents)} €`
+													: ''}</span
+											>
+										{:else}
+											<span class="badge open">{t('portfolio.open')}</span>
+											<form method="POST" action="?/quickSellItem">
+												<input name="itemId" type="hidden" value={item.id} />
+												<button class="pay" type="submit" data-testid="quick-sell-item">
+													{t('portfolio.quickSell')}
+												</button>
+											</form>
+										{/if}
+									</div>
+								</article>
+							{/each}
 						</div>
-					</div>
+					{:else if hasActiveFilters}
+						<p class="empty" data-testid="filter-empty-state">{t('portfolio.noItemsForFilters')}</p>
+					{:else}
+						<p class="empty">{t('portfolio.waitingForFirstItem')}</p>
+					{/if}
 				</section>
-			{/if}
-			<ItemFilterForm
-				action="/"
-				hiddenFields={data.collection ? { collection: data.collection.id } : {}}
-				appliedFilters={appliedFilters}
-				categoryOptions={data.categoryOptions}
-				conditionOptions={data.conditionOptions}
-				hasActive={hasActiveFilters}
-				resetHref={data.collection ? `/?collection=${encodeURIComponent(data.collection.id)}` : '/'}
-				testIdPrefix="filter"
-			/>
-			<section class="items" aria-labelledby="items-title">
-				{#if data.items.length}
-				<div class="item-grid">
-					{#each data.items as item (item.id)}
-						<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
-						<article
-							data-testid="item-card"
-							class="tile-link"
-							tabindex="0"
-							onclick={() => goto(`/items/${encodeURIComponent(item.id)}`)}
-							onkeydown={(event) => {
-								if (event.key === 'Enter' || event.key === ' ') {
-									goto(`/items/${encodeURIComponent(item.id)}`);
-								}
-							}}
-						>
-							<div class="tile-media">
-								{#if item.coverImageKey}
-									<img class="item-image photo" src={`/media/${encodeURIComponent(item.coverImageKey)}`} alt={item.title} loading="lazy" />
-								{:else}
-									<div class="item-image" aria-hidden="true">{item.title.slice(0, 1).toUpperCase()}</div>
-								{/if}
-								<span class="kat">{categoryLabel(item.category)}</span>
-							</div>
-							<div class="item-copy">
-								<h2>{item.title}</h2>
-								<p class="price">{formatPrice(item.priceCents)} €</p>
-							</div>
-							<div class="tile-bottom">
-								{#if item.soldAt}
-									<span class="badge sold" data-testid="item-sold-badge">{t('portfolio.sold')}{item.saleProceedsCents !== null ? ` · ${formatPrice(item.saleProceedsCents)} €` : ''}</span>
-								{:else}
-									<span class="badge open">{t('portfolio.open')}</span>
-									<form method="POST" action="?/quickSellItem">
-										<input name="itemId" type="hidden" value={item.id} />
-										<button class="pay" type="submit" data-testid="quick-sell-item">
-											{t('portfolio.quickSell')}
-										</button>
-									</form>
-								{/if}
-							</div>
-						</article>
-					{/each}
-				</div>
-			{:else if hasActiveFilters}
-				<p class="empty" data-testid="filter-empty-state">{t('portfolio.noItemsForFilters')}</p>
-			{:else}
-				<p class="empty">{t('portfolio.waitingForFirstItem')}</p>
-			{/if}
-			</section>
 			</div>
 		</div>
 	{/if}
@@ -347,44 +419,17 @@
 		padding: 0 1.5rem 4rem;
 	}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	nav a,
-
 	nav a:hover {
 		background: var(--color-accent-soft);
 		transform: translateY(-1px);
 	}
-
 
 	nav a[aria-current='page'] {
 		background: var(--color-accent-strong);
 		box-shadow: var(--shadow-cta);
 		color: #fff;
 	}
-
-
-
-
-
 
 	.password-help {
 		background: var(--color-surface);
@@ -393,8 +438,6 @@
 		box-shadow: var(--shadow-tile);
 		padding: 1.1rem 1.2rem;
 	}
-
-
 
 	.collection-list {
 		display: grid;

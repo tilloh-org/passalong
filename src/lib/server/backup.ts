@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	renameSync,
+	statSync,
+	writeFileSync
+} from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import Database from 'better-sqlite3';
 
@@ -138,7 +146,13 @@ export function buildZip(entries: Array<[string, Buffer]>): Buffer {
  * @param {{ databasePath: string; mediaRoot: string }} options - Database and media locations.
  * @returns {Promise<BackupArchive>} Archive entries keyed by name plus the parsed manifest.
  */
-export async function createInstanceBackup({ databasePath, mediaRoot }: { databasePath: string; mediaRoot: string }): Promise<BackupArchive> {
+export async function createInstanceBackup({
+	databasePath,
+	mediaRoot
+}: {
+	databasePath: string;
+	mediaRoot: string;
+}): Promise<BackupArchive> {
 	const files: Array<[string, Buffer]> = [];
 
 	// SQLite online backup API produces a consistent snapshot while the app writes.
@@ -158,7 +172,10 @@ export async function createInstanceBackup({ databasePath, mediaRoot }: { databa
 		files: {}
 	};
 	for (const [name, payload] of files) {
-		manifest.files[name] = { sha256: createHash('sha256').update(payload).digest(sha256Encoding), bytes: payload.length };
+		manifest.files[name] = {
+			sha256: createHash('sha256').update(payload).digest(sha256Encoding),
+			bytes: payload.length
+		};
 	}
 	const manifestPayload = Buffer.from(JSON.stringify(manifest, null, '\t'), 'utf8');
 
@@ -236,7 +253,12 @@ export function parseZip(payload: Buffer): Map<string, ZipEntry> {
 		const nameLength = payload.readUInt16LE(offset + 26);
 		const extraLength = payload.readUInt16LE(offset + 28);
 		const compressedSize = payload.readUInt32LE(offset + 18);
-		const name = payload.subarray(offset + localFileHeaderFixedLength, offset + localFileHeaderFixedLength + nameLength).toString('utf8');
+		const name = payload
+			.subarray(
+				offset + localFileHeaderFixedLength,
+				offset + localFileHeaderFixedLength + nameLength
+			)
+			.toString('utf8');
 		entries.set(name, {
 			name,
 			payloadOffset: offset + localFileHeaderFixedLength + nameLength + extraLength,
@@ -255,7 +277,15 @@ export function parseZip(payload: Buffer): Map<string, ZipEntry> {
  * @param {{ archivePath: string; databasePath: string; mediaRoot: string }} options - Restore inputs.
  * @returns {Promise<RestoreOutcome>} Whether the restore succeeded.
  */
-export async function restoreInstanceBackup({ archivePath, databasePath, mediaRoot }: { archivePath: string; databasePath: string; mediaRoot: string }): Promise<RestoreOutcome> {
+export async function restoreInstanceBackup({
+	archivePath,
+	databasePath,
+	mediaRoot
+}: {
+	archivePath: string;
+	databasePath: string;
+	mediaRoot: string;
+}): Promise<RestoreOutcome> {
 	const payload = readFileSync(archivePath);
 	if (!hasValidEndOfCentralDirectory(payload)) {
 		return { restored: false, reason: tamperedArchiveMessage };
@@ -265,7 +295,10 @@ export async function restoreInstanceBackup({ archivePath, databasePath, mediaRo
 	if (!manifestEntry) {
 		return { restored: false, reason: tamperedArchiveMessage };
 	}
-	const manifestPayload = payload.subarray(manifestEntry.payloadOffset, manifestEntry.payloadOffset + manifestEntry.size);
+	const manifestPayload = payload.subarray(
+		manifestEntry.payloadOffset,
+		manifestEntry.payloadOffset + manifestEntry.size
+	);
 	let manifest: BackupManifest;
 	try {
 		manifest = JSON.parse(manifestPayload.toString('utf8')) as BackupManifest;
@@ -291,9 +324,14 @@ export async function restoreInstanceBackup({ archivePath, databasePath, mediaRo
 	// Stage the database beside the live file and the media into a sibling directory.
 	const stagingDatabasePath = `${databasePath}.restore-staging`;
 	const databaseEntry = entries.get(databaseEntryName)!;
-	writeFileSync(stagingDatabasePath, payload.subarray(databaseEntry.payloadOffset, databaseEntry.payloadOffset + databaseEntry.size));
+	writeFileSync(
+		stagingDatabasePath,
+		payload.subarray(databaseEntry.payloadOffset, databaseEntry.payloadOffset + databaseEntry.size)
+	);
 	const stagingMediaRoot = `${mediaRoot}.restore-staging`;
-	const mediaEntries = Object.keys(manifest.files).filter((name) => name.startsWith(mediaEntryPrefix));
+	const mediaEntries = Object.keys(manifest.files).filter((name) =>
+		name.startsWith(mediaEntryPrefix)
+	);
 	for (const name of mediaEntriesOf(manifest)) {
 		const entry = entries.get(name);
 		if (!entry) {

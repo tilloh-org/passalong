@@ -51,7 +51,12 @@
 	</section>
 
 	<section class="summary" data-testid="sale-history-summary">
-		<strong>{t('saleHistory.summary', { count: data.summary.soldItemCount, proceeds: formatPrice(data.summary.totalProceedsCents) })}</strong>
+		<strong
+			>{t('saleHistory.summary', {
+				count: data.summary.soldItemCount,
+				proceeds: formatPrice(data.summary.totalProceedsCents)
+			})}</strong
+		>
 	</section>
 
 	<section class="filter-panel" aria-labelledby="sale-filter-title">
@@ -62,7 +67,9 @@
 				<select name="channel">
 					<option value="">{t('saleHistory.allChannels')}</option>
 					{#each data.saleChannelOptions as channel}
-						<option value={channel} selected={data.filters.channel === channel}>{saleChannelLabel(channel)}</option>
+						<option value={channel} selected={data.filters.channel === channel}
+							>{saleChannelLabel(channel)}</option
+						>
 					{/each}
 				</select>
 			</label>
@@ -71,17 +78,33 @@
 				<select name="category">
 					<option value="">{t('saleHistory.allCategories')}</option>
 					{#each data.categoryOptions as category}
-						<option value={category} selected={data.filters.category === category}>{categoryLabel(category)}</option>
+						<option value={category} selected={data.filters.category === category}
+							>{categoryLabel(category)}</option
+						>
 					{/each}
 				</select>
 			</label>
 			<label>
 				<span>{t('saleHistory.proceedsMin')}</span>
-				<input name="proceedsMin" type="text" inputmode="decimal" value={data.filters.proceedsMinCents === null ? '' : formatPrice(data.filters.proceedsMinCents)} />
+				<input
+					name="proceedsMin"
+					type="text"
+					inputmode="decimal"
+					value={data.filters.proceedsMinCents === null
+						? ''
+						: formatPrice(data.filters.proceedsMinCents)}
+				/>
 			</label>
 			<label>
 				<span>{t('saleHistory.proceedsMax')}</span>
-				<input name="proceedsMax" type="text" inputmode="decimal" value={data.filters.proceedsMaxCents === null ? '' : formatPrice(data.filters.proceedsMaxCents)} />
+				<input
+					name="proceedsMax"
+					type="text"
+					inputmode="decimal"
+					value={data.filters.proceedsMaxCents === null
+						? ''
+						: formatPrice(data.filters.proceedsMaxCents)}
+				/>
 			</label>
 			<div class="filter-actions">
 				<a class="secondary-link" href="/sales">{t('saleHistory.resetFilters')}</a>
@@ -115,7 +138,10 @@
 			</div>
 		{:else}
 			<p class="empty" data-testid="sale-history-empty">
-				{data.filters.channel || data.filters.category || data.filters.proceedsMinCents !== null || data.filters.proceedsMaxCents !== null
+				{data.filters.channel ||
+				data.filters.category ||
+				data.filters.proceedsMinCents !== null ||
+				data.filters.proceedsMaxCents !== null
 					? t('saleHistory.emptyFiltered')
 					: t('saleHistory.empty')}
 			</p>

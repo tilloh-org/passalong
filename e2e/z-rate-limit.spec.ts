@@ -14,7 +14,10 @@ test.describe('Login rate limiting', () => {
 				form: { username: 'x', password: 'not-a-password' },
 				headers: { Origin: 'http://localhost:4173' }
 			});
-			failedLoginAttempts.push({ actionStatus: (await response.json()).status, responseStatus: response.status() });
+			failedLoginAttempts.push({
+				actionStatus: (await response.json()).status,
+				responseStatus: response.status()
+			});
 		}
 		const blockedResponse = await page.request.post('/?/login', {
 			form: { username: 'x', password: 'not-a-password' },

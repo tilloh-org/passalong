@@ -54,12 +54,16 @@ function createOriginalCoreCollectionDatabase(databasePath: string): void {
 			created_at TEXT NOT NULL
 		);
 	`);
-	database.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)').run('legacy-tenant', 'Legacy household', createdAt);
+	database
+		.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+		.run('legacy-tenant', 'Legacy household', createdAt);
 	database
 		.prepare('INSERT INTO users (id, tenant_id, display_name, created_at) VALUES (?, ?, ?, ?)')
 		.run('legacy-user', 'legacy-tenant', 'Legacy owner', createdAt);
 	database
-		.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
+		.prepare(
+			'INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)'
+		)
 		.run('legacy-collection', 'legacy-tenant', 'legacy-user', 'Legacy collection', createdAt);
 	database
 		.prepare(
@@ -124,7 +128,9 @@ describe('collection repository', () => {
 		database.close();
 
 		// assume
-		expect(duplicateAdminError).toMatchObject({ message: 'an initial admin account already exists' });
+		expect(duplicateAdminError).toMatchObject({
+			message: 'an initial admin account already exists'
+		});
 		expect(instanceRoles).toEqual([{ user_id: admin.userId, role: 'instance_admin' }]);
 	});
 
@@ -143,7 +149,14 @@ describe('collection repository', () => {
 			.prepare(
 				'INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)'
 			)
-			.run('second-user', administrator.tenantId, 'blake', 'Blake', 'scrypt$test-salt$test-key', '2026-01-01T00:00:00.000Z');
+			.run(
+				'second-user',
+				administrator.tenantId,
+				'blake',
+				'Blake',
+				'scrypt$test-salt$test-key',
+				'2026-01-01T00:00:00.000Z'
+			);
 
 		let singletonRoleError: unknown;
 
@@ -157,7 +170,9 @@ describe('collection repository', () => {
 		}
 
 		// assume
-		expect(singletonRoleError).toMatchObject({ message: expect.stringMatching(/UNIQUE constraint failed/) });
+		expect(singletonRoleError).toMatchObject({
+			message: expect.stringMatching(/UNIQUE constraint failed/)
+		});
 		database.close();
 	});
 
@@ -175,13 +190,25 @@ describe('collection repository', () => {
 			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
 			.run('member-tenant', 'Member household', '2026-01-01T00:00:00.000Z');
 		database
-			.prepare('INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-			.run('member-user', 'member-tenant', 'blake', 'Blake', 'scrypt$test-salt$test-key', '2026-01-01T00:00:00.000Z');
+			.prepare(
+				'INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+			)
+			.run(
+				'member-user',
+				'member-tenant',
+				'blake',
+				'Blake',
+				'scrypt$test-salt$test-key',
+				'2026-01-01T00:00:00.000Z'
+			);
 		database.close();
 
 		// act
 		const administratorIsPrivileged = repository.isInstanceAdmin(instanceAdministrator);
-		const memberIsPrivileged = repository.isInstanceAdmin({ userId: 'member-user', tenantId: 'member-tenant' });
+		const memberIsPrivileged = repository.isInstanceAdmin({
+			userId: 'member-user',
+			tenantId: 'member-tenant'
+		});
 
 		// assume
 		expect(administratorIsPrivileged).toBe(true);
@@ -226,7 +253,9 @@ describe('collection repository', () => {
 		const database = new Database(databasePath, { readonly: true });
 		expect(database.prepare('SELECT COUNT(*) AS count FROM tenants').get()).toEqual({ count: 2 });
 		expect(database.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
-		expect(database.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual({ count: 1 });
+		expect(database.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual({
+			count: 1
+		});
 		expect(database.prepare('SELECT username FROM users ORDER BY username').all()).toEqual([
 			{ username: 'avery' },
 			{ username: 'blake' }
@@ -254,9 +283,9 @@ describe('collection repository', () => {
 				category: 'home',
 				condition: 'good',
 				internalNotes: 'Replace the bulb before listing.',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
 			},
 			admin
 		);
@@ -270,9 +299,9 @@ describe('collection repository', () => {
 				category: 'home',
 				condition: 'good',
 				internalNotes: 'Replace the bulb before listing.',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
 			})
 		]);
 	});
@@ -316,13 +345,29 @@ describe('collection repository', () => {
 		);
 
 		// act — search by title
-		const byTitle = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'lamp' }, admin);
+		const byTitle = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, query: 'lamp' },
+			admin
+		);
 		// act — search by internal note
-		const byNote = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'bulb' }, admin);
+		const byNote = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, query: 'bulb' },
+			admin
+		);
 		// act — search by external description
-		const byDescription = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'oak' }, admin);
+		const byDescription = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, query: 'oak' },
+			admin
+		);
 		// act — search without matches
-		const noMatch = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'missing-item' }, admin);
+		const noMatch = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, query: 'missing-item' },
+			admin
+		);
 
 		// assume
 		expect(byTitle.map((item) => item.id)).toEqual([lamp.id]);
@@ -386,14 +431,38 @@ describe('collection repository', () => {
 
 		// act — reserve the chair and sell the novel
 		repository.setItemReservation(chair.id, true, admin);
-		repository.markItemSold(novel.id, { channel: 'flea-market', soldAt: '2026-09-01T10:00:00.000Z', proceedsCents: 350 }, admin);
+		repository.markItemSold(
+			novel.id,
+			{ channel: 'flea-market', soldAt: '2026-09-01T10:00:00.000Z', proceedsCents: 350 },
+			admin
+		);
 
 		// act
-		const byCategory = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, category: 'home' }, admin);
-		const byCondition = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, condition: 'good' }, admin);
-		const openItems = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, status: 'open' }, admin);
-		const reservedItems = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, status: 'reserved' }, admin);
-		const soldItems = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, status: 'sold' }, admin);
+		const byCategory = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, category: 'home' },
+			admin
+		);
+		const byCondition = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, condition: 'good' },
+			admin
+		);
+		const openItems = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, status: 'open' },
+			admin
+		);
+		const reservedItems = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, status: 'reserved' },
+			admin
+		);
+		const soldItems = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, status: 'sold' },
+			admin
+		);
 		const combined = repository.searchItemsForOwner(
 			collection.id,
 			{ ...emptyItemFilters, category: 'furniture', condition: 'poor', status: 'reserved' },
@@ -435,7 +504,11 @@ describe('collection repository', () => {
 		const foreignScope = { userId: 'another-user', tenantId: admin.tenantId };
 
 		// act
-		const foreignResults = repository.searchItemsForOwner(collection.id, { ...emptyItemFilters, query: 'Novel' }, foreignScope);
+		const foreignResults = repository.searchItemsForOwner(
+			collection.id,
+			{ ...emptyItemFilters, query: 'Novel' },
+			foreignScope
+		);
 
 		// assume
 		expect(foreignResults).toEqual([]);
@@ -466,9 +539,9 @@ describe('collection repository', () => {
 					category: 'books',
 					condition: 'good',
 					internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
 				},
 				anotherScope
 			);
@@ -496,14 +569,22 @@ describe('collection repository', () => {
 		const migratedItem = migratedDatabase
 			.prepare('SELECT tenant_id, owner_id, collection_id FROM items WHERE id = ?')
 			.get('legacy-item');
-		const migratedSessionCount = migratedDatabase.prepare('SELECT COUNT(*) AS count FROM sessions').get();
-		const migratedImageCount = migratedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get();
+		const migratedSessionCount = migratedDatabase
+			.prepare('SELECT COUNT(*) AS count FROM sessions')
+			.get();
+		const migratedImageCount = migratedDatabase
+			.prepare('SELECT COUNT(*) AS count FROM item_images')
+			.get();
 		const migratedForeignKeyErrors = migratedDatabase.prepare('PRAGMA foreign_key_check').all();
 		migratedDatabase.close();
 
 		// assume
 		expect(legacyCollection).toMatchObject({ id: 'legacy-collection', name: 'Legacy collection' });
-		expect(migratedItem).toEqual({ tenant_id: 'legacy-tenant', owner_id: 'legacy-user', collection_id: 'legacy-collection' });
+		expect(migratedItem).toEqual({
+			tenant_id: 'legacy-tenant',
+			owner_id: 'legacy-user',
+			collection_id: 'legacy-collection'
+		});
 		expect(migratedSessionCount).toEqual({ count: 0 });
 		expect(migratedImageCount).toEqual({ count: 0 });
 		expect(migratedForeignKeyErrors).toEqual([]);
@@ -513,8 +594,12 @@ describe('collection repository', () => {
 		const reopenedDatabase = new Database(databasePath, { readonly: true });
 		const reopenedUserCount = reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get();
 		const reopenedItemCount = reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM items').get();
-		const reopenedSessionCount = reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM sessions').get();
-		const reopenedImageCount = reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get();
+		const reopenedSessionCount = reopenedDatabase
+			.prepare('SELECT COUNT(*) AS count FROM sessions')
+			.get();
+		const reopenedImageCount = reopenedDatabase
+			.prepare('SELECT COUNT(*) AS count FROM item_images')
+			.get();
 		const reopenedForeignKeyErrors = reopenedDatabase.prepare('PRAGMA foreign_key_check').all();
 		reopenedDatabase.close();
 
@@ -559,12 +644,18 @@ describe('collection repository', () => {
 			);
 		`);
 		const createdAt = '2026-01-01T00:00:00.000Z';
-		legacyDatabase.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)').run('tenant-a', 'Alpha', createdAt);
 		legacyDatabase
-			.prepare('INSERT INTO users (id, tenant_id, username, display_name, created_at) VALUES (?, ?, ?, ?, ?)')
+			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+			.run('tenant-a', 'Alpha', createdAt);
+		legacyDatabase
+			.prepare(
+				'INSERT INTO users (id, tenant_id, username, display_name, created_at) VALUES (?, ?, ?, ?, ?)'
+			)
 			.run('user-a', 'tenant-a', 'Alice', 'Alice', createdAt);
 		legacyDatabase
-			.prepare('INSERT INTO users (id, tenant_id, username, display_name, created_at) VALUES (?, ?, ?, ?, ?)')
+			.prepare(
+				'INSERT INTO users (id, tenant_id, username, display_name, created_at) VALUES (?, ?, ?, ?, ?)'
+			)
 			.run('user-b', 'tenant-a', 'alice', 'Alice duplicate', createdAt);
 		legacyDatabase.close();
 
@@ -578,7 +669,9 @@ describe('collection repository', () => {
 		}
 
 		// assume
-		expect(migrationError).toMatchObject({ message: expect.stringMatching(/UNIQUE constraint failed/) });
+		expect(migrationError).toMatchObject({
+			message: expect.stringMatching(/UNIQUE constraint failed/)
+		});
 
 		const unchangedDatabase = new Database(databasePath, { readonly: true });
 		expect(
@@ -611,17 +704,21 @@ describe('collection repository', () => {
 				category: 'home',
 				condition: 'good',
 				internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
 			},
 			alpha
 		);
 		const database = new Database(databasePath);
 		database.pragma('foreign_keys = ON');
-		database.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)').run('tenant-b', 'Beta', '2026-01-01T00:00:00.000Z');
 		database
-			.prepare('INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+			.run('tenant-b', 'Beta', '2026-01-01T00:00:00.000Z');
+		database
+			.prepare(
+				'INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+			)
 			.run('user-b', 'tenant-b', 'beta', 'Beta', 'scrypt$beta$hash', '2026-01-01T00:00:00.000Z');
 
 		const captureConstraintError = (operation: () => void): unknown => {
@@ -637,34 +734,70 @@ describe('collection repository', () => {
 		const constraintErrors = [
 			captureConstraintError(() =>
 				database
-					.prepare('INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-					.run('session-b', alpha.userId, 'tenant-b', 'token-b', '2099-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+					.prepare(
+						'INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+					)
+					.run(
+						'session-b',
+						alpha.userId,
+						'tenant-b',
+						'token-b',
+						'2099-01-01T00:00:00.000Z',
+						'2026-01-01T00:00:00.000Z'
+					)
 			),
 			captureConstraintError(() =>
 				database
-					.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
-					.run('collection-b', 'tenant-b', alpha.userId, 'Mixed collection', '2026-01-01T00:00:00.000Z')
+					.prepare(
+						'INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)'
+					)
+					.run(
+						'collection-b',
+						'tenant-b',
+						alpha.userId,
+						'Mixed collection',
+						'2026-01-01T00:00:00.000Z'
+					)
 			),
 			captureConstraintError(() =>
 				database
-					.prepare('INSERT INTO items (id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-					.run('item-b', 'tenant-b', alpha.userId, collection.id, 'Mixed item', 100, 'home', 'good', '', '2026-01-01T00:00:00.000Z')
+					.prepare(
+						'INSERT INTO items (id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+					)
+					.run(
+						'item-b',
+						'tenant-b',
+						alpha.userId,
+						collection.id,
+						'Mixed item',
+						100,
+						'home',
+						'good',
+						'',
+						'2026-01-01T00:00:00.000Z'
+					)
 			),
 			captureConstraintError(() =>
 				database
-					.prepare('INSERT INTO item_images (id, tenant_id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+					.prepare(
+						'INSERT INTO item_images (id, tenant_id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+					)
 					.run('image-b', 'tenant-b', item.id, 'items/mixed.jpg', 0, 1, '2026-01-01T00:00:00.000Z')
 			)
 		];
 		const indexNames = new Set(
 			['users', 'sessions', 'collections', 'items', 'item_images'].flatMap((tableName) =>
-				(database.prepare(`PRAGMA index_list(${tableName})`).all() as { name: string }[]).map(({ name }) => name)
+				(database.prepare(`PRAGMA index_list(${tableName})`).all() as { name: string }[]).map(
+					({ name }) => name
+				)
 			)
 		);
 
 		// assume
 		for (const constraintError of constraintErrors) {
-			expect(constraintError).toMatchObject({ message: expect.stringMatching(/FOREIGN KEY constraint failed/) });
+			expect(constraintError).toMatchObject({
+				message: expect.stringMatching(/FOREIGN KEY constraint failed/)
+			});
 		}
 		expect([...indexNames]).toEqual(
 			expect.arrayContaining([
@@ -707,8 +840,16 @@ describe('collection repository', () => {
 			.prepare('INSERT INTO users (id, tenant_id, display_name, created_at) VALUES (?, ?, ?, ?)')
 			.run('legacy-user', 'legacy-tenant', 'Legacy owner', '2026-01-01T00:00:00.000Z');
 		legacyDatabase
-			.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
-			.run('legacy-collection', 'legacy-tenant', 'legacy-user', 'Legacy collection', '2026-01-01T00:00:00.000Z');
+			.prepare(
+				'INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)'
+			)
+			.run(
+				'legacy-collection',
+				'legacy-tenant',
+				'legacy-user',
+				'Legacy collection',
+				'2026-01-01T00:00:00.000Z'
+			);
 		legacyDatabase.close();
 
 		// act
@@ -814,8 +955,12 @@ describe('collection repository', () => {
 			);
 		`);
 		const createdAt = '2026-01-01T00:00:00.000Z';
-		legacyDatabase.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)').run('tenant-a', 'Alpha', createdAt);
-		legacyDatabase.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)').run('tenant-b', 'Beta', createdAt);
+		legacyDatabase
+			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+			.run('tenant-a', 'Alpha', createdAt);
+		legacyDatabase
+			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+			.run('tenant-b', 'Beta', createdAt);
 		legacyDatabase
 			.prepare(
 				'INSERT INTO users (id, tenant_id, username, display_name, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -827,10 +972,14 @@ describe('collection repository', () => {
 			)
 			.run('user-b', 'tenant-b', 'beta-user', 'Beta User', 'scrypt$beta$hash', 0, createdAt);
 		legacyDatabase
-			.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
+			.prepare(
+				'INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)'
+			)
 			.run('collection-a', 'tenant-a', 'user-a', 'Alpha collection', createdAt);
 		legacyDatabase
-			.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
+			.prepare(
+				'INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)'
+			)
 			.run('collection-b', 'tenant-b', 'user-b', 'Beta collection', createdAt);
 		legacyDatabase
 			.prepare(
@@ -838,7 +987,9 @@ describe('collection repository', () => {
 			)
 			.run('item-a', 'collection-a', 'Alpha item', 100, 'home', 'good', '', createdAt);
 		legacyDatabase
-			.prepare('INSERT INTO item_images (id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+			.prepare(
+				'INSERT INTO item_images (id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+			)
 			.run('image-a', 'item-a', 'items/item-a/cover.jpg', 0, 1, createdAt);
 		legacyDatabase
 			.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
@@ -874,7 +1025,10 @@ describe('collection repository', () => {
 		]);
 
 		// act
-		const betaFollowUpCollection = repository.createCollection({ name: 'Beta follow-up' }, normalAccountScope);
+		const betaFollowUpCollection = repository.createCollection(
+			{ name: 'Beta follow-up' },
+			normalAccountScope
+		);
 
 		// assume
 		expect(betaFollowUpCollection).toMatchObject({
@@ -942,9 +1096,15 @@ describe('collection repository', () => {
 			{ version: '2026090901_market_days' },
 			{ version: '2026091001_expenses' }
 		]);
-		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
-		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM items').get()).toEqual({ count: 1 });
-		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get()).toEqual({ count: 1 });
+		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({
+			count: 2
+		});
+		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM items').get()).toEqual({
+			count: 1
+		});
+		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM item_images').get()).toEqual({
+			count: 1
+		});
 		expect(reopenedDatabase.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
 		reopenedDatabase.close();
 	});
@@ -971,8 +1131,17 @@ describe('collection repository', () => {
 		// act
 		const database = new Database(databasePath);
 		database
-			.prepare('INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-			.run('expired-session', admin.userId, admin.tenantId, 'expired-token-hash', '2000-01-01T00:00:00.000Z', '2000-01-01T00:00:00.000Z');
+			.prepare(
+				'INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+			)
+			.run(
+				'expired-session',
+				admin.userId,
+				admin.tenantId,
+				'expired-token-hash',
+				'2000-01-01T00:00:00.000Z',
+				'2000-01-01T00:00:00.000Z'
+			);
 		database.close();
 		const expiredSession = repository.getSession('expired-token-hash');
 
@@ -1007,17 +1176,33 @@ describe('collection repository', () => {
 		for (let attempt = 0; attempt < 5; attempt += 1) {
 			repository.recordLoginFailure('!', '127.0.0.3', now);
 		}
-		const unrelatedUserStatus = repository.getLoginAttemptStatus('unrelated-user', '127.0.0.3', now);
+		const unrelatedUserStatus = repository.getLoginAttemptStatus(
+			'unrelated-user',
+			'127.0.0.3',
+			now
+		);
 
 		// assume
 		expect(unrelatedUserStatus).toEqual({ blocked: true, retryAfterSeconds: 900 });
 
 		// act
 		repository.createSessionForUser(admin, 'reset-issuance-session-hash');
-		const createdReset = repository.createPasswordResetForUsername('avery', 'reset-secret-hash', '2030-01-02T00:00:00.000Z');
+		const createdReset = repository.createPasswordResetForUsername(
+			'avery',
+			'reset-secret-hash',
+			'2030-01-02T00:00:00.000Z'
+		);
 		const resetIssuanceSession = repository.getSession('reset-issuance-session-hash');
-		const resetScope = repository.consumePasswordReset('avery', 'reset-secret-hash', 'scrypt$v1$16384$8$1$salt$key');
-		const consumedResetScope = repository.consumePasswordReset('avery', 'reset-secret-hash', 'scrypt$v1$16384$8$1$salt$key');
+		const resetScope = repository.consumePasswordReset(
+			'avery',
+			'reset-secret-hash',
+			'scrypt$v1$16384$8$1$salt$key'
+		);
+		const consumedResetScope = repository.consumePasswordReset(
+			'avery',
+			'reset-secret-hash',
+			'scrypt$v1$16384$8$1$salt$key'
+		);
 		const originalSession = repository.getSession('session-token-hash');
 		const resetUser = repository.getUserForLogin('avery');
 
@@ -1047,9 +1232,9 @@ describe('collection repository', () => {
 				category: 'hobby',
 				condition: 'good',
 				internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
 			},
 			owner
 		);
@@ -1083,9 +1268,9 @@ describe('collection repository', () => {
 				category: 'hobby',
 				condition: 'fair',
 				internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
 			},
 			owner
 		);
@@ -1121,9 +1306,9 @@ describe('collection repository', () => {
 				category: 'furniture',
 				condition: 'fair',
 				internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
 			},
 			owner
 		);
@@ -1154,17 +1339,31 @@ describe('collection repository', () => {
 		const firstCollection = repository.createCollection({ name: 'First' }, owner);
 		const secondCollection = repository.createCollection({ name: 'Second' }, owner);
 		const firstItem = repository.createItem(
-			{ collectionId: firstCollection.id, title: 'First item', priceCents: 100, category: 'home', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: firstCollection.id,
+				title: 'First item',
+				priceCents: 100,
+				category: 'home',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const secondItem = repository.createItem(
-			{ collectionId: secondCollection.id, title: 'Second item', priceCents: 200, category: 'books', condition: 'fair', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: secondCollection.id,
+				title: 'Second item',
+				priceCents: 200,
+				category: 'books',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const database = new Database(databasePath);
@@ -1172,16 +1371,32 @@ describe('collection repository', () => {
 			.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
 			.run('other-tenant', 'Other household', '2026-01-01T00:00:00.000Z');
 		database
-			.prepare('INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-			.run('other-user', 'other-tenant', 'blake', 'Blake', 'scrypt$test-salt$test-key', '2026-01-01T00:00:00.000Z');
+			.prepare(
+				'INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+			)
+			.run(
+				'other-user',
+				'other-tenant',
+				'blake',
+				'Blake',
+				'scrypt$test-salt$test-key',
+				'2026-01-01T00:00:00.000Z'
+			);
 		database.close();
 		const otherScope = { userId: 'other-user', tenantId: 'other-tenant' };
 		const otherCollection = repository.createCollection({ name: 'Other' }, otherScope);
 		const otherItem = repository.createItem(
-			{ collectionId: otherCollection.id, title: 'Other item', priceCents: 300, category: 'tools', condition: 'poor', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: otherCollection.id,
+				title: 'Other item',
+				priceCents: 300,
+				category: 'tools',
+				condition: 'poor',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			otherScope
 		);
 		let duplicateContentError: unknown;
@@ -1193,9 +1408,21 @@ describe('collection repository', () => {
 
 		// assume
 		expect(duplicateContentError).toBeUndefined();
-		expect(firstOwnerImage).toMatchObject({ storageKey: 'same-content.png', position: 0, isCover: true });
-		expect(secondOwnerImage).toMatchObject({ storageKey: 'same-content.png', position: 0, isCover: true });
-		expect(otherTenantImage).toMatchObject({ storageKey: 'same-content.png', position: 0, isCover: true });
+		expect(firstOwnerImage).toMatchObject({
+			storageKey: 'same-content.png',
+			position: 0,
+			isCover: true
+		});
+		expect(secondOwnerImage).toMatchObject({
+			storageKey: 'same-content.png',
+			position: 0,
+			isCover: true
+		});
+		expect(otherTenantImage).toMatchObject({
+			storageKey: 'same-content.png',
+			position: 0,
+			isCover: true
+		});
 	});
 
 	it('migrates legacy items to carry sale and market-day fields while preserving every row', () => {
@@ -1236,22 +1463,39 @@ describe('collection repository', () => {
 			.prepare('INSERT INTO users (id, tenant_id, display_name, created_at) VALUES (?, ?, ?, ?)')
 			.run('sale-user', 'sale-tenant', 'Sale owner', '2026-01-01T00:00:00.000Z');
 		legacyDatabase
-			.prepare('INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)')
-			.run('sale-collection', 'sale-tenant', 'sale-user', 'Sale collection', '2026-01-01T00:00:00.000Z');
+			.prepare(
+				'INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)'
+			)
+			.run(
+				'sale-collection',
+				'sale-tenant',
+				'sale-user',
+				'Sale collection',
+				'2026-01-01T00:00:00.000Z'
+			);
 		legacyDatabase
 			.prepare(
 				'INSERT INTO items (id, collection_id, title, price_cents, category, condition, internal_notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
 			)
-			.run('sold-item', 'sale-collection', 'Sold legacy item', 500, 'books', 'good', '', '2026-01-01T00:00:00.000Z');
+			.run(
+				'sold-item',
+				'sale-collection',
+				'Sold legacy item',
+				500,
+				'books',
+				'good',
+				'',
+				'2026-01-01T00:00:00.000Z'
+			);
 		legacyDatabase.close();
 
 		// act
 		const repository = createCollectionRepository({ databasePath });
 		const saleScope = { userId: 'sale-user', tenantId: 'sale-tenant' };
 		const database = new Database(databasePath, { readonly: true });
-		const itemColumns = (database.prepare('PRAGMA table_info(items)').all() as { name: string }[]).map(
-			({ name }) => name
-		);
+		const itemColumns = (
+			database.prepare('PRAGMA table_info(items)').all() as { name: string }[]
+		).map(({ name }) => name);
 		const legacyItemCount = database.prepare('SELECT COUNT(*) AS count FROM items').get();
 		const foreignKeyErrors = database.prepare('PRAGMA foreign_key_check').all();
 		database.close();
@@ -1284,10 +1528,17 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const foreignScope = { userId: 'other-user', tenantId: 'other-tenant' };
@@ -1313,7 +1564,11 @@ describe('collection repository', () => {
 		try {
 			repository.markItemSold(
 				item.id,
-				{ channel: 'not-a-channel' as never, soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
+				{
+					channel: 'not-a-channel' as never,
+					soldAt: '2026-08-31T10:30:00.000Z',
+					proceedsCents: 750
+				},
 				owner
 			);
 		} catch (error) {
@@ -1329,8 +1584,14 @@ describe('collection repository', () => {
 		});
 		expect(listedItem).toMatchObject({ saleChannel: 'flea-market', saleProceedsCents: 750 });
 		expect(foreignSaleError).toMatchObject({ message: 'item was not found' });
-		expect(invalidChannelError).toMatchObject({ message: 'channel is not a supported sale channel' });
-		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null });
+		expect(invalidChannelError).toMatchObject({
+			message: 'channel is not a supported sale channel'
+		});
+		expect(reopenedItem).toMatchObject({
+			saleChannel: null,
+			soldAt: null,
+			saleProceedsCents: null
+		});
 	});
 
 	it('manages owner-scoped expenses with categories and tenant isolation', () => {
@@ -1348,7 +1609,14 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const marketDay = repository.createMarketDay(
-			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			{
+				name: 'May market',
+				date: '2026-05-16',
+				startTime: null,
+				endTime: null,
+				location: '',
+				notes: ''
+			},
 			owner
 		);
 		let invalidAmountError: unknown;
@@ -1368,12 +1636,24 @@ describe('collection repository', () => {
 			owner
 		);
 		repository.createExpense(
-			{ label: 'Kaffee', category: 'other', expenseDate: '2026-05-16', marketDayId: null, amountCents: 350 },
+			{
+				label: 'Kaffee',
+				category: 'other',
+				expenseDate: '2026-05-16',
+				marketDayId: null,
+				amountCents: 350
+			},
 			owner
 		);
 		try {
 			repository.createExpense(
-				{ label: 'Negativ', category: 'other', expenseDate: '2026-05-16', marketDayId: null, amountCents: -5 },
+				{
+					label: 'Negativ',
+					category: 'other',
+					expenseDate: '2026-05-16',
+					marketDayId: null,
+					amountCents: -5
+				},
 				owner
 			);
 		} catch (error) {
@@ -1381,7 +1661,13 @@ describe('collection repository', () => {
 		}
 		try {
 			repository.createExpense(
-				{ label: 'Falsche Kategorie', category: 'not-a-category' as never, expenseDate: '2026-05-16', marketDayId: null, amountCents: 100 },
+				{
+					label: 'Falsche Kategorie',
+					category: 'not-a-category' as never,
+					expenseDate: '2026-05-16',
+					marketDayId: null,
+					amountCents: 100
+				},
 				owner
 			);
 		} catch (error) {
@@ -1389,7 +1675,13 @@ describe('collection repository', () => {
 		}
 		try {
 			repository.createExpense(
-				{ label: 'Falsches Datum', category: 'other', expenseDate: '16.05.2026', marketDayId: null, amountCents: 100 },
+				{
+					label: 'Falsches Datum',
+					category: 'other',
+					expenseDate: '16.05.2026',
+					marketDayId: null,
+					amountCents: 100
+				},
 				owner
 			);
 		} catch (error) {
@@ -1397,7 +1689,13 @@ describe('collection repository', () => {
 		}
 		try {
 			repository.createExpense(
-				{ label: 'Fremder Markttag', category: 'other', expenseDate: '2026-05-16', marketDayId: 'missing-day', amountCents: 100 },
+				{
+					label: 'Fremder Markttag',
+					category: 'other',
+					expenseDate: '2026-05-16',
+					marketDayId: 'missing-day',
+					amountCents: 100
+				},
 				owner
 			);
 		} catch (error) {
@@ -1418,7 +1716,9 @@ describe('collection repository', () => {
 		expect(invalidAmountError).toMatchObject({ message: expect.stringMatching(/amountCents/) });
 		expect(invalidCategoryError).toMatchObject({ message: expect.stringMatching(/category/) });
 		expect(invalidDateError).toMatchObject({ message: expect.stringMatching(/YYYY-MM-DD/) });
-		expect(foreignMarketDayError).toMatchObject({ message: expect.stringMatching(/market day was not found/) });
+		expect(foreignMarketDayError).toMatchObject({
+			message: expect.stringMatching(/market day was not found/)
+		});
 
 		// act — another owner cannot list, update or delete foreign expenses
 		expect(secondRepository.listExpenses(blake)).toEqual([]);
@@ -1430,13 +1730,21 @@ describe('collection repository', () => {
 		}
 
 		// assume
-		expect(crossDeleteError).toMatchObject({ message: expect.stringMatching(/expense was not found/) });
+		expect(crossDeleteError).toMatchObject({
+			message: expect.stringMatching(/expense was not found/)
+		});
 		expect(repository.listExpenses(owner)).toHaveLength(2);
 
 		// act — update and delete an own expense
 		const updated = repository.updateExpense(
 			created.id,
-			{ label: 'Standgebühr erhöht', category: 'fee', amountCents: 1800, expenseDate: '2026-05-16', marketDayId: marketDay.id },
+			{
+				label: 'Standgebühr erhöht',
+				category: 'fee',
+				amountCents: 1800,
+				expenseDate: '2026-05-16',
+				marketDayId: marketDay.id
+			},
 			owner
 		);
 		repository.deleteExpense(listed[1]!.id, owner);
@@ -1462,26 +1770,105 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const marketDay = repository.createMarketDay(
-			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			{
+				name: 'May market',
+				date: '2026-05-16',
+				startTime: null,
+				endTime: null,
+				location: '',
+				notes: ''
+			},
 			owner
 		);
 		const otherMarketDay = repository.createMarketDay(
-			{ name: 'June market', date: '2026-06-20', startTime: null, endTime: null, location: '', notes: '' },
+			{
+				name: 'June market',
+				date: '2026-06-20',
+				startTime: null,
+				endTime: null,
+				location: '',
+				notes: ''
+			},
 			owner
 		);
 		const vase = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const book = repository.createItem(
-			{ collectionId: collection.id, title: 'Book', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Book',
+				priceCents: 300,
+				category: 'books',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
-		repository.markItemSold(vase.id, { channel: 'flea-market', soldAt: '2026-05-16T10:00:00.000Z', proceedsCents: 750, marketDayId: marketDay.id }, owner);
-		repository.markItemSold(book.id, { channel: 'private-sale', soldAt: '2026-05-17T10:00:00.000Z', proceedsCents: 250, marketDayId: marketDay.id }, owner);
-		repository.createExpense({ label: 'Standgebühr', category: 'fee', amountCents: 500, expenseDate: '2026-05-16', marketDayId: marketDay.id }, owner);
-		repository.createExpense({ label: 'Kaffee', category: 'supplies', amountCents: 200, expenseDate: '2026-05-16', marketDayId: marketDay.id }, owner);
-		repository.createExpense({ label: 'Anderer Tag', category: 'fee', amountCents: 999, expenseDate: '2026-06-20', marketDayId: otherMarketDay.id }, owner);
+		repository.markItemSold(
+			vase.id,
+			{
+				channel: 'flea-market',
+				soldAt: '2026-05-16T10:00:00.000Z',
+				proceedsCents: 750,
+				marketDayId: marketDay.id
+			},
+			owner
+		);
+		repository.markItemSold(
+			book.id,
+			{
+				channel: 'private-sale',
+				soldAt: '2026-05-17T10:00:00.000Z',
+				proceedsCents: 250,
+				marketDayId: marketDay.id
+			},
+			owner
+		);
+		repository.createExpense(
+			{
+				label: 'Standgebühr',
+				category: 'fee',
+				amountCents: 500,
+				expenseDate: '2026-05-16',
+				marketDayId: marketDay.id
+			},
+			owner
+		);
+		repository.createExpense(
+			{
+				label: 'Kaffee',
+				category: 'supplies',
+				amountCents: 200,
+				expenseDate: '2026-05-16',
+				marketDayId: marketDay.id
+			},
+			owner
+		);
+		repository.createExpense(
+			{
+				label: 'Anderer Tag',
+				category: 'fee',
+				amountCents: 999,
+				expenseDate: '2026-06-20',
+				marketDayId: otherMarketDay.id
+			},
+			owner
+		);
 
 		// act
 		const settlement = repository.getMarketDaySettlement(marketDay.id, owner);
@@ -1507,32 +1894,114 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const marketDay = repository.createMarketDay(
-			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			{
+				name: 'May market',
+				date: '2026-05-16',
+				startTime: null,
+				endTime: null,
+				location: '',
+				notes: ''
+			},
 			owner
 		);
 		const firstItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const secondItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Book', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Book',
+				priceCents: 300,
+				category: 'books',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
-		repository.markItemSold(firstItem.id, { channel: 'flea-market', soldAt: '2026-05-16T10:00:00.000Z', proceedsCents: 750, marketDayId: marketDay.id }, owner);
-		repository.markItemSold(secondItem.id, { channel: 'online-marketplace', soldAt: '2026-05-17T10:00:00.000Z', proceedsCents: 250 }, owner);
+		repository.markItemSold(
+			firstItem.id,
+			{
+				channel: 'flea-market',
+				soldAt: '2026-05-16T10:00:00.000Z',
+				proceedsCents: 750,
+				marketDayId: marketDay.id
+			},
+			owner
+		);
+		repository.markItemSold(
+			secondItem.id,
+			{ channel: 'online-marketplace', soldAt: '2026-05-17T10:00:00.000Z', proceedsCents: 250 },
+			owner
+		);
 
 		// act
-		const allSales = repository.getSaleHistory(owner, { channel: null, category: null, proceedsMinCents: null, proceedsMaxCents: null });
-		const marketplaceSales = repository.getSaleHistory(owner, { channel: 'online-marketplace', category: null, proceedsMinCents: null, proceedsMaxCents: null });
-		const decorSales = repository.getSaleHistory(owner, { channel: null, category: 'decor', proceedsMinCents: null, proceedsMaxCents: null });
-		const cheapSales = repository.getSaleHistory(owner, { channel: null, category: null, proceedsMinCents: 200, proceedsMaxCents: 500 });
-		const emptyRangeSales = repository.getSaleHistory(owner, { channel: null, category: null, proceedsMinCents: 800, proceedsMaxCents: 900 });
-		const foreignSales = repository.getSaleHistory({ userId: 'other-user', tenantId: 'other-tenant' }, { channel: null, category: null, proceedsMinCents: null, proceedsMaxCents: null });
+		const allSales = repository.getSaleHistory(owner, {
+			channel: null,
+			category: null,
+			proceedsMinCents: null,
+			proceedsMaxCents: null
+		});
+		const marketplaceSales = repository.getSaleHistory(owner, {
+			channel: 'online-marketplace',
+			category: null,
+			proceedsMinCents: null,
+			proceedsMaxCents: null
+		});
+		const decorSales = repository.getSaleHistory(owner, {
+			channel: null,
+			category: 'decor',
+			proceedsMinCents: null,
+			proceedsMaxCents: null
+		});
+		const cheapSales = repository.getSaleHistory(owner, {
+			channel: null,
+			category: null,
+			proceedsMinCents: 200,
+			proceedsMaxCents: 500
+		});
+		const emptyRangeSales = repository.getSaleHistory(owner, {
+			channel: null,
+			category: null,
+			proceedsMinCents: 800,
+			proceedsMaxCents: 900
+		});
+		const foreignSales = repository.getSaleHistory(
+			{ userId: 'other-user', tenantId: 'other-tenant' },
+			{ channel: null, category: null, proceedsMinCents: null, proceedsMaxCents: null }
+		);
 
 		// assume
 		expect(allSales).toEqual([
-			expect.objectContaining({ itemId: secondItem.id, itemTitle: 'Book', saleChannel: 'online-marketplace', saleProceedsCents: 250, marketDayId: null, marketDayName: null }),
-			expect.objectContaining({ itemId: firstItem.id, itemTitle: 'Vase', saleChannel: 'flea-market', saleProceedsCents: 750, marketDayId: marketDay.id, marketDayName: 'May market' })
+			expect.objectContaining({
+				itemId: secondItem.id,
+				itemTitle: 'Book',
+				saleChannel: 'online-marketplace',
+				saleProceedsCents: 250,
+				marketDayId: null,
+				marketDayName: null
+			}),
+			expect.objectContaining({
+				itemId: firstItem.id,
+				itemTitle: 'Vase',
+				saleChannel: 'flea-market',
+				saleProceedsCents: 750,
+				marketDayId: marketDay.id,
+				marketDayName: 'May market'
+			})
 		]);
 		expect(marketplaceSales).toEqual([expect.objectContaining({ itemId: secondItem.id })]);
 		expect(decorSales).toEqual([expect.objectContaining({ itemId: firstItem.id })]);
@@ -1551,19 +2020,54 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const firstMarketDay = repository.createMarketDay(
-			{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
+			{
+				name: 'May market',
+				date: '2026-05-16',
+				startTime: null,
+				endTime: null,
+				location: '',
+				notes: ''
+			},
 			owner
 		);
 		const item = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
-		repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-05-16T10:00:00.000Z', proceedsCents: 750, marketDayId: firstMarketDay.id }, owner);
+		repository.markItemSold(
+			item.id,
+			{
+				channel: 'flea-market',
+				soldAt: '2026-05-16T10:00:00.000Z',
+				proceedsCents: 750,
+				marketDayId: firstMarketDay.id
+			},
+			owner
+		);
 		let duplicateSaleError: unknown;
 
 		// act
 		try {
-			repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-05-16T10:01:00.000Z', proceedsCents: 700, marketDayId: firstMarketDay.id }, owner);
+			repository.markItemSold(
+				item.id,
+				{
+					channel: 'flea-market',
+					soldAt: '2026-05-16T10:01:00.000Z',
+					proceedsCents: 700,
+					marketDayId: firstMarketDay.id
+				},
+				owner
+			);
 		} catch (error) {
 			duplicateSaleError = error;
 		}
@@ -1572,7 +2076,12 @@ describe('collection repository', () => {
 		// assume
 		expect(duplicateSaleError).toMatchObject({ message: 'item is already sold' });
 
-		expect(reopenedItem).toMatchObject({ saleChannel: null, soldAt: null, saleProceedsCents: null, marketDayId: null });
+		expect(reopenedItem).toMatchObject({
+			saleChannel: null,
+			soldAt: null,
+			saleProceedsCents: null,
+			marketDayId: null
+		});
 	});
 
 	it('aggregates sale statistics per channel and month for the owning tenant only', () => {
@@ -1585,29 +2094,62 @@ describe('collection repository', () => {
 		});
 		const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const firstItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const secondItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Lampe', priceCents: 1500, category: 'decor', condition: 'fair', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Lampe',
+				priceCents: 1500,
+				category: 'decor',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const thirdItem = repository.createItem(
-			{ collectionId: collection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: collection.id,
+				title: 'Buch',
+				priceCents: 300,
+				category: 'books',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
-		repository.markItemSold(firstItem.id, { channel: 'flea-market', soldAt: '2026-07-12T09:00:00.000Z', proceedsCents: 700 }, owner);
-		repository.markItemSold(secondItem.id, { channel: 'flea-market', soldAt: '2026-08-02T09:00:00.000Z', proceedsCents: 1400 }, owner);
-		repository.markItemSold(thirdItem.id, { channel: 'online-marketplace', soldAt: '2026-08-20T09:00:00.000Z', proceedsCents: 250 }, owner);
+		repository.markItemSold(
+			firstItem.id,
+			{ channel: 'flea-market', soldAt: '2026-07-12T09:00:00.000Z', proceedsCents: 700 },
+			owner
+		);
+		repository.markItemSold(
+			secondItem.id,
+			{ channel: 'flea-market', soldAt: '2026-08-02T09:00:00.000Z', proceedsCents: 1400 },
+			owner
+		);
+		repository.markItemSold(
+			thirdItem.id,
+			{ channel: 'online-marketplace', soldAt: '2026-08-20T09:00:00.000Z', proceedsCents: 250 },
+			owner
+		);
 		const foreignScope = { userId: 'other-user', tenantId: 'other-tenant' };
 
 		// act
@@ -1662,28 +2204,53 @@ describe('collection repository', () => {
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const availableItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: 'Nur abends abgeben',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: 'Nur abends abgeben',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const secondAvailableItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Buch',
+				priceCents: 300,
+				category: 'books',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const privateNotesItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair', internalNotes: 'Privates Detail',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Geheime Lampe',
+				priceCents: 1500,
+				category: 'decor',
+				condition: 'fair',
+				internalNotes: 'Privates Detail',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		repository.setItemReservation(privateNotesItem.id, true, owner);
-		repository.markItemSold(availableItem.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, owner);
+		repository.markItemSold(
+			availableItem.id,
+			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
+			owner
+		);
 		const unknownCollectionId = '00000000-0000-0000-0000-000000000000';
 		let unknownStandView: ReturnType<typeof repository.getPublicStandView>;
 
@@ -1699,8 +2266,24 @@ describe('collection repository', () => {
 			ownerAvatarStorageKey: null,
 			intro: '',
 			items: expect.arrayContaining([
-				expect.objectContaining({ id: privateNotesItem.id, title: 'Geheime Lampe', priceCents: 1500, category: 'decor', condition: 'fair', reservedAt: expect.any(String), images: [] }),
-				expect.objectContaining({ id: secondAvailableItem.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', reservedAt: null, images: [] })
+				expect.objectContaining({
+					id: privateNotesItem.id,
+					title: 'Geheime Lampe',
+					priceCents: 1500,
+					category: 'decor',
+					condition: 'fair',
+					reservedAt: expect.any(String),
+					images: []
+				}),
+				expect.objectContaining({
+					id: secondAvailableItem.id,
+					title: 'Buch',
+					priceCents: 300,
+					category: 'books',
+					condition: 'fair',
+					reservedAt: null,
+					images: []
+				})
 			])
 		});
 		for (const entry of publicView?.items ?? []) {
@@ -1722,28 +2305,53 @@ describe('collection repository', () => {
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const visibleItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: 'Nur abends abgeben',
-			externalDescription: 'Handgefertigte Keramikvase.',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: 'Nur abends abgeben',
+				externalDescription: 'Handgefertigte Keramikvase.',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const reservedItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Reservierte Lampe', priceCents: 1500, category: 'decor', condition: 'fair', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Reservierte Lampe',
+				priceCents: 1500,
+				category: 'decor',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const soldItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Verkauftes Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Verkauftes Buch',
+				priceCents: 300,
+				category: 'books',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		repository.setItemReservation(reservedItem.id, true, owner);
-		repository.markItemSold(soldItem.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, owner);
+		repository.markItemSold(
+			soldItem.id,
+			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
+			owner
+		);
 		const unknownId = '00000000-0000-0000-0000-000000000000';
 		let unknownItem: ReturnType<typeof repository.getPublicStandItem>;
 		let soldResult: ReturnType<typeof repository.getPublicStandItem>;
@@ -1786,15 +2394,28 @@ describe('collection repository', () => {
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const item = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		repository.addItemImage(item.id, 'hash-second.webp', owner);
 		repository.addItemImage(item.id, 'hash-cover.png', owner);
-		repository.setItemCover(item.id, repository.listItemImages(item.id, owner).find((image) => image.storageKey === 'hash-cover.png')!.id, owner);
+		repository.setItemCover(
+			item.id,
+			repository
+				.listItemImages(item.id, owner)
+				.find((image) => image.storageKey === 'hash-cover.png')!.id,
+			owner
+		);
 		// note: the first added image ('hash-second.webp') was the automatic cover before the explicit set
 		const unknownKey = 'unknown-hash.png';
 		let publicViewAfterSale: ReturnType<typeof repository.getPublicStandView>;
@@ -1822,7 +2443,11 @@ describe('collection repository', () => {
 		expect(unknownImage).toBeNull();
 
 		// act — after the sale, the images disappear from the public view entirely
-		repository.markItemSold(item.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, owner);
+		repository.markItemSold(
+			item.id,
+			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
+			owner
+		);
 		publicViewAfterSale = repository.getPublicStandView(standCollection.id);
 
 		// assume
@@ -1866,47 +2491,103 @@ describe('collection repository', () => {
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const titleMatch = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Keramikvase blau', priceCents: 800, category: 'decor', condition: 'good', internalNotes: 'GeheimwortXYZ',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Keramikvase blau',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: 'GeheimwortXYZ',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const descriptionMatch = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Buch', priceCents: 300, category: 'books', condition: 'fair', internalNotes: '',
-			externalDescription: 'Deko für das Regal.',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Buch',
+				priceCents: 300,
+				category: 'books',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: 'Deko für das Regal.',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const reservedItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Reservierte Lampe', priceCents: 1500, category: 'home', condition: 'good', internalNotes: '',
-			externalDescription: '',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Reservierte Lampe',
+				priceCents: 1500,
+				category: 'home',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		const soldItem = repository.createItem(
-			{ collectionId: standCollection.id, title: 'Deko-Kerze verkauft', priceCents: 200, category: 'decor', condition: 'good', internalNotes: '',
-			externalDescription: 'Deko mit GeheimwortXYZ',
-			isComplete: false,
-			isFunctional: false },
+			{
+				collectionId: standCollection.id,
+				title: 'Deko-Kerze verkauft',
+				priceCents: 200,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: 'Deko mit GeheimwortXYZ',
+				isComplete: false,
+				isFunctional: false
+			},
 			owner
 		);
 		repository.setItemReservation(reservedItem.id, true, owner);
-		repository.markItemSold(soldItem.id, { channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 }, owner);
+		repository.markItemSold(
+			soldItem.id,
+			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
+			owner
+		);
 		const unknownFilters = { ...emptyItemFilters };
 		let reservedResults: ReturnType<typeof repository.searchPublicStandItems>;
 
 		// act
-		const titleResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, query: 'Keramikvase' });
-		const descriptionResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, query: 'Deko' });
-		const internalNoteResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, query: 'GeheimwortXYZ' });
-		const openResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, status: 'open' });
-		reservedResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, status: 'reserved' });
-		const soldStatusResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, status: 'sold' });
-		const categoryResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, category: 'books' });
-		const conditionResults = repository.searchPublicStandItems(standCollection.id, { ...emptyItemFilters, condition: 'fair' });
+		const titleResults = repository.searchPublicStandItems(standCollection.id, {
+			...emptyItemFilters,
+			query: 'Keramikvase'
+		});
+		const descriptionResults = repository.searchPublicStandItems(standCollection.id, {
+			...emptyItemFilters,
+			query: 'Deko'
+		});
+		const internalNoteResults = repository.searchPublicStandItems(standCollection.id, {
+			...emptyItemFilters,
+			query: 'GeheimwortXYZ'
+		});
+		const openResults = repository.searchPublicStandItems(standCollection.id, {
+			...emptyItemFilters,
+			status: 'open'
+		});
+		reservedResults = repository.searchPublicStandItems(standCollection.id, {
+			...emptyItemFilters,
+			status: 'reserved'
+		});
+		const soldStatusResults = repository.searchPublicStandItems(standCollection.id, {
+			...emptyItemFilters,
+			status: 'sold'
+		});
+		const categoryResults = repository.searchPublicStandItems(standCollection.id, {
+			...emptyItemFilters,
+			category: 'books'
+		});
+		const conditionResults = repository.searchPublicStandItems(standCollection.id, {
+			...emptyItemFilters,
+			condition: 'fair'
+		});
 
 		// assume
 		expect(titleResults.map((item) => item.id)).toEqual([titleMatch.id]);
@@ -1915,7 +2596,9 @@ describe('collection repository', () => {
 		// item with the secret in its internal notes must not surface
 		expect(internalNoteResults.map((item) => item.id)).not.toContain(reservedItem.id);
 		expect(openResults).toHaveLength(2);
-		expect(new Set(openResults.map((item) => item.id))).toEqual(new Set([titleMatch.id, descriptionMatch.id]));
+		expect(new Set(openResults.map((item) => item.id))).toEqual(
+			new Set([titleMatch.id, descriptionMatch.id])
+		);
 		expect(reservedResults.map((item) => item.id)).toEqual([reservedItem.id]);
 		// 'sold' is not a public status; the filter is ignored and all unsold items are listed
 		expect(soldStatusResults).toHaveLength(3);
@@ -2010,17 +2693,33 @@ describe('collection repository', () => {
 		let invalidDateError: unknown;
 		let invalidTimeRangeError: unknown;
 		try {
-			repository.createMarketDay({ name: '   ', date: null, startTime: null, endTime: null, location: '', notes: '' }, avery);
+			repository.createMarketDay(
+				{ name: '   ', date: null, startTime: null, endTime: null, location: '', notes: '' },
+				avery
+			);
 		} catch (error) {
 			invalidNameError = error;
 		}
 		try {
-			repository.createMarketDay({ name: 'X', date: '16.05.2026', startTime: null, endTime: null, location: '', notes: '' }, avery);
+			repository.createMarketDay(
+				{ name: 'X', date: '16.05.2026', startTime: null, endTime: null, location: '', notes: '' },
+				avery
+			);
 		} catch (error) {
 			invalidDateError = error;
 		}
 		try {
-			repository.createMarketDay({ name: 'X', date: '2026-05-16', startTime: '18:00', endTime: '08:00', location: '', notes: '' }, avery);
+			repository.createMarketDay(
+				{
+					name: 'X',
+					date: '2026-05-16',
+					startTime: '18:00',
+					endTime: '08:00',
+					location: '',
+					notes: ''
+				},
+				avery
+			);
 		} catch (error) {
 			invalidTimeRangeError = error;
 		}
@@ -2033,13 +2732,19 @@ describe('collection repository', () => {
 		// act — another tenant cannot see or modify the market day
 		let crossAccessError: unknown;
 		try {
-			secondRepository.updateMarketDay(created.id, { name: 'Hacked', date: null, startTime: null, endTime: null, location: '', notes: '' }, blake);
+			secondRepository.updateMarketDay(
+				created.id,
+				{ name: 'Hacked', date: null, startTime: null, endTime: null, location: '', notes: '' },
+				blake
+			);
 		} catch (error) {
 			crossAccessError = error;
 		}
 
 		// assume
-		expect(crossAccessError).toMatchObject({ message: expect.stringMatching(/market day was not found/) });
+		expect(crossAccessError).toMatchObject({
+			message: expect.stringMatching(/market day was not found/)
+		});
 		expect(secondRepository.listMarketDays(blake)).toEqual([]);
 		expect(repository.listMarketDays(avery)).toHaveLength(1);
 

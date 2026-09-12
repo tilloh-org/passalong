@@ -120,7 +120,11 @@ function archivePathToBuffer(archive: Buffer, entry: ArchiveEntry): Buffer {
 	return archive.subarray(entry.payloadOffset, entry.payloadOffset + entry.size);
 }
 
-function readArchiveEntry(archive: Buffer, entries: Map<string, ArchiveEntry>, path: string): Buffer {
+function readArchiveEntry(
+	archive: Buffer,
+	entries: Map<string, ArchiveEntry>,
+	path: string
+): Buffer {
 	const entry = entries.get(path);
 	if (!entry) {
 		throw new Error('export archive is missing a required file');
@@ -128,7 +132,10 @@ function readArchiveEntry(archive: Buffer, entries: Map<string, ArchiveEntry>, p
 	return archivePathToBuffer(archive, entry);
 }
 
-function verifyArchiveManifestFile(archive: Buffer): { manifest: AccountExportManifest; entries: Map<string, ArchiveEntry> } {
+function verifyArchiveManifestFile(archive: Buffer): {
+	manifest: AccountExportManifest;
+	entries: Map<string, ArchiveEntry>;
+} {
 	if (!hasValidEndOfCentralDirectory(archive)) {
 		throw new Error('export archive is not a valid account export');
 	}
@@ -163,7 +170,6 @@ function addFile(
 	};
 }
 
-
 /**
  * Create a portable account archive containing the current user's collections,
  * items, item images, and optional avatar.
@@ -193,7 +199,11 @@ export async function createAccountExport(
 			for (let imageIndex = 0; imageIndex < images.length; imageIndex += 1) {
 				const image = images[imageIndex];
 				const imageKey = `image-${collectionIndex + 1}-${itemIndex + 1}-${imageIndex + 1}`;
-				const imagePath = archiveFilePath(collectionKey, itemKey, `${imageKey}${fileNameFromStorageKey(image.storageKey)}`);
+				const imagePath = archiveFilePath(
+					collectionKey,
+					itemKey,
+					`${imageKey}${fileNameFromStorageKey(image.storageKey)}`
+				);
 				const payload = readFileSync(join(mediaRoot, image.storageKey));
 				addFile(files, manifestFiles, imagePath, payload);
 				exportedImages.push({ key: imageKey, file: imagePath, isCover: image.isCover });
@@ -331,12 +341,20 @@ export async function importAccountExport({
 					if (exportedItem.reservedAt) {
 						repository.setItemReservation(item.id, true, scope);
 					}
-					if (exportedItem.saleChannel && exportedItem.soldAt && exportedItem.saleProceedsCents !== null) {
-						repository.markItemSold(item.id, {
-							channel: exportedItem.saleChannel,
-							soldAt: exportedItem.soldAt,
-							proceedsCents: exportedItem.saleProceedsCents
-						}, scope);
+					if (
+						exportedItem.saleChannel &&
+						exportedItem.soldAt &&
+						exportedItem.saleProceedsCents !== null
+					) {
+						repository.markItemSold(
+							item.id,
+							{
+								channel: exportedItem.saleChannel,
+								soldAt: exportedItem.soldAt,
+								proceedsCents: exportedItem.saleProceedsCents
+							},
+							scope
+						);
 					}
 					let coverImageId: string | null = null;
 					for (const exportedImage of exportedItem.images) {

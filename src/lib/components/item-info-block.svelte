@@ -24,7 +24,8 @@
 		soldAt?: string | null;
 	}
 
-	let { item, variant = 'internal' }: { item: ItemInfo; variant?: 'internal' | 'public' } = $props();
+	let { item, variant = 'internal' }: { item: ItemInfo; variant?: 'internal' | 'public' } =
+		$props();
 
 	/**
 	 * Translate a category key in the active locale.

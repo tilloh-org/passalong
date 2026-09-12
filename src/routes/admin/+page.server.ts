@@ -25,7 +25,8 @@ const secondsPerMinute = 60;
 const minutesPerHour = 60;
 const hoursPerDay = 24;
 const passwordResetLifetimeHours = 1;
-const passwordResetLifetimeMilliseconds = passwordResetLifetimeHours * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
+const passwordResetLifetimeMilliseconds =
+	passwordResetLifetimeHours * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
 
 /**
  * Load instance administration data for instance admins only.
@@ -60,11 +61,15 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { passwordResetIssueError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				passwordResetIssueError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 		const repository = getCollectionRepository();
 		if (!repository.isInstanceAdmin(scope)) {
-			return fail(httpStatus.forbidden, { passwordResetIssueError: 'Du bist nicht für die Instanzverwaltung berechtigt.' });
+			return fail(httpStatus.forbidden, {
+				passwordResetIssueError: 'Du bist nicht für die Instanzverwaltung berechtigt.'
+			});
 		}
 
 		try {
@@ -75,7 +80,9 @@ export const actions: Actions = {
 				new Date(Date.now() + passwordResetLifetimeMilliseconds).toISOString()
 			);
 			if (!resetCreated) {
-				return fail(httpStatus.notFound, { passwordResetIssueError: 'Das angegebene Konto wurde nicht gefunden.' });
+				return fail(httpStatus.notFound, {
+					passwordResetIssueError: 'Das angegebene Konto wurde nicht gefunden.'
+				});
 			}
 			return { passwordResetSecret: resetSecret };
 		} catch (error) {
@@ -89,7 +96,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { backupError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				backupError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 		if (!getCollectionRepository().isInstanceAdmin(scope)) {
 			return fail(httpStatus.notFound, { backupError: 'Backup nicht gefunden.' });
@@ -110,7 +119,9 @@ export const actions: Actions = {
 				mediaRoot: getMediaRoot()
 			});
 			if (!outcome.restored) {
-				return fail(httpStatus.badRequest, { backupError: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.' });
+				return fail(httpStatus.badRequest, {
+					backupError: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.'
+				});
 			}
 		} finally {
 			rmSync(stagingPath, { force: true });
