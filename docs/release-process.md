@@ -9,15 +9,18 @@ long-lived branches require different merge methods to keep Git ancestry intact.
 
 - Require a pull request and one approval.
 - Allow merge commits only. Do not allow squash or rebase merges.
-- Require the `build` and `test` status checks.
+- Require the `build` and `test` status checks. `build` is the aggregate gate:
+  it depends on audit, unit tests, E2E tests and the Trivy `docker-scan`, and
+  fails explicitly if any of them did not succeed. (GitHub treats skipped
+  required checks as passing, so the gate must fail rather than be skipped.)
 - Do not require linear history: each release promotion is a deliberate merge commit.
 - Use merge commits for both `develop -> main` release candidates and Release Please PRs.
 
 ### `develop`
 
 - Require a pull request and one approval.
-- Require the `build` status check. `build` depends on audit, unit tests and E2E
-  tests, so those gates must pass first.
+- Require the `build` status check. `build` is the aggregate gate described
+  above and also runs lint and the type check.
 - Allow both squash and merge commits.
 - Use squash for normal feature and fix pull requests.
 - Use a merge commit only for `main -> develop` backmerge pull requests.
