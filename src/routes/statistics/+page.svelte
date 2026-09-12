@@ -95,6 +95,24 @@
 		<p class="sub">{t('statistics.sub')}</p>
 	</section>
 
+	<section class="chart-card period-card" aria-labelledby="period-title">
+		<h2 id="period-title">{t('saleHistory.byPeriod')}</h2>
+		<form method="GET" class="period-form" data-testid="statistics-period">
+			<label>
+				<span>{t('saleHistory.periodFrom')}</span>
+				<input name="from" type="date" value={data.period.fromInclusive ?? ''} />
+			</label>
+			<label>
+				<span>{t('saleHistory.periodTo')}</span>
+				<input name="to" type="date" value={data.period.toInclusive ?? ''} />
+			</label>
+			<div class="period-actions">
+				<a class="secondary-link" href="/statistics">{t('saleHistory.resetFilters')}</a>
+				<button class="filter-submit" type="submit">{t('saleHistory.applyFilters')}</button>
+			</div>
+		</form>
+	</section>
+
 	<SummaryCards
 		cards={[
 			{
@@ -114,10 +132,13 @@
 			{
 				label: t('statistics.net'),
 				value: formatPrice(data.statistics.netResultCents),
-				meta: t('statistics.periodLabel', {
-					from: data.period.fromInclusive ?? t('statistics.periodAny'),
-					to: data.period.toInclusive ?? t('statistics.periodAny')
-				}),
+				meta:
+					data.period.fromInclusive === null && data.period.toInclusive === null
+						? t('statistics.periodEntire')
+						: t('statistics.periodLabel', {
+								from: data.period.fromInclusive ?? t('statistics.periodAny'),
+								to: data.period.toInclusive ?? t('statistics.periodAny')
+							}),
 				negative: data.statistics.netResultCents < 0
 			}
 		]}
@@ -251,24 +272,6 @@
 	{:else}
 		<p class="empty" data-testid="statistics-empty">{t('statistics.empty')}</p>
 	{/if}
-
-	<section class="chart-card period-card" aria-labelledby="period-title">
-		<h2 id="period-title">{t('saleHistory.byPeriod')}</h2>
-		<form method="GET" class="period-form" data-testid="statistics-period">
-			<label>
-				<span>{t('saleHistory.periodFrom')}</span>
-				<input name="from" type="date" value={data.period.fromInclusive ?? ''} />
-			</label>
-			<label>
-				<span>{t('saleHistory.periodTo')}</span>
-				<input name="to" type="date" value={data.period.toInclusive ?? ''} />
-			</label>
-			<div class="period-actions">
-				<a class="secondary-link" href="/statistics">{t('saleHistory.resetFilters')}</a>
-				<button class="filter-submit" type="submit">{t('saleHistory.applyFilters')}</button>
-			</div>
-		</form>
-	</section>
 </main>
 
 <style>
@@ -326,6 +329,11 @@
 
 	.chart-grid .chart-card {
 		margin-bottom: 0;
+	}
+
+	.chart-grid .chart-card h2 {
+		line-height: 1.2;
+		min-block-size: 2.4em;
 	}
 
 	.period-form {

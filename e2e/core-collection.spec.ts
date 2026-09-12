@@ -343,6 +343,16 @@ test.describe('Core collection', () => {
 		const totals = page.getByTestId('statistics-totals');
 		await expect(totals).toContainText('Bruttoeinnahmen');
 		await expect(totals).toContainText('9,50 €');
+		await expect(totals).toContainText('Zeitraum: gesamter Zeitraum');
+		const periodPrecedesTotals = await page.evaluate(() => {
+			const filter = document.querySelector('[data-testid="statistics-period"]');
+			const totalsElement = document.querySelector('[data-testid="statistics-totals"]');
+			if (!filter || !totalsElement) return false;
+			return Boolean(
+				filter.compareDocumentPosition(totalsElement) & Node.DOCUMENT_POSITION_FOLLOWING
+			);
+		});
+		expect(periodPrecedesTotals).toBe(true);
 		await expect(page.getByTestId('statistics-trend')).toContainText('9,50');
 		await expect(page.getByTestId('statistics-categories')).toContainText('Haushalt');
 		await expect(page.getByTestId('statistics-channels')).toContainText('Flohmarkt');
