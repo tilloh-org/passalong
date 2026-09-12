@@ -20,7 +20,9 @@ export interface BootstrapConfiguration {
  * @returns {BootstrapConfiguration | null} A validated manifest, or null when it is absent.
  * @throws {Error} When the manifest is not valid structured bootstrap configuration.
  */
-export function parseBootstrapConfiguration(value: string | undefined): BootstrapConfiguration | null {
+export function parseBootstrapConfiguration(
+	value: string | undefined
+): BootstrapConfiguration | null {
 	if (value === undefined || value.trim() === '') {
 		return null;
 	}
@@ -87,7 +89,9 @@ export async function provisionBootstrapConfiguration(
  */
 function parseBootstrapAccount(value: unknown): BootstrapAccount {
 	const account = requireRecord(value, 'Each bootstrap account must be an object.');
-	if (!hasOnlyKeys(account, ['tenantName', 'username', 'displayName', 'password', 'instanceAdmin'])) {
+	if (
+		!hasOnlyKeys(account, ['tenantName', 'username', 'displayName', 'password', 'instanceAdmin'])
+	) {
 		throw new Error('Each bootstrap account contains unsupported properties.');
 	}
 	if (typeof account.instanceAdmin !== 'boolean') {
@@ -95,9 +99,15 @@ function parseBootstrapAccount(value: unknown): BootstrapAccount {
 	}
 
 	return {
-		tenantName: requireNonBlankText(account.tenantName, 'Each bootstrap account requires tenantName.'),
+		tenantName: requireNonBlankText(
+			account.tenantName,
+			'Each bootstrap account requires tenantName.'
+		),
 		username: requireNonBlankText(account.username, 'Each bootstrap account requires username.'),
-		displayName: requireNonBlankText(account.displayName, 'Each bootstrap account requires displayName.'),
+		displayName: requireNonBlankText(
+			account.displayName,
+			'Each bootstrap account requires displayName.'
+		),
 		password: requireNonBlankText(account.password, 'Each bootstrap account requires password.'),
 		instanceAdmin: account.instanceAdmin
 	};

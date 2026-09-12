@@ -25,8 +25,6 @@ const sessionExpiredError = 'Deine Sitzung ist abgelaufen. Bitte melde dich erne
 const marketDayInputError = 'Bitte prüfe Name, Datum und Zeiten.';
 const expenseCategories: ExpenseCategory[] = ['fee', 'supplies', 'transport', 'purchase', 'other'];
 const maximumExpenseCents = 10_000_000;
-const euroAmountPattern = /^\d{1,7}([.,]\d{1,2})?$/;
-const marketDayNotFoundError = 'Markttag nicht gefunden.';
 const expenseError = {
 	csrf: 'csrf',
 	sessionExpired: 'sessionExpired',
@@ -158,7 +156,11 @@ export const actions: Actions = {
 		}
 		const formData = await request.formData();
 		try {
-			getCollectionRepository().updateMarketDay(getFormText(formData, 'marketDayId'), parseMarketDayInput(formData), scope);
+			getCollectionRepository().updateMarketDay(
+				getFormText(formData, 'marketDayId'),
+				parseMarketDayInput(formData),
+				scope
+			);
 		} catch {
 			return fail(httpStatus.badRequest, { marketDayError: marketDayInputError });
 		}
@@ -232,7 +234,8 @@ export const actions: Actions = {
 					label: getFormText(formData, 'label'),
 					category: categoryText as ExpenseCategory,
 					amountCents,
-					expenseDate: getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
+					expenseDate:
+						getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
 					marketDayId: getOptionalFormText(formData, 'marketDayId')
 				},
 				scope
@@ -263,7 +266,8 @@ export const actions: Actions = {
 					label: getFormText(formData, 'label'),
 					category: categoryText as ExpenseCategory,
 					amountCents,
-					expenseDate: getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
+					expenseDate:
+						getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
 					marketDayId: getOptionalFormText(formData, 'marketDayId')
 				},
 				scope

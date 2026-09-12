@@ -1,12 +1,18 @@
 <script lang="ts" module>
 	/** Expense category identifiers mirrored from the server. */
-	const expenseCategories: ExpenseCategory[] = ['fee', 'supplies', 'transport', 'purchase', 'other'];
+	const expenseCategories: ExpenseCategory[] = [
+		'fee',
+		'supplies',
+		'transport',
+		'purchase',
+		'other'
+	];
 </script>
 
 <script lang="ts">
 	import { t, getLocale } from '$lib/i18n/index.svelte';
 	import { formatPrice } from '$lib/utils/format';
-	import type { Expense, ExpenseCategory, MarketDay, MarketDaySettlement } from '$lib/server/collection-repository';
+	import type { Expense, ExpenseCategory, MarketDay } from '$lib/server/collection-repository';
 
 	let { data, form } = $props();
 
@@ -26,7 +32,9 @@
 			return '—';
 		}
 		const parsed = new Date(`${date}T00:00:00.000Z`);
-		return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString(getLocale(), { dateStyle: 'long', timeZone: 'UTC' });
+		return Number.isNaN(parsed.getTime())
+			? date
+			: parsed.toLocaleDateString(getLocale(), { dateStyle: 'long', timeZone: 'UTC' });
 	}
 
 	/**
@@ -39,7 +47,6 @@
 		return marketDay.closedAt ? t('marketDays.closed') : t('marketDays.open');
 	}
 
-	let editMarketDayOpen = $state(false);
 	let editDialog: HTMLDialogElement | undefined = $state();
 	let editMarketDayId = $state('');
 	let editMarketDayName = $state('');
@@ -132,7 +139,12 @@
 	<section class="panel" aria-labelledby="create-title">
 		<div class="panel-head">
 			<h2 id="create-title">{t('marketDays.createTitle')}</h2>
-			<button type="button" class="toggle" data-testid="market-days-create-toggle" onclick={() => (createFormOpen = !createFormOpen)}>
+			<button
+				type="button"
+				class="toggle"
+				data-testid="market-days-create-toggle"
+				onclick={() => (createFormOpen = !createFormOpen)}
+			>
 				{createFormOpen ? t('marketDays.cancel') : t('marketDays.createToggle')}
 			</button>
 		</div>
@@ -140,7 +152,12 @@
 			<p class="form-error" role="alert" data-testid="market-days-error">{form.marketDayError}</p>
 		{/if}
 		{#if createFormOpen}
-			<form method="POST" action="?/createMarketDay" class="form-grid" data-testid="market-days-create-form">
+			<form
+				method="POST"
+				action="?/createMarketDay"
+				class="form-grid"
+				data-testid="market-days-create-form"
+			>
 				<label>
 					<span>{t('marketDays.name')}</span>
 					<input name="name" required data-testid="market-days-name-input" />
@@ -163,10 +180,16 @@
 				</label>
 				<label class="wide">
 					<span>{t('marketDays.notes')}</span>
-					<input name="notes" placeholder={t('marketDays.notesPlaceholder')} data-testid="market-days-notes-input" />
+					<input
+						name="notes"
+						placeholder={t('marketDays.notesPlaceholder')}
+						data-testid="market-days-notes-input"
+					/>
 				</label>
 				<div class="actions">
-					<button type="submit" data-testid="market-days-create-submit">{t('marketDays.create')}</button>
+					<button type="submit" data-testid="market-days-create-submit"
+						>{t('marketDays.create')}</button
+					>
 				</div>
 			</form>
 		{/if}
@@ -180,30 +203,49 @@
 						<div>
 							<h3>{marketDay.name}</h3>
 							<p class="meta">
-								<span class="pill" class:closed-pill={marketDay.closedAt}>{statusLabel(marketDay)}</span>
+								<span class="pill" class:closed-pill={marketDay.closedAt}
+									>{statusLabel(marketDay)}</span
+								>
 								{#if marketDay.date}
 									<span class="date">{displayDate(marketDay.date)}</span>
 								{/if}
 								{#if marketDay.startTime}
-									<span class="time">{marketDay.startTime}{marketDay.endTime ? `–${marketDay.endTime}` : ''}</span>
+									<span class="time"
+										>{marketDay.startTime}{marketDay.endTime ? `–${marketDay.endTime}` : ''}</span
+									>
 								{/if}
 							</p>
 						</div>
 						<div class="day-actions">
-							<button type="button" class="secondary" data-testid="market-days-edit-trigger" onclick={() => openEditDialog(marketDay)}>
+							<button
+								type="button"
+								class="secondary"
+								data-testid="market-days-edit-trigger"
+								onclick={() => openEditDialog(marketDay)}
+							>
 								{t('marketDays.edit')}
 							</button>
-							<form method="POST" action={marketDay.closedAt ? '?/reopenMarketDay' : '?/closeMarketDay'} class="inline">
+							<form
+								method="POST"
+								action={marketDay.closedAt ? '?/reopenMarketDay' : '?/closeMarketDay'}
+								class="inline"
+							>
 								<input type="hidden" name="marketDayId" value={marketDay.id} />
 								{#if marketDay.closedAt}
-									<button type="submit" class="secondary" data-testid="market-days-reopen">{t('marketDays.reopen')}</button>
+									<button type="submit" class="secondary" data-testid="market-days-reopen"
+										>{t('marketDays.reopen')}</button
+									>
 								{:else}
-									<button type="submit" class="primary" data-testid="market-days-close">{t('marketDays.close')}</button>
+									<button type="submit" class="primary" data-testid="market-days-close"
+										>{t('marketDays.close')}</button
+									>
 								{/if}
 							</form>
 							<form method="POST" action="?/deleteMarketDay" class="inline">
 								<input type="hidden" name="marketDayId" value={marketDay.id} />
-								<button type="submit" class="danger" data-testid="market-days-delete">{t('marketDays.delete')}</button>
+								<button type="submit" class="danger" data-testid="market-days-delete"
+									>{t('marketDays.delete')}</button
+								>
 							</form>
 						</div>
 					</div>
@@ -232,12 +274,24 @@
 					<div class="settlement-row" data-testid="settlement-item">
 						<div>
 							<strong>{settlement.marketDayName}</strong>
-							<span class="meta">{t('settlement.soldCount', { count: settlement.soldItemCount })}</span>
+							<span class="meta"
+								>{t('settlement.soldCount', { count: settlement.soldItemCount })}</span
+							>
 						</div>
 						<div class="settlement-numbers">
-							<span class="positive">{t('settlement.proceeds', { proceeds: formatPrice(settlement.totalProceedsCents) })}</span>
-							<span>{t('settlement.expenses', { expenses: formatPrice(settlement.totalExpensesCents) })}</span>
-							<strong class:negative={settlement.netResultCents < 0}>{t('settlement.net', { net: formatPrice(settlement.netResultCents) })}</strong>
+							<span class="positive"
+								>{t('settlement.proceeds', {
+									proceeds: formatPrice(settlement.totalProceedsCents)
+								})}</span
+							>
+							<span
+								>{t('settlement.expenses', {
+									expenses: formatPrice(settlement.totalExpensesCents)
+								})}</span
+							>
+							<strong class:negative={settlement.netResultCents < 0}
+								>{t('settlement.net', { net: formatPrice(settlement.netResultCents) })}</strong
+							>
 						</div>
 					</div>
 				{/if}
@@ -248,16 +302,28 @@
 	<section class="panel" aria-labelledby="expenses-title">
 		<div class="panel-head">
 			<h2 id="expenses-title">{t('expenses.title')}</h2>
-			<button type="button" class="toggle" data-testid="expenses-toggle" onclick={() => (expenseFormOpen = !expenseFormOpen)}>
+			<button
+				type="button"
+				class="toggle"
+				data-testid="expenses-toggle"
+				onclick={() => (expenseFormOpen = !expenseFormOpen)}
+			>
 				{expenseFormOpen ? t('marketDays.cancel') : t('expenses.toggle')}
 			</button>
 		</div>
 		<p class="panel-sub">{t('expenses.sub')}</p>
 		{#if form?.expenseError}
-			<p class="form-error" role="alert" data-testid="expenses-error">{t(`expenses.error.${form.expenseError}`)}</p>
+			<p class="form-error" role="alert" data-testid="expenses-error">
+				{t(`expenses.error.${form.expenseError}`)}
+			</p>
 		{/if}
 		{#if expenseFormOpen}
-			<form method="POST" action="?/createExpense" class="form-grid" data-testid="expenses-create-form">
+			<form
+				method="POST"
+				action="?/createExpense"
+				class="form-grid"
+				data-testid="expenses-create-form"
+			>
 				<label>
 					<span>{t('expenses.label')}</span>
 					<input name="label" required data-testid="expenses-label-input" />
@@ -265,14 +331,20 @@
 				<label>
 					<span>{t('expenses.category')}</span>
 					<select name="category" required data-testid="expenses-category-input">
-						{#each expenseCategories as category}
+						{#each expenseCategories as category (category)}
 							<option value={category}>{expenseCategoryLabel(category)}</option>
 						{/each}
 					</select>
 				</label>
 				<label>
 					<span>{t('expenses.amount')}</span>
-					<input name="amountEuros" type="text" inputmode="decimal" required data-testid="expenses-amount-input" />
+					<input
+						name="amountEuros"
+						type="text"
+						inputmode="decimal"
+						required
+						data-testid="expenses-amount-input"
+					/>
 				</label>
 				<label>
 					<span>{t('expenses.date')}</span>
@@ -282,7 +354,7 @@
 					<span>{t('expenses.marketDay')}</span>
 					<select name="marketDayId" data-testid="expenses-market-day-input">
 						<option value="">{t('expenses.noMarketDay')}</option>
-						{#each data.marketDays as marketDay}
+						{#each data.marketDays as marketDay (marketDay.id)}
 							<option value={marketDay.id}>{marketDay.name}</option>
 						{/each}
 					</select>
@@ -299,17 +371,28 @@
 						<div class="expense-main">
 							<div>
 								<strong>{expense.label}</strong>
-								<span class="meta">{expenseCategoryLabel(expense.category)}{expense.marketDayName ? ` · ${expense.marketDayName}` : ''}</span>
+								<span class="meta"
+									>{expenseCategoryLabel(expense.category)}{expense.marketDayName
+										? ` · ${expense.marketDayName}`
+										: ''}</span
+								>
 							</div>
 							<strong class="amount">{formatPrice(expense.amountCents)} €</strong>
 						</div>
 						<div class="expense-actions">
-							<button type="button" class="secondary" data-testid="expenses-edit-trigger" onclick={() => openExpenseDialog(expense)}>
+							<button
+								type="button"
+								class="secondary"
+								data-testid="expenses-edit-trigger"
+								onclick={() => openExpenseDialog(expense)}
+							>
 								{t('expenses.edit')}
 							</button>
 							<form method="POST" action="?/deleteExpense" class="inline">
 								<input type="hidden" name="expenseId" value={expense.id} />
-								<button type="submit" class="danger" data-testid="expenses-delete">{t('expenses.delete')}</button>
+								<button type="submit" class="danger" data-testid="expenses-delete"
+									>{t('expenses.delete')}</button
+								>
 							</form>
 						</div>
 					</article>
@@ -321,10 +404,17 @@
 	</section>
 </main>
 
-<dialog class="edit-dialog" bind:this={expenseDialog} aria-label={t('expenses.edit')} data-testid="expenses-edit-dialog">
+<dialog
+	class="edit-dialog"
+	bind:this={expenseDialog}
+	aria-label={t('expenses.edit')}
+	data-testid="expenses-edit-dialog"
+>
 	<div class="dialog-head">
 		<h3>{t('expenses.edit')}</h3>
-		<button type="button" class="secondary" onclick={closeExpenseDialog}>{t('marketDays.cancel')}</button>
+		<button type="button" class="secondary" onclick={closeExpenseDialog}
+			>{t('marketDays.cancel')}</button
+		>
 	</div>
 	<form method="POST" action="?/updateExpense">
 		<input type="hidden" name="expenseId" value={editExpenseId} />
@@ -336,14 +426,20 @@
 			<label>
 				<span>{t('expenses.category')}</span>
 				<select name="category" bind:value={editExpenseCategory} required>
-					{#each expenseCategories as category}
+					{#each expenseCategories as category (category)}
 						<option value={category}>{expenseCategoryLabel(category)}</option>
 					{/each}
 				</select>
 			</label>
 			<label>
 				<span>{t('expenses.amount')}</span>
-				<input name="amountEuros" type="text" inputmode="decimal" value={editExpenseAmount} required />
+				<input
+					name="amountEuros"
+					type="text"
+					inputmode="decimal"
+					value={editExpenseAmount}
+					required
+				/>
 			</label>
 			<label>
 				<span>{t('expenses.date')}</span>
@@ -353,7 +449,7 @@
 				<span>{t('expenses.marketDay')}</span>
 				<select name="marketDayId" bind:value={editExpenseMarketDayId}>
 					<option value="">{t('expenses.noMarketDay')}</option>
-					{#each data.marketDays as marketDay}
+					{#each data.marketDays as marketDay (marketDay.id)}
 						<option value={marketDay.id}>{marketDay.name}</option>
 					{/each}
 				</select>
@@ -365,11 +461,17 @@
 	</form>
 </dialog>
 
-
-<dialog class="edit-dialog" bind:this={editDialog} aria-label={t('marketDays.edit')} data-testid="market-days-edit-dialog">
+<dialog
+	class="edit-dialog"
+	bind:this={editDialog}
+	aria-label={t('marketDays.edit')}
+	data-testid="market-days-edit-dialog"
+>
 	<div class="dialog-head">
 		<h3>{t('marketDays.editTitle')}</h3>
-		<button type="button" class="secondary" onclick={closeEditDialog}>{t('marketDays.cancel')}</button>
+		<button type="button" class="secondary" onclick={closeEditDialog}
+			>{t('marketDays.cancel')}</button
+		>
 	</div>
 	<form method="POST" action="?/updateMarketDay">
 		<input type="hidden" name="marketDayId" value={editMarketDayId} />
@@ -396,7 +498,11 @@
 			</label>
 			<label class="wide">
 				<span>{t('marketDays.notes')}</span>
-				<input name="notes" value={editMarketDayNotes} placeholder={t('marketDays.notesPlaceholder')} />
+				<input
+					name="notes"
+					value={editMarketDayNotes}
+					placeholder={t('marketDays.notesPlaceholder')}
+				/>
 			</label>
 		</div>
 		<div class="actions">

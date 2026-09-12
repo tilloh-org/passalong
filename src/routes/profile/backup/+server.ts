@@ -26,13 +26,19 @@ export const GET: RequestHandler = async ({ cookies }) => {
 		? getCollectionRepository().getSession(hashSessionToken(cookies.get(sessionCookieName)!))
 		: null;
 	if (!scope) {
-		throw error(httpStatus.unauthorized, 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.');
+		throw error(
+			httpStatus.unauthorized,
+			'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+		);
 	}
 	if (!getCollectionRepository().isInstanceAdmin(scope)) {
 		throw error(httpStatus.notFound, 'Backup nicht gefunden');
 	}
 
-	const archive = await createInstanceBackup({ databasePath: getDatabasePath(), mediaRoot: getMediaRoot() });
+	const archive = await createInstanceBackup({
+		databasePath: getDatabasePath(),
+		mediaRoot: getMediaRoot()
+	});
 	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 	return new Response(new Uint8Array(archive.zip), {
 		headers: {

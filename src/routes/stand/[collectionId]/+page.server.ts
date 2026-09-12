@@ -30,9 +30,18 @@ function parseItemFilters(searchParams: URLSearchParams): ItemFilters {
 	const categoryParam = searchParams.get('category');
 	const conditionParam = searchParams.get('condition');
 	const statusParam = searchParams.get('status');
-	const category = categoryParam && (itemCategories as readonly string[]).includes(categoryParam) ? (categoryParam as ItemCategory) : null;
-	const condition = conditionParam && (itemConditions as readonly string[]).includes(conditionParam) ? (conditionParam as ItemCondition) : null;
-	const status = statusParam && (itemStatusFilters as readonly string[]).includes(statusParam) ? (statusParam as ItemStatusFilter) : null;
+	const category =
+		categoryParam && (itemCategories as readonly string[]).includes(categoryParam)
+			? (categoryParam as ItemCategory)
+			: null;
+	const condition =
+		conditionParam && (itemConditions as readonly string[]).includes(conditionParam)
+			? (conditionParam as ItemCondition)
+			: null;
+	const status =
+		statusParam && (itemStatusFilters as readonly string[]).includes(statusParam)
+			? (statusParam as ItemStatusFilter)
+			: null;
 	return { ...emptyItemFilters, query, category, condition, status };
 }
 

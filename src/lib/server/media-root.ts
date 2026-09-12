@@ -12,7 +12,9 @@ let mediaRoot: string | undefined;
  */
 export function getMediaRoot(): string {
 	if (!mediaRoot) {
-		mediaRoot = process.env[mediaRootEnvironmentVariable] ?? join(process.cwd(), 'data', defaultMediaDirectoryName);
+		mediaRoot =
+			process.env[mediaRootEnvironmentVariable] ??
+			join(process.cwd(), 'data', defaultMediaDirectoryName);
 	}
 	return mediaRoot;
 }

@@ -12,13 +12,11 @@
 	let mediaStream = $state<MediaStream | null>(null);
 	let barcodeDetector = $state<BarcodeDetectorLike | null>(null);
 	let cameraActive = $state(false);
-	let scanStatus = $state('');
+	// Seed the idle status text; the translation lookup is available at init time.
+	let scanStatus = $state(t('scan.statusIdle'));
 	let scanError = $state<string | null>(null);
 	let manualValue = $state('');
 	let animationFrameId = $state<number | null>(null);
-
-	// Seed the idle status text after translation lookup is available.
-	scanStatus = t('scan.statusIdle');
 
 	/**
 	 * Start the live camera scanner and begin reading QR codes.
@@ -33,9 +31,11 @@
 			return;
 		}
 
-		const detectorConstructor = (window as Window & {
-			BarcodeDetector?: new (options: { formats: string[] }) => BarcodeDetectorLike;
-		}).BarcodeDetector;
+		const detectorConstructor = (
+			window as Window & {
+				BarcodeDetector?: new (options: { formats: string[] }) => BarcodeDetectorLike;
+			}
+		).BarcodeDetector;
 
 		if (!detectorConstructor) {
 			scanStatus = t('scan.statusNoDetector');
@@ -58,10 +58,10 @@
 			cameraActive = true;
 			scanStatus = t('scan.statusActive');
 			void scanLoop();
-			} catch {
-				await stopScanner();
-				scanStatus = t('scan.statusCameraFailed');
-			}
+		} catch {
+			await stopScanner();
+			scanStatus = t('scan.statusCameraFailed');
+		}
 	}
 
 	/**
@@ -166,7 +166,12 @@
 			<button type="button" class="primary" onclick={() => void startScanner()}>
 				{t('scan.startCamera')}
 			</button>
-			<button type="button" class="secondary" onclick={() => void stopScanner()} disabled={!cameraActive}>
+			<button
+				type="button"
+				class="secondary"
+				onclick={() => void stopScanner()}
+				disabled={!cameraActive}
+			>
 				{t('scan.stopCamera')}
 			</button>
 		</div>

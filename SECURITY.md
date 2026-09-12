@@ -11,7 +11,7 @@ that vulnerabilities are reported and fixed responsibly.
 Instead, report vulnerabilities privately:
 
 - **Preferred:** GitHub's private security advisory
-  → Repository → *Security* tab → *Report a vulnerability*
+  → Repository → _Security_ tab → _Report a vulnerability_
 - **Alternative:** email the maintainer (address in the repository metadata)
 
 You will receive a response within **5 business days**. We will keep you

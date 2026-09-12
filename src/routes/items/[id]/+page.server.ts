@@ -3,10 +3,8 @@ import {
 	itemCategories,
 	itemConditions,
 	saleChannels,
-	type Item,
 	type ItemCategory,
 	type ItemCondition,
-	type ItemImage,
 	type SaleChannel
 } from '$lib/server/collection-repository';
 import { getMediaRoot } from '$lib/server/media-root';
@@ -89,7 +87,8 @@ const itemActionErrorByInternalMessage: Record<string, string> = {
 	'category is not supported': 'Bitte wähle eine gültige Kategorie.',
 	'condition is not supported': 'Bitte wähle einen gültigen Zustand.'
 };
-const itemActionGenericError = 'Die Änderung konnte nicht gespeichert werden. Bitte prüfe die Angaben.';
+const itemActionGenericError =
+	'Die Änderung konnte nicht gespeichert werden. Bitte prüfe die Angaben.';
 
 /**
  * Map item-action failures to German user-facing messages without leaking internals.
@@ -180,7 +179,10 @@ export const load: PageServerLoad = async ({ cookies, params, url }) => {
 		throw error(httpStatus.notFound, 'Artikel nicht gefunden');
 	}
 	const itemUrl = new URL(`/items/${encodeURIComponent(item.id)}`, url.origin).toString();
-	const qrCodeDataUrl = await QRCode.toDataURL(itemUrl, { width: qrCodeImageSizePixels, margin: 1 });
+	const qrCodeDataUrl = await QRCode.toDataURL(itemUrl, {
+		width: qrCodeImageSizePixels,
+		margin: 1
+	});
 	return {
 		item,
 		images: repository.listItemImages(item.id, scope),
@@ -199,17 +201,25 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { uploadImageError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				uploadImageError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
 		const itemId = getFormText(formData, 'itemId');
-		const uploads = formData.getAll('image').filter((entry): entry is File => entry instanceof File && entry.size > 0);
+		const uploads = formData
+			.getAll('image')
+			.filter((entry): entry is File => entry instanceof File && entry.size > 0);
 		if (uploads.length === 0) {
-			return fail(httpStatus.badRequest, { uploadImageError: 'Bitte wähle mindestens ein Bild aus.' });
+			return fail(httpStatus.badRequest, {
+				uploadImageError: 'Bitte wähle mindestens ein Bild aus.'
+			});
 		}
 		if (uploads.length > maximumImagesPerUpload) {
-			return fail(httpStatus.badRequest, { uploadImageError: `Bitte wähle höchstens ${maximumImagesPerUpload} Bilder gleichzeitig aus.` });
+			return fail(httpStatus.badRequest, {
+				uploadImageError: `Bitte wähle höchstens ${maximumImagesPerUpload} Bilder gleichzeitig aus.`
+			});
 		}
 
 		try {
@@ -231,7 +241,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { removeImageError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				removeImageError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
@@ -251,7 +263,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
@@ -280,7 +294,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				saleStatusError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
@@ -293,13 +309,15 @@ export const actions: Actions = {
 
 		redirect(httpStatus.seeOther, `/items/${encodeURIComponent(itemId)}`);
 	},
-	setItemCover: async ({ cookies, request, url, params }) => {
+	setItemCover: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
 			return fail(httpStatus.forbidden, { csrfError });
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { coverError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				coverError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
@@ -319,7 +337,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { deleteItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				deleteItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
@@ -338,7 +358,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { updateItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				updateItemError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();
@@ -371,7 +393,9 @@ export const actions: Actions = {
 		}
 		const scope = getSessionScope(cookies.get(sessionCookieName));
 		if (!scope) {
-			return fail(httpStatus.unauthorized, { reservationError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.' });
+			return fail(httpStatus.unauthorized, {
+				reservationError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
 		}
 
 		const formData = await request.formData();

@@ -1,7 +1,14 @@
 <script lang="ts">
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
-	import { getLocale, initLocale, locales, setLocale, t, type Locale } from '$lib/i18n/index.svelte';
+	import {
+		getLocale,
+		initLocale,
+		locales,
+		setLocale,
+		t,
+		type Locale
+	} from '$lib/i18n/index.svelte';
 
 	let { children, data } = $props();
 
@@ -31,8 +38,7 @@
 			// on the drawer-mode header, where brand and actions still occupy their inline widths.
 			const brand = headerElement.querySelector('.brand-wrap');
 			const actions = headerElement.querySelector('.header-actions');
-			const reservedWidth =
-				((brand?.scrollWidth ?? 0) + (actions?.scrollWidth ?? 0)) * 2 + 96;
+			const reservedWidth = ((brand?.scrollWidth ?? 0) + (actions?.scrollWidth ?? 0)) * 2 + 96;
 			if (navOverflow) {
 				navOverflow = headerElement.clientWidth - reservedWidth < navElement.scrollWidth;
 			} else {
@@ -107,101 +113,110 @@
 <svelte:head>
 	<link rel="icon" href={favicon} />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
-	<meta name="description" content="Manage the things you no longer need — and give them a second home." />
+	<meta
+		name="description"
+		content="Manage the things you no longer need — and give them a second home."
+	/>
 </svelte:head>
 
-	<header class="masthead" class:nav-overflow={navOverflow} bind:this={headerElement}>
-		<h1 class="brand-wrap">
-			<a class="brand" href="/">
-				<img class="header-logo" src="/passalong-icon.svg" alt="" />
-				passalong
+<header class="masthead" class:nav-overflow={navOverflow} bind:this={headerElement}>
+	<h1 class="brand-wrap">
+		<a class="brand" href="/">
+			<img class="header-logo" src="/passalong-icon.svg" alt="" />
+			passalong
+		</a>
+	</h1>
+	{#if data.header?.isAuthenticated}
+		<nav class:open={menuOpen} bind:this={navElement}>
+			<a class="nav-cta" href="/" onclick={() => setMenuOpen(false)}>
+				{t('nav.newItem')}
 			</a>
-		</h1>
-		{#if data.header?.isAuthenticated}
-			<nav class:open={menuOpen} bind:this={navElement}>
+			<a href="/scan" onclick={() => setMenuOpen(false)}>
+				{t('nav.scan')}
+			</a>
+			<a href="/market-days" onclick={() => setMenuOpen(false)} data-testid="nav-market-days-link">
+				{t('nav.marketDays')}
+			</a>
+			<a href="/sales" onclick={() => setMenuOpen(false)} data-testid="nav-sale-history-link">
+				{t('nav.saleHistory')}
+			</a>
+			{#if data.header?.standPath}
 				<a
-					class="nav-cta"
-					href="/"
+					href={data.header.standPath}
 					onclick={() => setMenuOpen(false)}
+					data-testid="nav-stand-link"
 				>
-					{t('nav.newItem')}
+					{t('nav.myStand')}
 				</a>
-				<a href="/scan" onclick={() => setMenuOpen(false)}>
-					{t('nav.scan')}
-				</a>
-				<a href="/market-days" onclick={() => setMenuOpen(false)} data-testid="nav-market-days-link">
-					{t('nav.marketDays')}
-				</a>
-				<a href="/sales" onclick={() => setMenuOpen(false)} data-testid="nav-sale-history-link">
-					{t('nav.saleHistory')}
-				</a>
-				{#if data.header?.standPath}
-					<a href={data.header.standPath} onclick={() => setMenuOpen(false)} data-testid="nav-stand-link">
-						{t('nav.myStand')}
-					</a>
-				{/if}
-				</nav>
-			<span class="header-divider" aria-hidden="true"></span>
-			<div class="header-actions">
-				<button
-					class="burger"
-					aria-label={menuOpen ? t('header.menuClose') : t('header.menuOpen')}
-					aria-expanded={menuOpen}
-					type="button"
-					bind:this={burgerButton}
-					onclick={() => setMenuOpen(!menuOpen)}
-				>
-					<span></span><span></span><span></span>
-				</button>
-				<button
-					class="icon-btn theme-toggle"
-					aria-label={t('header.toggleTheme')}
-					title={t('header.themeTitle')}
-					type="button"
-					onclick={toggleTheme}
-				>
-					<svg class="icon" aria-hidden="true" focusable="false">
-						<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
-					</svg>
-				</button>
-				<button
-					class="icon-btn language-toggle"
-					aria-label={t('header.language')}
-					title={t('header.languageTitle')}
-					type="button"
-					data-testid="language-toggle"
-					onclick={() => cycleLocale()}
-				>
-					<span class="language-label">{getLocale() === 'de' ? 'DE' : 'EN'}</span>
-				</button>
-				<a
-					class="profile-avatar"
-					href="/profile"
-					aria-label="Profil öffnen"
-					title="Profil"
-					data-testid="profile-avatar-link"
-				>
-					{#if data.header?.profile?.avatarStorageKey}
-						<img class="profile-avatar-img" src={`/media/${encodeURIComponent(data.header?.profile?.avatarStorageKey ?? '')}`} alt="" />
-					{:else}
-						<span class="profile-avatar-fallback">{(data.header?.profile?.displayName ?? 'P').slice(0, 1).toUpperCase()}</span>
-					{/if}
-				</a>
-			</div>
+			{/if}
+		</nav>
+		<span class="header-divider" aria-hidden="true"></span>
+		<div class="header-actions">
 			<button
-				class="nav-backdrop"
-				class:open={menuOpen}
-				aria-label="Menü schließen"
+				class="burger"
+				aria-label={menuOpen ? t('header.menuClose') : t('header.menuOpen')}
+				aria-expanded={menuOpen}
 				type="button"
-				onclick={() => setMenuOpen(false)}
-			></button>
-		{/if}
-		</header>
-
+				bind:this={burgerButton}
+				onclick={() => setMenuOpen(!menuOpen)}
+			>
+				<span></span><span></span><span></span>
+			</button>
+			<button
+				class="icon-btn theme-toggle"
+				aria-label={t('header.toggleTheme')}
+				title={t('header.themeTitle')}
+				type="button"
+				onclick={toggleTheme}
+			>
+				<svg class="icon" aria-hidden="true" focusable="false">
+					<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
+				</svg>
+			</button>
+			<button
+				class="icon-btn language-toggle"
+				aria-label={t('header.language')}
+				title={t('header.languageTitle')}
+				type="button"
+				data-testid="language-toggle"
+				onclick={() => cycleLocale()}
+			>
+				<span class="language-label">{getLocale() === 'de' ? 'DE' : 'EN'}</span>
+			</button>
+			<a
+				class="profile-avatar"
+				href="/profile"
+				aria-label="Profil öffnen"
+				title="Profil"
+				data-testid="profile-avatar-link"
+			>
+				{#if data.header?.profile?.avatarStorageKey}
+					<img
+						class="profile-avatar-img"
+						src={`/media/${encodeURIComponent(data.header?.profile?.avatarStorageKey ?? '')}`}
+						alt=""
+					/>
+				{:else}
+					<span class="profile-avatar-fallback"
+						>{(data.header?.profile?.displayName ?? 'P').slice(0, 1).toUpperCase()}</span
+					>
+				{/if}
+			</a>
+		</div>
+		<button
+			class="nav-backdrop"
+			class:open={menuOpen}
+			aria-label="Menü schließen"
+			type="button"
+			onclick={() => setMenuOpen(false)}
+		></button>
+	{/if}
+</header>
 
 <main class="layout-main">
 	{@render children()}
 </main>
+
 <style>
 	.masthead {
 		position: sticky;
@@ -325,8 +340,7 @@
 		justify-content: center;
 		padding: 0;
 		position: relative;
-		transition:
-			all 0.25s ease;
+		transition: all 0.25s ease;
 		width: 40px;
 		z-index: 86;
 	}
@@ -515,5 +529,4 @@
 			transition: none;
 		}
 	}
-
 </style>

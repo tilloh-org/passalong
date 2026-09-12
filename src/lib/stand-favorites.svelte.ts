@@ -7,6 +7,8 @@
  * that are no longer rendered are pruned on initialization.
  */
 
+import { SvelteSet } from 'svelte/reactivity';
+
 const favoritesKeyPrefix = 'passalong-favorites-';
 
 /**
@@ -93,7 +95,7 @@ export function toggleFavorite(collectionId: string, itemId: string): boolean {
  * @returns {string[]} The pruned favorites list after persistence.
  */
 export function pruneFavorites(collectionId: string, visibleItemIds: string[]): string[] {
-	const visible = new Set(visibleItemIds);
+	const visible = new SvelteSet(visibleItemIds);
 	const favorites = getFavorites(collectionId).filter((itemId) => visible.has(itemId));
 	writeFavorites(collectionId, favorites);
 	return favorites;

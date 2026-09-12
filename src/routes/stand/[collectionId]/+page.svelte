@@ -23,18 +23,16 @@
 	const conditionLabel = (condition: string) => t(`condition.${condition}`);
 
 	/**
-	 * Favorite item IDs of this stand page, hydrated on the client only.
-	 * Server-rendered markup always starts empty so SSR and client agree.
+	 * Favorite item IDs of this stand page, pruned to the rendered items and
+	 * hydrated on the client only: without a window, pruneFavorites returns an
+	 * empty list, so server-rendered markup always starts empty.
 	 */
-	let favoriteIds = $state<string[]>([]);
-
-	$effect(() => {
-		// Prune sold items and hydrate the persisted list in the browser.
-		favoriteIds = pruneFavorites(
+	let favoriteIds = $derived(
+		pruneFavorites(
 			data.stand.collectionId,
 			data.stand.items.map((item) => item.id)
-		);
-	});
+		)
+	);
 
 	/**
 	 * Check whether one item is currently marked as favorite.
@@ -75,9 +73,15 @@
 	<section class="hero">
 		<div class="hero-avatar">
 			{#if data.stand.ownerAvatarStorageKey}
-				<img src={`/media/${encodeURIComponent(data.stand.ownerAvatarStorageKey)}`} alt={t('stand.ownerAvatarAlt', { name: data.stand.collectionName })} data-testid="stand-owner-avatar" />
+				<img
+					src={`/media/${encodeURIComponent(data.stand.ownerAvatarStorageKey)}`}
+					alt={t('stand.ownerAvatarAlt', { name: data.stand.collectionName })}
+					data-testid="stand-owner-avatar"
+				/>
 			{:else}
-				<span class="initial" aria-hidden="true">{data.stand.collectionName.slice(0, 1).toUpperCase()}</span>
+				<span class="initial" aria-hidden="true"
+					>{data.stand.collectionName.slice(0, 1).toUpperCase()}</span
+				>
 			{/if}
 		</div>
 		<h1 data-testid="stand-title">{data.stand.collectionName}</h1>
@@ -106,13 +110,19 @@
 				<div class="tile" class:reserved={item.reservedAt} data-testid="stand-item">
 					<div class="img" class:has-photo={item.images.some((image) => image.isCover)}>
 						{#each item.images.filter((image) => image.isCover) as cover (cover.storageKey)}
-							<img src={`/media/${encodeURIComponent(cover.storageKey)}`} alt={item.title} loading="lazy" />
+							<img
+								src={`/media/${encodeURIComponent(cover.storageKey)}`}
+								alt={item.title}
+								loading="lazy"
+							/>
 						{/each}
 						{#if !item.images.some((image) => image.isCover)}
 							{item.title.slice(0, 1).toUpperCase()}
 						{/if}
 						{#if item.reservedAt}
-							<span class="reserved-tag" data-testid="stand-item-reserved">{t('item.reserved')}</span>
+							<span class="reserved-tag" data-testid="stand-item-reserved"
+								>{t('item.reserved')}</span
+							>
 						{/if}
 						{#if item.images.length > 1}
 							<span class="photo-count" data-testid="stand-item-photo-count">
@@ -136,11 +146,16 @@
 							</svg>
 						</button>
 					</div>
-					<a class="tile-link" href={`/stand/${encodeURIComponent(data.stand.collectionId)}/${encodeURIComponent(item.id)}`}>
+					<a
+						class="tile-link"
+						href={`/stand/${encodeURIComponent(data.stand.collectionId)}/${encodeURIComponent(item.id)}`}
+					>
 						<div class="body">
 							<div class="name">{item.title}</div>
 							<div class="price">{formatPrice(item.priceCents)}</div>
-							<div class="meta">{categoryLabel(item.category)} · {conditionLabel(item.condition)}</div>
+							<div class="meta">
+								{categoryLabel(item.category)} · {conditionLabel(item.condition)}
+							</div>
 							{#if item.isComplete || item.isFunctional}
 								<div class="flag-pills" data-testid="stand-item-flags">
 									{#if item.isComplete}
@@ -152,12 +167,14 @@
 								</div>
 							{/if}
 							{#if item.externalDescription}
-								<p class="description" data-testid="stand-item-description">{item.externalDescription}</p>
+								<p class="description" data-testid="stand-item-description">
+									{item.externalDescription}
+								</p>
 							{/if}
 						</div>
 					</a>
-			</div>
-		{/each}
+				</div>
+			{/each}
 		</div>
 	{:else if data.hasActiveFilters}
 		<p class="empty" data-testid="stand-filter-empty-state">{t('portfolio.noItemsForFilters')}</p>
