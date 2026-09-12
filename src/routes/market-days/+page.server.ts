@@ -3,7 +3,14 @@ import type { Actions, PageServerLoad } from './$types';
 import { hasSameOrigin } from '$lib/server/csrf';
 import { hashSessionToken } from '$lib/server/session-token';
 import { getCollectionRepository } from '$lib/server/repository';
-import type { CreateMarketDayInput, MarketDay, SessionScope } from '$lib/server/collection-repository';
+import type {
+	CreateMarketDayInput,
+	Expense,
+	ExpenseCategory,
+	MarketDay,
+	MarketDaySettlement,
+	SessionScope
+} from '$lib/server/collection-repository';
 
 const sessionCookieName = 'passalong_session';
 const httpStatus = {
@@ -16,6 +23,16 @@ const httpStatus = {
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const sessionExpiredError = 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.';
 const marketDayInputError = 'Bitte prüfe Name, Datum und Zeiten.';
+const expenseCategories: ExpenseCategory[] = ['fee', 'supplies', 'transport', 'purchase', 'other'];
+const maximumExpenseCents = 10_000_000;
+const euroAmountPattern = /^\d{1,7}([.,]\d{1,2})?$/;
+const marketDayNotFoundError = 'Markttag nicht gefunden.';
+const expenseError = {
+	csrf: 'csrf',
+	sessionExpired: 'sessionExpired',
+	invalid: 'invalid',
+	notFound: 'notFound'
+} as const;
 
 /**
  * Resolve the authenticated owner for the market-days page.
@@ -39,8 +56,13 @@ export const load: PageServerLoad = ({ cookies }) => {
 	if (!scope) {
 		redirect(httpStatus.seeOther, '/');
 	}
-	const marketDays: MarketDay[] = getCollectionRepository().listMarketDays(scope);
-	return { marketDays };
+	const repository = getCollectionRepository();
+	const marketDays: MarketDay[] = repository.listMarketDays(scope);
+	const expenses: Expense[] = repository.listExpenses(scope);
+	const settlements: MarketDaySettlement[] = marketDays
+		.map((marketDay) => repository.getMarketDaySettlement(marketDay.id, scope))
+		.filter((settlement): settlement is MarketDaySettlement => settlement !== null);
+	return { marketDays, expenses, settlements };
 };
 
 /**
@@ -53,6 +75,31 @@ export const load: PageServerLoad = ({ cookies }) => {
 function getFormText(formData: FormData, name: string): string {
 	const value = formData.get(name);
 	return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * Read an optional form field as a nullable trimmed string.
+ *
+ * @param {FormData} formData - The submitted form data.
+ * @param {string} name - The field name.
+ * @returns {string | null} The trimmed value or null when blank.
+ */
+/**
+ * Convert a localized euro input into whole cents.
+ *
+ * @param {string} value - Decimal euro value using a comma or period separator.
+ * @returns {number | null} The validated amount in cents or null when invalid.
+ */
+function parseEuroCents(value: string): number | null {
+	if (!/^[0-9]{1,7}([.,][0-9]{1,2})?$/.test(value)) {
+		return null;
+	}
+	const euros = Number(value.replace(',', '.'));
+	if (!Number.isFinite(euros)) {
+		return null;
+	}
+	const cents = Math.round(euros * 100);
+	return Number.isSafeInteger(cents) && cents <= maximumExpenseCents ? cents : null;
 }
 
 /**
@@ -162,6 +209,83 @@ export const actions: Actions = {
 			getCollectionRepository().reopenMarketDay(getFormText(formData, 'marketDayId'), scope);
 		} catch {
 			return fail(httpStatus.notFound, { marketDayError: 'Markttag nicht gefunden.' });
+		}
+		redirect(httpStatus.seeOther, '/market-days');
+	},
+	createExpense: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { expenseError: expenseError.csrf });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { expenseError: expenseError.sessionExpired });
+		}
+		const formData = await request.formData();
+		const amountCents = parseEuroCents(getFormText(formData, 'amountEuros'));
+		const categoryText = getFormText(formData, 'category');
+		if (amountCents === null || !(expenseCategories as string[]).includes(categoryText)) {
+			return fail(httpStatus.badRequest, { expenseError: expenseError.invalid });
+		}
+		try {
+			getCollectionRepository().createExpense(
+				{
+					label: getFormText(formData, 'label'),
+					category: categoryText as ExpenseCategory,
+					amountCents,
+					expenseDate: getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
+					marketDayId: getOptionalFormText(formData, 'marketDayId')
+				},
+				scope
+			);
+		} catch {
+			return fail(httpStatus.badRequest, { expenseError: expenseError.invalid });
+		}
+		redirect(httpStatus.seeOther, '/market-days');
+	},
+	updateExpense: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { expenseError: expenseError.csrf });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { expenseError: expenseError.sessionExpired });
+		}
+		const formData = await request.formData();
+		const amountCents = parseEuroCents(getFormText(formData, 'amountEuros'));
+		const categoryText = getFormText(formData, 'category');
+		if (amountCents === null || !(expenseCategories as string[]).includes(categoryText)) {
+			return fail(httpStatus.badRequest, { expenseError: expenseError.invalid });
+		}
+		try {
+			getCollectionRepository().updateExpense(
+				getFormText(formData, 'expenseId'),
+				{
+					label: getFormText(formData, 'label'),
+					category: categoryText as ExpenseCategory,
+					amountCents,
+					expenseDate: getOptionalFormText(formData, 'expenseDate') ?? new Date().toISOString().slice(0, 10),
+					marketDayId: getOptionalFormText(formData, 'marketDayId')
+				},
+				scope
+			);
+		} catch {
+			return fail(httpStatus.badRequest, { expenseError: expenseError.invalid });
+		}
+		redirect(httpStatus.seeOther, '/market-days');
+	},
+	deleteExpense: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { expenseError: expenseError.csrf });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, { expenseError: expenseError.sessionExpired });
+		}
+		const formData = await request.formData();
+		try {
+			getCollectionRepository().deleteExpense(getFormText(formData, 'expenseId'), scope);
+		} catch {
+			return fail(httpStatus.notFound, { expenseError: expenseError.notFound });
 		}
 		redirect(httpStatus.seeOther, '/market-days');
 	}

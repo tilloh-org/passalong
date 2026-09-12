@@ -1,6 +1,12 @@
+<script lang="ts" module>
+	/** Expense category identifiers mirrored from the server. */
+	const expenseCategories: ExpenseCategory[] = ['fee', 'supplies', 'transport', 'purchase', 'other'];
+</script>
+
 <script lang="ts">
 	import { t, getLocale } from '$lib/i18n/index.svelte';
-	import type { MarketDay } from '$lib/server/collection-repository';
+	import { formatPrice } from '$lib/utils/format';
+	import type { Expense, ExpenseCategory, MarketDay, MarketDaySettlement } from '$lib/server/collection-repository';
 
 	let { data, form } = $props();
 
@@ -65,6 +71,51 @@
 	function closeEditDialog(): void {
 		editDialog?.close();
 		editMarketDayId = '';
+	}
+
+	/**
+	 * Whether the expense form is currently open.
+	 */
+	let expenseFormOpen = $state(false);
+	let expenseDialog: HTMLDialogElement | undefined = $state();
+	let editExpenseId = $state('');
+	let editExpenseLabel = $state('');
+	let editExpenseCategory: ExpenseCategory | undefined = $state(undefined);
+	let editExpenseAmount = $state('');
+	let editExpenseDate = $state('');
+	let editExpenseMarketDayId = $state('');
+
+	/**
+	 * Translate an expense category identifier for display.
+	 *
+	 * @param {ExpenseCategory} category - Technical category identifier.
+	 * @returns {string} Localized category label.
+	 */
+	function expenseCategoryLabel(category: ExpenseCategory): string {
+		return t(`expenses.category.${category}`);
+	}
+
+	/**
+	 * Populate and open the expense edit dialog for one expense.
+	 *
+	 * @param {Expense} expense - The expense to edit.
+	 */
+	function openExpenseDialog(expense: Expense): void {
+		editExpenseId = expense.id;
+		editExpenseLabel = expense.label;
+		editExpenseCategory = expense.category;
+		editExpenseAmount = formatPrice(expense.amountCents);
+		editExpenseDate = expense.expenseDate;
+		editExpenseMarketDayId = expense.marketDayId ?? '';
+		expenseDialog?.showModal();
+	}
+
+	/**
+	 * Close the expense dialog and clear its draft state.
+	 */
+	function closeExpenseDialog(): void {
+		expenseDialog?.close();
+		editExpenseId = '';
 	}
 </script>
 
@@ -172,7 +223,148 @@
 			<p class="empty" data-testid="market-days-empty">{t('marketDays.empty')}</p>
 		{/if}
 	</section>
+
+	<section class="panel" aria-labelledby="settlement-title">
+		<h2 id="settlement-title">{t('settlement.title')}</h2>
+		<div class="settlement-list" data-testid="settlement-list">
+			{#each data.settlements as settlement (settlement.marketDayId)}
+				{#if settlement.soldItemCount > 0 || settlement.totalExpensesCents > 0}
+					<div class="settlement-row" data-testid="settlement-item">
+						<div>
+							<strong>{settlement.marketDayName}</strong>
+							<span class="meta">{t('settlement.soldCount', { count: settlement.soldItemCount })}</span>
+						</div>
+						<div class="settlement-numbers">
+							<span class="positive">{t('settlement.proceeds', { proceeds: formatPrice(settlement.totalProceedsCents) })}</span>
+							<span>{t('settlement.expenses', { expenses: formatPrice(settlement.totalExpensesCents) })}</span>
+							<strong class:negative={settlement.netResultCents < 0}>{t('settlement.net', { net: formatPrice(settlement.netResultCents) })}</strong>
+						</div>
+					</div>
+				{/if}
+			{/each}
+		</div>
+	</section>
+
+	<section class="panel" aria-labelledby="expenses-title">
+		<div class="panel-head">
+			<h2 id="expenses-title">{t('expenses.title')}</h2>
+			<button type="button" class="toggle" data-testid="expenses-toggle" onclick={() => (expenseFormOpen = !expenseFormOpen)}>
+				{expenseFormOpen ? t('marketDays.cancel') : t('expenses.toggle')}
+			</button>
+		</div>
+		<p class="panel-sub">{t('expenses.sub')}</p>
+		{#if form?.expenseError}
+			<p class="form-error" role="alert" data-testid="expenses-error">{t(`expenses.error.${form.expenseError}`)}</p>
+		{/if}
+		{#if expenseFormOpen}
+			<form method="POST" action="?/createExpense" class="form-grid" data-testid="expenses-create-form">
+				<label>
+					<span>{t('expenses.label')}</span>
+					<input name="label" required data-testid="expenses-label-input" />
+				</label>
+				<label>
+					<span>{t('expenses.category')}</span>
+					<select name="category" required data-testid="expenses-category-input">
+						{#each expenseCategories as category}
+							<option value={category}>{expenseCategoryLabel(category)}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					<span>{t('expenses.amount')}</span>
+					<input name="amountEuros" type="text" inputmode="decimal" required data-testid="expenses-amount-input" />
+				</label>
+				<label>
+					<span>{t('expenses.date')}</span>
+					<input name="expenseDate" type="date" data-testid="expenses-date-input" />
+				</label>
+				<label class="wide">
+					<span>{t('expenses.marketDay')}</span>
+					<select name="marketDayId" data-testid="expenses-market-day-input">
+						<option value="">{t('expenses.noMarketDay')}</option>
+						{#each data.marketDays as marketDay}
+							<option value={marketDay.id}>{marketDay.name}</option>
+						{/each}
+					</select>
+				</label>
+				<div class="actions">
+					<button type="submit" data-testid="expenses-create-submit">{t('expenses.create')}</button>
+				</div>
+			</form>
+		{/if}
+		<section class="list" data-testid="expenses-list">
+			{#if data.expenses.length}
+				{#each data.expenses as expense (expense.id)}
+					<article class="expense-row" data-testid="expense-item">
+						<div class="expense-main">
+							<div>
+								<strong>{expense.label}</strong>
+								<span class="meta">{expenseCategoryLabel(expense.category)}{expense.marketDayName ? ` · ${expense.marketDayName}` : ''}</span>
+							</div>
+							<strong class="amount">{formatPrice(expense.amountCents)} €</strong>
+						</div>
+						<div class="expense-actions">
+							<button type="button" class="secondary" data-testid="expenses-edit-trigger" onclick={() => openExpenseDialog(expense)}>
+								{t('expenses.edit')}
+							</button>
+							<form method="POST" action="?/deleteExpense" class="inline">
+								<input type="hidden" name="expenseId" value={expense.id} />
+								<button type="submit" class="danger" data-testid="expenses-delete">{t('expenses.delete')}</button>
+							</form>
+						</div>
+					</article>
+				{/each}
+			{:else}
+				<p class="empty" data-testid="expenses-empty">{t('expenses.empty')}</p>
+			{/if}
+		</section>
+	</section>
 </main>
+
+<dialog class="edit-dialog" bind:this={expenseDialog} aria-label={t('expenses.edit')} data-testid="expenses-edit-dialog">
+	<div class="dialog-head">
+		<h3>{t('expenses.edit')}</h3>
+		<button type="button" class="secondary" onclick={closeExpenseDialog}>{t('marketDays.cancel')}</button>
+	</div>
+	<form method="POST" action="?/updateExpense">
+		<input type="hidden" name="expenseId" value={editExpenseId} />
+		<div class="form-grid">
+			<label>
+				<span>{t('expenses.label')}</span>
+				<input name="label" value={editExpenseLabel} required />
+			</label>
+			<label>
+				<span>{t('expenses.category')}</span>
+				<select name="category" bind:value={editExpenseCategory} required>
+					{#each expenseCategories as category}
+						<option value={category}>{expenseCategoryLabel(category)}</option>
+					{/each}
+				</select>
+			</label>
+			<label>
+				<span>{t('expenses.amount')}</span>
+				<input name="amountEuros" type="text" inputmode="decimal" value={editExpenseAmount} required />
+			</label>
+			<label>
+				<span>{t('expenses.date')}</span>
+				<input name="expenseDate" type="date" value={editExpenseDate} />
+			</label>
+			<label class="wide">
+				<span>{t('expenses.marketDay')}</span>
+				<select name="marketDayId" bind:value={editExpenseMarketDayId}>
+					<option value="">{t('expenses.noMarketDay')}</option>
+					{#each data.marketDays as marketDay}
+						<option value={marketDay.id}>{marketDay.name}</option>
+					{/each}
+				</select>
+			</label>
+		</div>
+		<div class="actions">
+			<button type="submit" data-testid="expenses-save">{t('expenses.save')}</button>
+		</div>
+	</form>
+</dialog>
+
 
 <dialog class="edit-dialog" bind:this={editDialog} aria-label={t('marketDays.edit')} data-testid="market-days-edit-dialog">
 	<div class="dialog-head">
@@ -478,5 +670,98 @@
 		.form-grid {
 			grid-template-columns: 1fr;
 		}
+	}
+	.panel-sub {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		margin: -0.4rem 0 0;
+	}
+
+	.settlement-list {
+		display: grid;
+		gap: 0.6rem;
+		margin-top: 0.8rem;
+	}
+
+	.settlement-row {
+		align-items: center;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 0.65rem;
+		display: flex;
+		gap: 0.8rem;
+		justify-content: space-between;
+		padding: 0.7rem 0.9rem;
+	}
+
+	.settlement-row .meta {
+		color: var(--color-text-muted);
+		display: block;
+		font-size: 0.8rem;
+	}
+
+	.settlement-numbers {
+		display: grid;
+		font-size: 0.85rem;
+		gap: 0.15rem;
+		justify-items: end;
+	}
+
+	.settlement-numbers .positive {
+		color: var(--color-ok);
+	}
+
+	.settlement-numbers strong.negative {
+		color: var(--color-danger);
+	}
+
+	.expense-row {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		margin-bottom: 0.6rem;
+		padding: 0.8rem 1rem;
+	}
+
+	.expense-main {
+		align-items: center;
+		display: flex;
+		gap: 0.8rem;
+		justify-content: space-between;
+	}
+
+	.expense-main .meta {
+		color: var(--color-text-muted);
+		display: block;
+		font-size: 0.8rem;
+		margin-top: 2px;
+	}
+
+	.expense-main .amount {
+		color: var(--color-accent-strong);
+		white-space: nowrap;
+	}
+
+	.expense-actions {
+		display: flex;
+		gap: var(--gap-action-row);
+		justify-content: flex-end;
+		margin-top: var(--gap-action-block);
+	}
+
+	.danger {
+		background: var(--color-danger-soft);
+		border: 1px solid var(--color-danger);
+		border-radius: var(--radius-control);
+		color: var(--color-danger);
+		cursor: pointer;
+		font-size: 0.82rem;
+		font-weight: 700;
+		padding: 0.5rem 0.85rem;
+	}
+
+	.inline {
+		display: contents;
 	}
 </style>

@@ -29,6 +29,46 @@ export type ItemCategory = (typeof itemCategories)[number];
 export type ItemCondition = (typeof itemConditions)[number];
 export type SaleChannel = (typeof saleChannels)[number];
 
+export const expenseCategories = [
+	'fee',
+	'supplies',
+	'transport',
+	'purchase',
+	'other'
+] as const;
+
+export type ExpenseCategory = (typeof expenseCategories)[number];
+
+export interface Expense {
+	id: string;
+	label: string;
+	category: ExpenseCategory;
+	amountCents: number;
+	expenseDate: string;
+	marketDayId: string | null;
+	marketDayName: string | null;
+	createdAt: string;
+}
+
+export interface CreateExpenseInput {
+	label: string;
+	category: ExpenseCategory;
+	amountCents: number;
+	expenseDate: string;
+	marketDayId: string | null;
+}
+
+export interface MarketDaySettlement {
+	marketDayId: string;
+	marketDayName: string;
+	date: string | null;
+	closedAt: string | null;
+	soldItemCount: number;
+	totalProceedsCents: number;
+	totalExpensesCents: number;
+	netResultCents: number;
+}
+
 export interface Collection {
 	id: string;
 	name: string;
@@ -294,6 +334,11 @@ export interface CollectionRepository {
 	deleteMarketDay(marketDayId: string, scope: SessionScope): void;
 	closeMarketDay(marketDayId: string, scope: SessionScope): MarketDay;
 	reopenMarketDay(marketDayId: string, scope: SessionScope): MarketDay;
+		createExpense(input: CreateExpenseInput, scope: SessionScope): Expense;
+		listExpenses(scope: SessionScope): Expense[];
+		updateExpense(expenseId: string, input: CreateExpenseInput, scope: SessionScope): Expense;
+		deleteExpense(expenseId: string, scope: SessionScope): void;
+		getMarketDaySettlement(marketDayId: string, scope: SessionScope): MarketDaySettlement | null;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
 	searchItemsForOwner(collectionId: string, filters: ItemFilters, scope: SessionScope): Item[];
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
@@ -377,6 +422,7 @@ const itemReservationVersion = '2026090201_item_reservation';
 const userAvatarVersion = '2026090202_user_avatar';
 const collectionStandIntroVersion = '2026090203_collection_stand_intro';
 const marketDaysVersion = '2026090901_market_days';
+const expensesVersion = '2026091001_expenses';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -401,6 +447,7 @@ const requestIpPattern = new RegExp(`^[0-9a-fA-F:.]{${minimumRequestIpLength},${
 const categoryValues = itemCategories.map((category) => `'${category}'`).join(', ');
 const conditionValues = itemConditions.map((condition) => `'${condition}'`).join(', ');
 const saleChannelValues = saleChannels.map((channel) => `'${channel}'`).join(', ');
+const expenseCategoryValues = expenseCategories.map((category) => `'${category}'`).join(', ');
 
 /**
  * Create a SQLite-backed repository for the core collection domain.
@@ -755,6 +802,7 @@ export function createCollectionRepository(
 				database.prepare("DELETE FROM login_attempts WHERE scope = 'username' AND subject = ?").run(profile.username);
 				database.prepare('DELETE FROM items WHERE owner_id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
 				database.prepare('DELETE FROM market_days WHERE owner_id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
+				database.prepare('DELETE FROM expenses WHERE owner_id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
 				database.prepare('DELETE FROM collections WHERE owner_id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
 				database.prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?').run(scope.userId, scope.tenantId);
 				const remainingUsers = database
@@ -1069,6 +1117,102 @@ export function createCollectionRepository(
 					.prepare('SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?')
 					.get(marketDayId, scope.tenantId) as MarketDayRow
 			);
+		},
+
+		createExpense(input, scope) {
+			const expense = validateExpenseInput(input);
+			if (expense.marketDayId !== null) {
+				assertOwnMarketDay(database, expense.marketDayId, scope);
+			}
+			const expenseId = randomUUID();
+			const createdAt = new Date().toISOString();
+			database
+				.prepare(
+					'INSERT INTO expenses (id, tenant_id, owner_id, market_day_id, label, category, amount_cents, expense_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+				)
+				.run(
+					expenseId,
+					scope.tenantId,
+					scope.userId,
+					expense.marketDayId,
+					expense.label,
+					expense.category,
+					expense.amountCents,
+					expense.expenseDate,
+					createdAt
+				);
+			return getExpenseRow(database, expenseId, scope);
+		},
+
+		listExpenses(scope) {
+			return listExpenseRows(database, scope);
+		},
+
+		updateExpense(expenseId, input, scope) {
+			const expense = validateExpenseInput(input);
+			return runImmediateTransaction(database, () => {
+				if (expense.marketDayId !== null) {
+					assertOwnMarketDay(database, expense.marketDayId, scope);
+				}
+				const updated = database
+					.prepare(
+						'UPDATE expenses SET market_day_id = ?, label = ?, category = ?, amount_cents = ?, expense_date = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+					)
+					.run(
+						expense.marketDayId,
+						expense.label,
+						expense.category,
+						expense.amountCents,
+						expense.expenseDate,
+						expenseId,
+						scope.userId,
+						scope.tenantId
+					);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('expense was not found');
+				}
+				return getExpenseRow(database, expenseId, scope);
+			});
+		},
+
+		deleteExpense(expenseId, scope) {
+			const deleted = database
+				.prepare('DELETE FROM expenses WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+				.run(expenseId, scope.userId, scope.tenantId);
+			if (deleted.changes !== singleDatabaseRowChange) {
+				throw new Error('expense was not found');
+			}
+		},
+
+		getMarketDaySettlement(marketDayId, scope) {
+			const marketDayRow = database
+				.prepare('SELECT id, name, date, closed_at FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+				.get(marketDayId, scope.userId, scope.tenantId) as
+				| { id: string; name: string; date: string | null; closed_at: string | null }
+				| undefined;
+			if (!marketDayRow) {
+				return null;
+			}
+			const sales = database
+				.prepare(
+					'SELECT COUNT(*) AS sold_item_count, COALESCE(SUM(sale_proceeds_cents), 0) AS total_proceeds_cents FROM items WHERE owner_id = ? AND tenant_id = ? AND market_day_id = ? AND sold_at IS NOT NULL'
+				)
+				.get(scope.userId, scope.tenantId, marketDayId) as { sold_item_count: number; total_proceeds_cents: number };
+			const expenses = database
+				.prepare(
+					'SELECT COALESCE(SUM(amount_cents), 0) AS total_expenses_cents FROM expenses WHERE owner_id = ? AND tenant_id = ? AND market_day_id = ?'
+				)
+				.get(scope.userId, scope.tenantId, marketDayId) as { total_expenses_cents: number };
+			return {
+				marketDayId: marketDayRow.id,
+				marketDayName: marketDayRow.name,
+				date: marketDayRow.date,
+				closedAt: marketDayRow.closed_at,
+				soldItemCount: sales.sold_item_count,
+				totalProceedsCents: sales.total_proceeds_cents,
+				totalExpensesCents: expenses.total_expenses_cents,
+				netResultCents: sales.total_proceeds_cents - expenses.total_expenses_cents
+			};
 		},
 
 		markItemSold(itemId, sale, scope) {
@@ -1803,6 +1947,143 @@ function validateMarketDayInput(input: CreateMarketDayInput): CreateMarketDayInp
 }
 
 /**
+ * Ensure a market day exists for the authenticated owner and tenant.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} marketDayId - Referenced market day id.
+ * @param {SessionScope} scope - Authenticated owner scope.
+ * @returns {void}
+ * @throws When the market day does not belong to the owner.
+ */
+function assertOwnMarketDay(database: Database.Database, marketDayId: string, scope: SessionScope): void {
+	const marketDay = database
+		.prepare('SELECT 1 FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+		.get(marketDayId, scope.userId, scope.tenantId);
+	if (!marketDay) {
+		throw new Error('market day was not found');
+	}
+}
+
+/**
+ * Read one expense with its optional market day name for the owner.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} expenseId - Expense id to read.
+ * @param {SessionScope} scope - Authenticated owner scope.
+ * @returns {Expense} The mapped expense.
+ * @throws {Error} When the expense does not exist for the owner.
+ */
+function getExpenseRow(database: Database.Database, expenseId: string, scope: SessionScope): Expense {
+	const row = database
+		.prepare(
+			`SELECT expenses.id, expenses.label, expenses.category, expenses.amount_cents, expenses.expense_date,
+				expenses.market_day_id, expenses.created_at, market_days.name AS market_day_name
+			 FROM expenses
+			 LEFT JOIN market_days ON market_days.id = expenses.market_day_id
+				AND market_days.owner_id = expenses.owner_id AND market_days.tenant_id = expenses.tenant_id
+			 WHERE expenses.id = ? AND expenses.owner_id = ? AND expenses.tenant_id = ?`
+		)
+		.get(expenseId, scope.userId, scope.tenantId) as
+		| {
+				id: string;
+				label: string;
+				category: ExpenseCategory;
+				amount_cents: number;
+				expense_date: string;
+				market_day_id: string | null;
+				created_at: string;
+				market_day_name: string | null;
+		  }
+		| undefined;
+	if (!row) {
+		throw new Error('expense was not found');
+	}
+	return {
+		id: row.id,
+		label: row.label,
+		category: row.category,
+		amountCents: row.amount_cents,
+		expenseDate: row.expense_date,
+		marketDayId: row.market_day_id,
+		marketDayName: row.market_day_name,
+		createdAt: row.created_at
+	};
+}
+
+/**
+ * List all expenses of the authenticated owner, newest first.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {SessionScope} scope - Authenticated owner scope.
+ * @returns {Expense[]} Owner-scoped expenses ordered by date and creation time.
+ */
+function listExpenseRows(database: Database.Database, scope: SessionScope): Expense[] {
+	const rows = database
+		.prepare(
+			`SELECT expenses.id, expenses.label, expenses.category, expenses.amount_cents, expenses.expense_date,
+				expenses.market_day_id, expenses.created_at, market_days.name AS market_day_name
+			 FROM expenses
+			 LEFT JOIN market_days ON market_days.id = expenses.market_day_id
+				AND market_days.owner_id = expenses.owner_id AND market_days.tenant_id = expenses.tenant_id
+			 WHERE expenses.owner_id = ? AND expenses.tenant_id = ?
+			 ORDER BY expenses.expense_date DESC, expenses.created_at DESC, expenses.id DESC`
+		)
+		.all(scope.userId, scope.tenantId) as {
+		id: string;
+		label: string;
+		category: ExpenseCategory;
+		amount_cents: number;
+		expense_date: string;
+		market_day_id: string | null;
+		created_at: string;
+		market_day_name: string | null;
+	}[];
+	return rows.map((row) => ({
+		id: row.id,
+		label: row.label,
+		category: row.category,
+		amountCents: row.amount_cents,
+		expenseDate: row.expense_date,
+		marketDayId: row.market_day_id,
+		marketDayName: row.market_day_name,
+		createdAt: row.created_at
+	}));
+}
+
+/**
+ * Validate and normalize an expense input.
+ *
+ * @param {CreateExpenseInput} input - Raw expense values.
+ * @returns {CreateExpenseInput} Normalized values (trimmed label, validated amount and date).
+ */
+function validateExpenseInput(input: CreateExpenseInput): CreateExpenseInput {
+	const label = requireText(input.label, 'label');
+	const category = requireValidExpenseCategory(input.category);
+	const amountCents = requireNonNegativeInteger(input.amountCents, 'amountCents');
+	const expenseDate = requireIsoDate(input.expenseDate, 'expenseDate');
+	return {
+		label,
+		category,
+		amountCents,
+		expenseDate,
+		marketDayId: input.marketDayId ?? null
+	};
+}
+
+/**
+ * Validate that a category is one of the supported expense categories.
+ *
+ * @param {ExpenseCategory} category - Raw category value.
+ * @returns {ExpenseCategory} The validated category.
+ */
+function requireValidExpenseCategory(category: ExpenseCategory): ExpenseCategory {
+	if (!(expenseCategories as readonly string[]).includes(category)) {
+		throw new Error('category is not a supported expense category');
+	}
+	return category;
+}
+
+/**
  * Rewrite image position numbers so they stay gap-free after a deletion.
  *
  * @param {ImageRow[]} orderedImages - Remaining images sorted by current position.
@@ -1830,8 +2111,8 @@ function initializeSchema(database: Database.Database): void {
 			createIndexes(database);
 			const appliedAt = new Date().toISOString();
 			database
-				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)')
-				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, itemScopedImageKeysVersion, appliedAt, saleStatusVersion, appliedAt, itemDetailFieldsVersion, appliedAt, itemReservationVersion, appliedAt, userAvatarVersion, appliedAt, collectionStandIntroVersion, appliedAt, marketDaysVersion, appliedAt);
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)')
+				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt, itemScopedImageKeysVersion, appliedAt, saleStatusVersion, appliedAt, itemDetailFieldsVersion, appliedAt, itemReservationVersion, appliedAt, userAvatarVersion, appliedAt, collectionStandIntroVersion, appliedAt, marketDaysVersion, appliedAt, expensesVersion, appliedAt);
 		})();
 		return;
 	}
@@ -1969,6 +2250,20 @@ function createSchema(database: Database.Database): void {
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
 		);
+		CREATE TABLE IF NOT EXISTS expenses (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			owner_id TEXT NOT NULL,
+			market_day_id TEXT,
+			label TEXT NOT NULL CHECK (length(trim(label)) > 0),
+			category TEXT NOT NULL CHECK (category IN ('fee', 'supplies', 'transport', 'purchase', 'other')),
+			amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
+			expense_date TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id),
+			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
+			FOREIGN KEY (market_day_id, tenant_id) REFERENCES market_days(id, tenant_id) ON DELETE SET NULL
+		);
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
 			applied_at TEXT NOT NULL
@@ -1995,6 +2290,7 @@ function createIndexes(database: Database.Database): void {
 		CREATE INDEX IF NOT EXISTS items_tenant_collection_created_idx ON items(tenant_id, collection_id, created_at, id);
 		CREATE INDEX IF NOT EXISTS items_tenant_owner_created_idx ON items(tenant_id, owner_id, created_at, id);
 		CREATE INDEX IF NOT EXISTS item_images_tenant_item_position_idx ON item_images(tenant_id, item_id, position);
+		CREATE INDEX IF NOT EXISTS expenses_tenant_owner_date_idx ON expenses(tenant_id, owner_id, expense_date, id);
 	`);
 }
 
@@ -2047,6 +2343,7 @@ function migrateSchema(database: Database.Database): void {
 	migrateUserAvatar(database);
 	migrateCollectionStandIntro(database);
 	migrateMarketDays(database);
+	migrateExpenses(database);
 }
 
 /**
@@ -2111,6 +2408,45 @@ function migrateMarketDays(database: Database.Database): void {
 }
 
 /**
+ * Add the expenses table once, preserving every existing record.
+ *
+ * Expenses belong to one tenant and one owner and optionally reference a
+ * market day so a market day settlement can subtract them from the proceeds.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateExpenses(database: Database.Database): void {
+	if (hasMigrationVersion(database, expensesVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		database.exec(`
+			CREATE TABLE IF NOT EXISTS expenses (
+				id TEXT PRIMARY KEY,
+				tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+				owner_id TEXT NOT NULL,
+				market_day_id TEXT,
+				label TEXT NOT NULL CHECK (length(trim(label)) > 0),
+				category TEXT NOT NULL CHECK (category IN (${expenseCategoryValues})),
+				amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
+				expense_date TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				UNIQUE (id, tenant_id),
+				FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
+				FOREIGN KEY (market_day_id, tenant_id) REFERENCES market_days(id, tenant_id) ON DELETE SET NULL
+			);
+			CREATE INDEX IF NOT EXISTS expenses_tenant_owner_date_idx ON expenses(tenant_id, owner_id, expense_date, id);
+		`);
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(expensesVersion, new Date().toISOString());
+	})();
+}
+
+/**
+ * Add the avatar storage key to users on databases that predate profile avatars./**
  * Add the avatar storage key to users on databases that predate profile avatars.
  *
  * @param {Database.Database} database - The SQLite connection to migrate.
