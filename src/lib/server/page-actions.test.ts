@@ -358,7 +358,7 @@ describe('instance-admin actions', () => {
 		} as never)) as { saleStatistics?: unknown };
 
 		// assume
-		expect(authenticatedData.saleStatistics).toEqual({
+		expect(authenticatedData.saleStatistics).toMatchObject({
 			soldItemCount: 1,
 			totalProceedsCents: 750,
 			proceedsByChannel: [{ channel: 'flea-market', soldItemCount: 1, totalProceedsCents: 750 }],

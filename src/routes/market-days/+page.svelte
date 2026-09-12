@@ -10,16 +10,89 @@
 </script>
 
 <script lang="ts">
+	import BarList from '$lib/components/statistics/bar-list.svelte';
+	import ChartToggle from '$lib/components/statistics/chart-toggle.svelte';
+	import PieChart from '$lib/components/statistics/pie-chart.svelte';
 	import { t, getLocale } from '$lib/i18n/index.svelte';
 	import { formatPrice } from '$lib/utils/format';
 	import type { Expense, ExpenseCategory, MarketDay } from '$lib/server/collection-repository';
 
 	let { data, form } = $props();
 
+	/** Market-day settlements that contain either sales or expenses. */
+	const settlementsWithActivity = $derived(
+		data.settlements.filter(
+			(settlement) => settlement.soldItemCount > 0 || settlement.totalExpensesCents > 0
+		)
+	);
+
+	/** The market day explicitly selected in the settlement picker, if any. */
+	let selectedSettlementId = $state('');
+
+	/** Default to the first active day without waiting for browser-only state, while preserving a selection. */
+	const activeSettlementId = $derived(
+		selectedSettlementId || settlementsWithActivity[0]?.marketDayId || ''
+	);
+
+	/** Clear a selection when its market day or final activity is deleted. */
+	$effect(() => {
+		if (
+			selectedSettlementId &&
+			!settlementsWithActivity.some((settlement) => settlement.marketDayId === selectedSettlementId)
+		) {
+			selectedSettlementId = '';
+		}
+	});
+
+	/** A category chart can render its breakdown as bars or as a pie. */
+	type ChartType = 'bars' | 'pie';
+
+	/** Per-market-day chart choices, kept independent while the page stays open. */
+	let settlementChartModes = $state<Record<string, ChartType>>({});
+
+	/**
+	 * Resolve the current chart presentation for one settlement metric.
+	 *
+	 * @param {string} marketDayId - The owning market-day identifier.
+	 * @param {'proceeds' | 'sales'} metric - The settlement metric to render.
+	 * @returns {ChartType} The selected chart presentation.
+	 */
+	function settlementChartMode(marketDayId: string, metric: 'proceeds' | 'sales'): ChartType {
+		return (
+			settlementChartModes[`${marketDayId}:${metric}`] ?? (metric === 'proceeds' ? 'bars' : 'pie')
+		);
+	}
+
+	/**
+	 * Store the independently selected presentation for one settlement metric.
+	 *
+	 * @param {string} marketDayId - The owning market-day identifier.
+	 * @param {'proceeds' | 'sales'} metric - The settlement metric to update.
+	 * @param {ChartType} mode - The newly selected chart presentation.
+	 * @returns {void}
+	 */
+	function setSettlementChartMode(
+		marketDayId: string,
+		metric: 'proceeds' | 'sales',
+		mode: ChartType
+	): void {
+		settlementChartModes = { ...settlementChartModes, [`${marketDayId}:${metric}`]: mode };
+	}
+
 	/**
 	 * Whether the create form is currently open.
 	 */
 	let createFormOpen = $state(false);
+
+	/**
+	 * Translate a technical item-category identifier for display.
+	 *
+	 * @param {string} category - Technical item-category identifier.
+	 * @returns {string} Localized item-category label.
+	 */
+	function categoryLabel(category: string): string {
+		return t(`category.${category}`);
+	}
 
 	/**
 	 * Format a YYYY-MM-DD date as a localized long date for display.
@@ -268,32 +341,153 @@
 
 	<section class="panel" aria-labelledby="settlement-title">
 		<h2 id="settlement-title">{t('settlement.title')}</h2>
+		{#if settlementsWithActivity.length > 0}
+			<div class="settlement-picker" role="group" aria-label={t('settlement.title')}>
+				{#each settlementsWithActivity as settlement (settlement.marketDayId)}
+					<button
+						type="button"
+						class="settlement-picker-button"
+						class:selected={activeSettlementId === settlement.marketDayId}
+						aria-pressed={activeSettlementId === settlement.marketDayId}
+						data-testid={`settlement-picker-${settlement.marketDayId}`}
+						onclick={() => (selectedSettlementId = settlement.marketDayId)}
+					>
+						<span class="settlement-picker-name">{settlement.marketDayName}</span>
+						<span class="settlement-picker-meta"
+							>{t('settlement.soldCount', { count: settlement.soldItemCount })} · {t(
+								'settlement.net',
+								{
+									net: formatPrice(settlement.netResultCents)
+								}
+							)}</span
+						>
+					</button>
+				{/each}
+			</div>
+		{/if}
 		<div class="settlement-list" data-testid="settlement-list">
 			{#each data.settlements as settlement (settlement.marketDayId)}
-				{#if settlement.soldItemCount > 0 || settlement.totalExpensesCents > 0}
-					<div class="settlement-row" data-testid="settlement-item">
-						<div>
-							<strong>{settlement.marketDayName}</strong>
-							<span class="meta"
-								>{t('settlement.soldCount', { count: settlement.soldItemCount })}</span
-							>
+				{#if activeSettlementId === settlement.marketDayId && (settlement.soldItemCount > 0 || settlement.totalExpensesCents > 0)}
+					<article class="settlement-row" data-testid="settlement-item">
+						<div class="settlement-overview">
+							<div class="settlement-head">
+								<span class="active-settlement-label">{t('settlement.activeMarketDay')}</span>
+								<strong>{settlement.marketDayName}</strong>
+								<span class="meta"
+									>{t('settlement.soldCount', { count: settlement.soldItemCount })}</span
+								>
+							</div>
+							<div class="settlement-numbers">
+								<span class="positive"
+									>{t('settlement.proceeds', {
+										proceeds: formatPrice(settlement.totalProceedsCents)
+									})}</span
+								>
+								<span class="negative"
+									>{t('settlement.expenses', {
+										expenses: formatPrice(settlement.totalExpensesCents)
+									})}</span
+								>
+								<strong class:negative={settlement.netResultCents < 0}
+									>{t('settlement.net', { net: formatPrice(settlement.netResultCents) })}</strong
+								>
+							</div>
 						</div>
-						<div class="settlement-numbers">
-							<span class="positive"
-								>{t('settlement.proceeds', {
-									proceeds: formatPrice(settlement.totalProceedsCents)
-								})}</span
-							>
-							<span
-								>{t('settlement.expenses', {
-									expenses: formatPrice(settlement.totalExpensesCents)
-								})}</span
-							>
-							<strong class:negative={settlement.netResultCents < 0}
-								>{t('settlement.net', { net: formatPrice(settlement.netResultCents) })}</strong
-							>
-						</div>
-					</div>
+						{#if settlement.proceedsByCategory.length > 0 || settlement.expensesByCategory.length > 0}
+							<div class="settlement-chart-grid">
+								{#if settlement.proceedsByCategory.length > 0}
+									<section
+										class="settlement-chart-card"
+										aria-labelledby={`settlement-proceeds-${settlement.marketDayId}`}
+									>
+										<h3 id={`settlement-proceeds-${settlement.marketDayId}`}>
+											{t('statistics.proceedsPerCategory')}
+										</h3>
+										<ChartToggle
+											testId={`settlement-proceeds-toggle-${settlement.marketDayId}`}
+											value={settlementChartMode(settlement.marketDayId, 'proceeds')}
+											onchange={(mode) =>
+												setSettlementChartMode(settlement.marketDayId, 'proceeds', mode)}
+										/>
+										{#if settlementChartMode(settlement.marketDayId, 'proceeds') === 'pie'}
+											<PieChart
+												slices={settlement.proceedsByCategory.map((entry) => ({
+													label: categoryLabel(entry.category),
+													valueCents: entry.totalProceedsCents
+												}))}
+												testId={`settlement-proceeds-${settlement.marketDayId}`}
+												centerLabel={t('statistics.totalLabel')}
+												centerValueCents={settlement.totalProceedsCents}
+											/>
+										{:else}
+											<BarList
+												entries={settlement.proceedsByCategory.map((entry) => ({
+													label: categoryLabel(entry.category),
+													valueCents: entry.totalProceedsCents
+												}))}
+												testId={`settlement-proceeds-${settlement.marketDayId}`}
+											/>
+										{/if}
+									</section>
+
+									<section
+										class="settlement-chart-card"
+										aria-labelledby={`settlement-sales-${settlement.marketDayId}`}
+									>
+										<h3 id={`settlement-sales-${settlement.marketDayId}`}>
+											{t('statistics.salesPerCategory')}
+										</h3>
+										<ChartToggle
+											testId={`settlement-sales-toggle-${settlement.marketDayId}`}
+											value={settlementChartMode(settlement.marketDayId, 'sales')}
+											onchange={(mode) =>
+												setSettlementChartMode(settlement.marketDayId, 'sales', mode)}
+										/>
+										{#if settlementChartMode(settlement.marketDayId, 'sales') === 'pie'}
+											<PieChart
+												mode="count"
+												slices={settlement.proceedsByCategory.map((entry) => ({
+													label: categoryLabel(entry.category),
+													valueCents: entry.soldItemCount
+												}))}
+												testId={`settlement-sales-${settlement.marketDayId}`}
+												centerLabel={t('statistics.totalLabel')}
+												centerCount={settlement.soldItemCount}
+											/>
+										{:else}
+											<BarList
+												mode="count"
+												entries={settlement.proceedsByCategory.map((entry) => ({
+													label: categoryLabel(entry.category),
+													valueCents: entry.soldItemCount
+												}))}
+												testId={`settlement-sales-${settlement.marketDayId}`}
+											/>
+										{/if}
+									</section>
+								{/if}
+
+								{#if settlement.expensesByCategory.length > 0}
+									<section
+										class="settlement-chart-card settlement-expense-card"
+										aria-labelledby={`settlement-expenses-title-${settlement.marketDayId}`}
+									>
+										<h3 id={`settlement-expenses-title-${settlement.marketDayId}`}>
+											{t('statistics.expensesByCategory')}
+										</h3>
+										<BarList
+											accent="expenses"
+											entries={settlement.expensesByCategory.map((entry) => ({
+												label: expenseCategoryLabel(entry.category),
+												valueCents: entry.totalExpensesCents
+											}))}
+											testId={`settlement-expenses-${settlement.marketDayId}`}
+										/>
+									</section>
+								{/if}
+							</div>
+						{/if}
+					</article>
 				{/if}
 			{/each}
 		</div>
@@ -377,7 +571,7 @@
 										: ''}</span
 								>
 							</div>
-							<strong class="amount">{formatPrice(expense.amountCents)} €</strong>
+							<strong class="amount negative">-{formatPrice(expense.amountCents)} €</strong>
 						</div>
 						<div class="expense-actions">
 							<button
@@ -780,7 +974,53 @@
 	.panel-sub {
 		color: var(--color-text-muted);
 		font-size: 0.85rem;
-		margin: -0.4rem 0 0;
+		margin: 0.4rem 0 1rem;
+	}
+
+	.settlement-picker {
+		display: grid;
+		gap: 0.6rem;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+		margin-top: 0.8rem;
+	}
+
+	.settlement-picker-button {
+		background: var(--color-input);
+		border: 1px solid var(--color-border);
+		border-radius: 0.75rem;
+		color: var(--color-text);
+		cursor: pointer;
+		display: grid;
+		gap: 0.15rem;
+		min-width: 0;
+		padding: 0.7rem 0.8rem;
+		text-align: left;
+	}
+
+	.settlement-picker-button.selected {
+		background: var(--color-accent-soft);
+		border-color: var(--color-accent);
+		box-shadow: inset 0 0 0 1px var(--color-accent);
+	}
+
+	.settlement-picker-button:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.settlement-picker-name {
+		font-weight: 800;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.settlement-picker-meta {
+		color: var(--color-text-muted);
+		font-size: 0.75rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.settlement-list {
@@ -790,14 +1030,32 @@
 	}
 
 	.settlement-row {
-		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: 0.65rem;
-		display: flex;
+		display: grid;
+		gap: 1rem;
+		padding: 1rem;
+	}
+
+	.settlement-overview {
+		align-items: start;
+		display: grid;
 		gap: 0.8rem;
-		justify-content: space-between;
-		padding: 0.7rem 0.9rem;
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.settlement-head {
+		display: grid;
+		gap: 0.3rem;
+	}
+
+	.active-settlement-label {
+		color: var(--color-accent);
+		font-size: 0.7rem;
+		font-weight: 800;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
 	}
 
 	.settlement-row .meta {
@@ -811,13 +1069,41 @@
 		font-size: 0.85rem;
 		gap: 0.15rem;
 		justify-items: end;
+		text-align: right;
+	}
+
+	.settlement-chart-grid {
+		border-top: 1px dashed var(--color-border);
+		display: grid;
+		gap: 0.8rem;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+		padding-top: 1rem;
+	}
+
+	.settlement-chart-card {
+		background: var(--color-input);
+		border: 1px solid var(--color-border);
+		border-radius: 0.75rem;
+		min-width: 0;
+		padding: 1rem;
+	}
+
+	.settlement-chart-card h3 {
+		font-size: 1rem;
+		line-height: 1.2;
+		margin: 0 0 0.8rem;
+		min-block-size: 2.4em;
+	}
+
+	.settlement-expense-card {
+		grid-column: 1 / -1;
 	}
 
 	.settlement-numbers .positive {
 		color: var(--color-ok);
 	}
 
-	.settlement-numbers strong.negative {
+	.settlement-numbers .negative {
 		color: var(--color-danger);
 	}
 
@@ -849,6 +1135,10 @@
 		white-space: nowrap;
 	}
 
+	.expense-main .amount.negative {
+		color: var(--color-danger);
+	}
+
 	.expense-actions {
 		display: flex;
 		gap: var(--gap-action-row);
@@ -869,5 +1159,24 @@
 
 	.inline {
 		display: contents;
+	}
+
+	@media (max-width: 700px) {
+		.settlement-overview {
+			grid-template-columns: 1fr;
+		}
+
+		.settlement-numbers {
+			justify-items: start;
+			text-align: left;
+		}
+
+		.settlement-chart-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.settlement-expense-card {
+			grid-column: auto;
+		}
 	}
 </style>

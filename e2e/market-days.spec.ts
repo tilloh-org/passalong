@@ -126,11 +126,14 @@ test.describe('Market days', () => {
 
 		// assume — the expense row and the settlement appear
 		const expenseRow = page.getByTestId('expense-item').filter({ hasText: 'Standgebühr' });
-		await expect(expenseRow).toContainText('15,00 €');
+		await expect(expenseRow).toContainText('-15,00 €');
 		const settlementRow = page
 			.getByTestId('settlement-item')
 			.filter({ hasText: `${marketDayName} (verschoben)` });
-		await expect(settlementRow).toContainText('Ausgaben: 15,00 €');
+		await expect(settlementRow).toContainText('Ausgaben: -15,00 €');
+
+		// assume — the settlement shows the per-day expense bars (no sales yet, so no proceeds donut)
+		await expect(settlementRow.locator('[data-testid^=settlement-expenses-]')).toBeVisible();
 
 		// act — edit the expense through the dialog
 		await expenseRow.getByTestId('expenses-edit-trigger').click();
@@ -142,11 +145,11 @@ test.describe('Market days', () => {
 
 		// assume — the expense row and the settlement reflect the corrected amount
 		await expect(page.getByTestId('expense-item').filter({ hasText: 'Standgebühr' })).toContainText(
-			'18,00 €'
+			'-18,00 €'
 		);
 		await expect(
 			page.getByTestId('settlement-item').filter({ hasText: `${marketDayName} (verschoben)` })
-		).toContainText('Ausgaben: 18,00 €');
+		).toContainText('Ausgaben: -18,00 €');
 
 		// act — delete the expense
 		await page.getByTestId('expenses-delete').click();
