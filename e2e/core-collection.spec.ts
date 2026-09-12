@@ -1,10 +1,15 @@
 import { Buffer } from 'node:buffer';
 import { expect, test } from '@playwright/test';
 
+const coreCollectionFlowTimeoutMs = 60_000;
+
 test.describe('Core collection', () => {
 	test('rejects cross-site registration and completes the authenticated collection flow', async ({
 		page
 	}) => {
+		// This deliberately covers the complete authenticated owner journey in one test.
+		test.setTimeout(coreCollectionFlowTimeoutMs);
+
 		// arrange
 		const registrations = [
 			{ username: 'avery', displayName: 'Avery', password: 'correct-horse-battery-staple' },
@@ -359,8 +364,16 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('statistics-trend').locator('.trend-column')).toHaveCount(1);
 		await expect(page.getByTestId('statistics-market-days')).toContainText(marketDayName);
 
-		// act — inspect the linked market-day settlement's category breakdowns
+		// act — select the linked market day before inspecting its category breakdowns.
+		// This remains deterministic when a retried run already contains another active day.
 		await page.getByTestId('nav-market-days-link').click();
+		const marketDayPicker = page
+			.getByTestId('settlement-list')
+			.locator('..')
+			.getByTestId(/settlement-picker-/)
+			.filter({ hasText: marketDayName });
+		await expect(marketDayPicker).toHaveCount(1);
+		await marketDayPicker.click();
 		const marketDaySettlement = page
 			.getByTestId('settlement-item')
 			.filter({ hasText: marketDayName });

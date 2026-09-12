@@ -19,6 +19,31 @@
 
 	let { data, form } = $props();
 
+	/** Market-day settlements that contain either sales or expenses. */
+	const settlementsWithActivity = $derived(
+		data.settlements.filter(
+			(settlement) => settlement.soldItemCount > 0 || settlement.totalExpensesCents > 0
+		)
+	);
+
+	/** The market day explicitly selected in the settlement picker, if any. */
+	let selectedSettlementId = $state('');
+
+	/** Default to the first active day without waiting for browser-only state, while preserving a selection. */
+	const activeSettlementId = $derived(
+		selectedSettlementId || settlementsWithActivity[0]?.marketDayId || ''
+	);
+
+	/** Clear a selection when its market day or final activity is deleted. */
+	$effect(() => {
+		if (
+			selectedSettlementId &&
+			!settlementsWithActivity.some((settlement) => settlement.marketDayId === selectedSettlementId)
+		) {
+			selectedSettlementId = '';
+		}
+	});
+
 	/** A category chart can render its breakdown as bars or as a pie. */
 	type ChartType = 'bars' | 'pie';
 
@@ -316,12 +341,37 @@
 
 	<section class="panel" aria-labelledby="settlement-title">
 		<h2 id="settlement-title">{t('settlement.title')}</h2>
+		{#if settlementsWithActivity.length > 0}
+			<div class="settlement-picker" role="group" aria-label={t('settlement.title')}>
+				{#each settlementsWithActivity as settlement (settlement.marketDayId)}
+					<button
+						type="button"
+						class="settlement-picker-button"
+						class:selected={activeSettlementId === settlement.marketDayId}
+						aria-pressed={activeSettlementId === settlement.marketDayId}
+						data-testid={`settlement-picker-${settlement.marketDayId}`}
+						onclick={() => (selectedSettlementId = settlement.marketDayId)}
+					>
+						<span class="settlement-picker-name">{settlement.marketDayName}</span>
+						<span class="settlement-picker-meta"
+							>{t('settlement.soldCount', { count: settlement.soldItemCount })} · {t(
+								'settlement.net',
+								{
+									net: formatPrice(settlement.netResultCents)
+								}
+							)}</span
+						>
+					</button>
+				{/each}
+			</div>
+		{/if}
 		<div class="settlement-list" data-testid="settlement-list">
 			{#each data.settlements as settlement (settlement.marketDayId)}
-				{#if settlement.soldItemCount > 0 || settlement.totalExpensesCents > 0}
+				{#if activeSettlementId === settlement.marketDayId && (settlement.soldItemCount > 0 || settlement.totalExpensesCents > 0)}
 					<article class="settlement-row" data-testid="settlement-item">
 						<div class="settlement-overview">
 							<div class="settlement-head">
+								<span class="active-settlement-label">{t('settlement.activeMarketDay')}</span>
 								<strong>{settlement.marketDayName}</strong>
 								<span class="meta"
 									>{t('settlement.soldCount', { count: settlement.soldItemCount })}</span
@@ -924,7 +974,53 @@
 	.panel-sub {
 		color: var(--color-text-muted);
 		font-size: 0.85rem;
-		margin: -0.4rem 0 0;
+		margin: 0.4rem 0 1rem;
+	}
+
+	.settlement-picker {
+		display: grid;
+		gap: 0.6rem;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+		margin-top: 0.8rem;
+	}
+
+	.settlement-picker-button {
+		background: var(--color-input);
+		border: 1px solid var(--color-border);
+		border-radius: 0.75rem;
+		color: var(--color-text);
+		cursor: pointer;
+		display: grid;
+		gap: 0.15rem;
+		min-width: 0;
+		padding: 0.7rem 0.8rem;
+		text-align: left;
+	}
+
+	.settlement-picker-button.selected {
+		background: var(--color-accent-soft);
+		border-color: var(--color-accent);
+		box-shadow: inset 0 0 0 1px var(--color-accent);
+	}
+
+	.settlement-picker-button:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
+
+	.settlement-picker-name {
+		font-weight: 800;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.settlement-picker-meta {
+		color: var(--color-text-muted);
+		font-size: 0.75rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.settlement-list {
@@ -952,6 +1048,14 @@
 	.settlement-head {
 		display: grid;
 		gap: 0.3rem;
+	}
+
+	.active-settlement-label {
+		color: var(--color-accent);
+		font-size: 0.7rem;
+		font-weight: 800;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
 	}
 
 	.settlement-row .meta {
