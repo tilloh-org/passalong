@@ -115,13 +115,8 @@
 						style={`background: ${palette[index % palette.length]}`}
 						aria-hidden="true"
 					></span>
-					<div class="legend-text">
-						<span class="legend-label">{slice.label}</span>
-						<span class="legend-value">{sliceValue(slice.valueCents)}</span>
-						{#if slice.countLabel}
-							<span class="legend-count">{slice.countLabel}</span>
-						{/if}
-					</div>
+					<span class="legend-label">{slice.label}</span>
+					<span class="legend-value">{sliceValue(slice.valueCents)}</span>
 				</li>
 			{/each}
 		</ul>
@@ -180,10 +175,24 @@
 	}
 
 	.legend li {
-		align-items: flex-start;
+		align-items: center;
 		display: flex;
 		gap: 0.5rem;
 		min-width: 0;
+	}
+
+	.legend-label {
+		font-weight: 700;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.legend-value {
+		color: var(--color-text-muted);
+		margin-left: auto;
+		white-space: nowrap;
 	}
 
 	.swatch {
@@ -193,26 +202,6 @@
 		flex-shrink: 0;
 		height: 0.7rem;
 		width: 0.7rem;
-	}
-
-	.legend-text {
-		display: grid;
-		gap: 0.1rem;
-		min-width: 0;
-	}
-
-	.legend-label {
-		font-weight: 700;
-	}
-
-	.legend-value {
-		color: var(--color-text-muted);
-	}
-
-	.legend-count {
-		color: var(--color-text-muted);
-		font-size: 0.72rem;
-		font-weight: 300;
 	}
 
 	.empty {

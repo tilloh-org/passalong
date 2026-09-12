@@ -140,8 +140,7 @@
 				<PieChart
 					slices={data.statistics.proceedsByChannel.map((entry) => ({
 						label: saleChannelLabel(entry.channel),
-						valueCents: entry.totalProceedsCents,
-						countLabel: soldCountLabel(entry.soldItemCount)
+						valueCents: entry.totalProceedsCents
 					}))}
 					testId="statistics-channels"
 					centerLabel={t('statistics.totalLabel')}
@@ -161,8 +160,7 @@
 					<PieChart
 						slices={data.statistics.proceedsByCategory.map((entry) => ({
 							label: categoryLabel(entry.category),
-							valueCents: entry.totalProceedsCents,
-							countLabel: soldCountLabel(entry.soldItemCount)
+							valueCents: entry.totalProceedsCents
 						}))}
 						testId="statistics-categories"
 						centerLabel={t('statistics.totalLabel')}
@@ -173,8 +171,7 @@
 					<BarList
 						entries={data.statistics.proceedsByCategory.map((entry) => ({
 							label: categoryLabel(entry.category),
-							valueCents: entry.totalProceedsCents,
-							countLabel: soldCountLabel(entry.soldItemCount)
+							valueCents: entry.totalProceedsCents
 						}))}
 						testId="statistics-categories"
 						emptyLabel={t('statistics.empty')}
@@ -219,8 +216,7 @@
 				<BarList
 					entries={data.statistics.proceedsByMarketDay.map((entry) => ({
 						label: marketDayLabel(entry.marketDayName),
-						valueCents: entry.totalProceedsCents,
-						countLabel: soldCountLabel(entry.soldItemCount)
+						valueCents: entry.totalProceedsCents
 					}))}
 					testId="statistics-market-days"
 					emptyLabel={t('statistics.empty')}
@@ -245,8 +241,7 @@
 				<BarList
 					entries={data.statistics.proceedsByMonth.map((entry) => ({
 						label: monthLabel(entry.month),
-						valueCents: entry.totalProceedsCents,
-						countLabel: soldCountLabel(entry.soldItemCount)
+						valueCents: entry.totalProceedsCents
 					}))}
 					testId="statistics-months"
 					emptyLabel={t('statistics.empty')}
