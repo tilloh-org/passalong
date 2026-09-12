@@ -295,22 +295,7 @@ test.describe('Core collection', () => {
 		await expect(page).toHaveURL(/proceedsMin=20/);
 		await expect(page.getByTestId('sale-history-empty')).toBeVisible();
 
-		// act — check the statistics section on the unfiltered history
-		await page.goto('/sales');
-		await expect(page.getByTestId('sale-statistics-total')).toContainText('9,50 € Erlös');
-		await expect(page.getByTestId('sale-statistics-categories')).toContainText('Haushalt');
-		await expect(page.getByTestId('sale-statistics-market-days')).toContainText(marketDayName);
-
-		// act — restrict the statistics period to a range without sales
-		await page.getByTestId('sale-statistics-period').getByLabel('Von (Datum)').fill('2026-01-01');
-		await page.getByTestId('sale-statistics-period').getByLabel('Bis (Datum)').fill('2026-01-31');
-		await page.getByTestId('sale-statistics-period').getByRole('button', { name: 'Filtern' }).click();
-
-		// assume — the period filter drives the statistics; the row list keeps its own filters
-		await expect(page).toHaveURL(/from=2026-01-01/);
-		await expect(page.getByTestId('sale-statistics-total')).toContainText('0 Verkäufe');
-
-		// act — check the dedicated statistics page via the nav link
+// act — check the dedicated statistics page via the nav link
 		await page.getByTestId('nav-statistics-link').click();
 		await expect(page).toHaveURL(/\/statistics/);
 		const totals = page.getByTestId('statistics-totals');

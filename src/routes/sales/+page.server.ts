@@ -5,8 +5,6 @@ import {
 	type ItemCategory,
 	type SaleChannel,
 	type SaleHistoryFilters,
-	type SaleStatistics,
-	type SaleStatisticsPeriod,
 	type SessionScope
 } from '$lib/server/collection-repository';
 import { getCollectionRepository } from '$lib/server/repository';
@@ -16,7 +14,6 @@ import type { Actions, PageServerLoad } from './$types';
 const sessionCookieName = 'passalong_session';
 const maximumPriceCents = 10_000_000;
 const euroAmountPattern = /^\d{1,7}([.,]\d{1,2})?$/;
-const isoDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const httpStatus = {
 	seeOther: 303,
 	badRequest: 400
@@ -79,21 +76,9 @@ function parseProceedsBound(params: URLSearchParams, name: string): number | nul
 }
 
 /**
- * Read an optional ISO calendar-date bound from the query string.
+ * Load the authenticated owner's filtered sale history.
  *
- * @param {URLSearchParams} params - The request query parameters.
- * @param {string} name - Query parameter name to read.
- * @returns {string | null} The validated date or null when unset/invalid.
- */
-function parseDateBound(params: URLSearchParams, name: string): string | null {
-	const raw = params.get(name);
-	return raw && isoDatePattern.test(raw) ? raw : null;
-}
-
-/**
- * Load the authenticated owner's filtered sale history with statistics.
- *
- * @returns Sale history entries, filter options, filtered summary, and statistics.
+ * @returns Sale history entries, filter options, and filtered summary values.
  */
 export const load: PageServerLoad = ({ cookies, url }) => {
 	const scope = getSessionScope(cookies.get(sessionCookieName));
@@ -121,16 +106,9 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 		proceedsMaxCents: proceedsMax === 'invalid' ? null : proceedsMax
 	};
 	const sales = invalidRange ? [] : repository.getSaleHistory(scope, filters);
-	const period: SaleStatisticsPeriod = {
-		fromInclusive: parseDateBound(url.searchParams, 'from'),
-		toInclusive: parseDateBound(url.searchParams, 'to')
-	};
-	const statistics = repository.getSaleStatistics(scope, period);
 	return {
-		statistics,
 		sales,
 		filters,
-		period,
 		saleChannelOptions: saleChannels,
 		categoryOptions: itemCategories,
 		invalidRange,
