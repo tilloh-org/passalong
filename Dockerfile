@@ -20,7 +20,7 @@ ENV NODE_ENV=production
 RUN apk upgrade --no-cache && \
     rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx && \
     addgroup -S app && adduser -S app -G app && \
-    mkdir -p /data && chown app:app /data
+    mkdir -p /data /data/media && chown -R app:app /data
 
 COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules

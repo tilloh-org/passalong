@@ -17,13 +17,57 @@ export const itemCategories = [
 
 export const itemConditions = ['new', 'like-new', 'good', 'fair', 'poor'] as const;
 
+export const saleChannels = [
+	'flea-market',
+	'online-marketplace',
+	'shop',
+	'private-sale',
+	'other'
+] as const;
+
 export type ItemCategory = (typeof itemCategories)[number];
 export type ItemCondition = (typeof itemConditions)[number];
+export type SaleChannel = (typeof saleChannels)[number];
+
+export const expenseCategories = ['fee', 'supplies', 'transport', 'purchase', 'other'] as const;
+
+export type ExpenseCategory = (typeof expenseCategories)[number];
+
+export interface Expense {
+	id: string;
+	label: string;
+	category: ExpenseCategory;
+	amountCents: number;
+	expenseDate: string;
+	marketDayId: string | null;
+	marketDayName: string | null;
+	createdAt: string;
+}
+
+export interface CreateExpenseInput {
+	label: string;
+	category: ExpenseCategory;
+	amountCents: number;
+	expenseDate: string;
+	marketDayId: string | null;
+}
+
+export interface MarketDaySettlement {
+	marketDayId: string;
+	marketDayName: string;
+	date: string | null;
+	closedAt: string | null;
+	soldItemCount: number;
+	totalProceedsCents: number;
+	totalExpensesCents: number;
+	netResultCents: number;
+}
 
 export interface Collection {
 	id: string;
 	name: string;
 	ownerName: string;
+	standIntro: string;
 }
 
 export interface Item {
@@ -34,6 +78,138 @@ export interface Item {
 	category: ItemCategory;
 	condition: ItemCondition;
 	internalNotes: string;
+	externalDescription: string;
+	isComplete: boolean;
+	isFunctional: boolean;
+	reservedAt: string | null;
+	saleChannel: SaleChannel | null;
+	soldAt: string | null;
+	saleProceedsCents: number | null;
+	marketDayId: string | null;
+}
+
+export interface MarkItemSoldInput {
+	channel: SaleChannel;
+	soldAt: string;
+	proceedsCents: number;
+	marketDayId?: string | null;
+}
+
+export interface SaleChannelProceeds {
+	channel: SaleChannel;
+	soldItemCount: number;
+	totalProceedsCents: number;
+}
+
+export type ItemStatusFilter = 'open' | 'reserved' | 'sold';
+
+export interface ItemFilters {
+	query: string | null;
+	category: ItemCategory | null;
+	condition: ItemCondition | null;
+	status: ItemStatusFilter | null;
+}
+
+export const emptyItemFilters: ItemFilters = {
+	query: null,
+	category: null,
+	condition: null,
+	status: null
+};
+
+export interface MarketDay {
+	id: string;
+	name: string;
+	date: string | null;
+	startTime: string | null;
+	endTime: string | null;
+	location: string;
+	notes: string;
+	closedAt: string | null;
+	createdAt: string;
+}
+
+export interface CreateMarketDayInput {
+	name: string;
+	date: string | null;
+	startTime: string | null;
+	endTime: string | null;
+	location: string;
+	notes: string;
+}
+
+const ITEM_SELECT_COLUMNS = [
+	'items.id',
+	'items.collection_id',
+	'items.title',
+	'items.price_cents',
+	'items.category',
+	'items.condition',
+	'items.internal_notes',
+	'items.external_description',
+	'items.is_complete',
+	'items.is_functional',
+	'items.sale_channel',
+	'items.sold_at',
+	'items.sale_proceeds_cents',
+	'items.market_day_id'
+].join(', ');
+
+export interface SaleMonthProceeds {
+	month: string;
+	soldItemCount: number;
+	totalProceedsCents: number;
+}
+
+export interface SaleStatistics {
+	soldItemCount: number;
+	totalProceedsCents: number;
+	proceedsByChannel: SaleChannelProceeds[];
+	proceedsByMonth: SaleMonthProceeds[];
+}
+
+export interface SaleHistoryEntry {
+	itemId: string;
+	itemTitle: string;
+	category: ItemCategory;
+	saleChannel: SaleChannel;
+	soldAt: string;
+	saleProceedsCents: number;
+	marketDayId: string | null;
+	marketDayName: string | null;
+}
+
+export interface SaleHistoryFilters {
+	channel: SaleChannel | null;
+	category: ItemCategory | null;
+	proceedsMinCents: number | null;
+	proceedsMaxCents: number | null;
+}
+
+export interface PublicStandItem {
+	id: string;
+	title: string;
+	priceCents: number;
+	category: ItemCategory;
+	condition: ItemCondition;
+	externalDescription: string;
+	reservedAt: string | null;
+	isComplete: boolean;
+	isFunctional: boolean;
+	images: PublicItemImage[];
+}
+
+export interface PublicItemImage {
+	storageKey: string;
+	isCover: boolean;
+}
+
+export interface PublicStandView {
+	collectionId: string;
+	collectionName: string;
+	ownerAvatarStorageKey: string | null;
+	intro: string;
+	items: PublicStandItem[];
 }
 
 export interface CreateInitialAdminInput {
@@ -62,11 +238,36 @@ export interface CreateItemInput {
 	category: ItemCategory;
 	condition: ItemCondition;
 	internalNotes: string;
+	externalDescription: string;
+	isComplete: boolean;
+	isFunctional: boolean;
+}
+
+export interface ItemImage {
+	id: string;
+	storageKey: string;
+	position: number;
+	isCover: boolean;
 }
 
 export interface SessionScope {
 	userId: string;
 	tenantId: string;
+}
+
+export interface UserProfile {
+	username: string;
+	displayName: string;
+	avatarStorageKey: string | null;
+}
+
+export interface UpdateProfileInput {
+	displayName: string;
+}
+
+export interface DeletedAccountArtifacts {
+	avatarStorageKey: string | null;
+	itemImageStorageKeys: string[];
 }
 
 export interface AdminAccount extends SessionScope {
@@ -101,27 +302,78 @@ export interface CollectionRepository {
 	getUserForLogin(username: string): LoginAccount | null;
 	createCollection(input: CreateCollectionInput, scope: SessionScope): Collection;
 	getCollectionForOwner(collectionId: string, scope: SessionScope): Collection | null;
+	getItemForOwner(itemId: string, scope: SessionScope): Item | null;
 	listCollectionsForOwner(scope: SessionScope): Collection[];
 	createSessionForUser(scope: SessionScope, tokenHash: string): void;
 	getSession(tokenHash: string): SessionScope | null;
 	isInstanceAdmin(scope: SessionScope): boolean;
 	revokeSession(tokenHash: string): void;
 	revokeSessionsForUser(scope: SessionScope): void;
+	deleteAccount(scope: SessionScope): DeletedAccountArtifacts;
+	transaction<T>(callback: () => T): T;
 	getLoginAttemptStatus(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
 	recordLoginFailure(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
 	clearLoginFailures(username: string, requestIp: string): void;
 	createPasswordResetForUsername(username: string, secretHash: string, expiresAt: string): boolean;
-	consumePasswordReset(username: string, secretHash: string, passwordHash: string): SessionScope | null;
+	consumePasswordReset(
+		username: string,
+		secretHash: string,
+		passwordHash: string
+	): SessionScope | null;
 	getPasswordHashForScope(scope: SessionScope): string | null;
 	updatePassword(scope: SessionScope, passwordHash: string): void;
+	getProfile(scope: SessionScope): UserProfile | null;
+	updateProfile(scope: SessionScope, input: UpdateProfileInput): UserProfile;
+	setProfileAvatar(scope: SessionScope, avatarStorageKey: string | null): UserProfile;
 	createItem(input: CreateItemInput, scope: SessionScope): Item;
+	listMarketDays(scope: SessionScope): MarketDay[];
+	createMarketDay(input: CreateMarketDayInput, scope: SessionScope): MarketDay;
+	updateMarketDay(marketDayId: string, input: CreateMarketDayInput, scope: SessionScope): MarketDay;
+	deleteMarketDay(marketDayId: string, scope: SessionScope): void;
+	closeMarketDay(marketDayId: string, scope: SessionScope): MarketDay;
+	reopenMarketDay(marketDayId: string, scope: SessionScope): MarketDay;
+	createExpense(input: CreateExpenseInput, scope: SessionScope): Expense;
+	listExpenses(scope: SessionScope): Expense[];
+	updateExpense(expenseId: string, input: CreateExpenseInput, scope: SessionScope): Expense;
+	deleteExpense(expenseId: string, scope: SessionScope): void;
+	getMarketDaySettlement(marketDayId: string, scope: SessionScope): MarketDaySettlement | null;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
+	searchItemsForOwner(collectionId: string, filters: ItemFilters, scope: SessionScope): Item[];
+	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
+	unmarkItemSold(itemId: string, scope: SessionScope): Item;
+	getSaleHistory(scope: SessionScope, filters: SaleHistoryFilters): SaleHistoryEntry[];
+	getSaleStatistics(scope: SessionScope): SaleStatistics;
+	getPublicStandView(collectionId: string): PublicStandView | null;
+	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
+	searchPublicStandItems(collectionId: string, filters: ItemFilters): PublicStandItem[];
+	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
+	setItemCover(itemId: string, imageId: string, scope: SessionScope): ItemImage;
+	listItemImages(itemId: string, scope: SessionScope): ItemImage[];
+	deleteItemImage(itemId: string, imageId: string, scope: SessionScope): void;
+	deleteItem(itemId: string, scope: SessionScope): void;
+	updateItem(itemId: string, input: UpdateItemInput, scope: SessionScope): Item;
+	setItemReservation(itemId: string, reserved: boolean, scope: SessionScope): Item;
+	findImageMetadataForTenant(storageKey: string, scope: SessionScope): ItemImage | null;
+	findProfileAvatarForTenant(storageKey: string, scope: SessionScope): boolean;
+	findPublicOwnerAvatar(storageKey: string): boolean;
+	findPublicItemImage(storageKey: string): { storageKey: string; isCover: boolean } | null;
+	updateStandIntro(collectionId: string, intro: string, scope: SessionScope): Collection;
+}
+
+export interface UpdateItemInput {
+	title: string;
+	priceCents: number;
+	category: ItemCategory;
+	condition: ItemCondition;
+	internalNotes: string;
+	externalDescription: string;
+	isComplete: boolean;
+	isFunctional: boolean;
 }
 
 interface CreateCollectionRepositoryOptions {
 	databasePath: string;
 }
-
 interface ItemRow {
 	id: string;
 	collection_id: string;
@@ -130,10 +382,45 @@ interface ItemRow {
 	category: ItemCategory;
 	condition: ItemCondition;
 	internal_notes: string;
+	external_description: string;
+	is_complete: number;
+	is_functional: number;
+	reserved_at: string | null;
+	sale_channel: SaleChannel | null;
+	sold_at: string | null;
+	sale_proceeds_cents: number | null;
+	market_day_id: string | null;
+}
+
+interface ImageRow {
+	id: string;
+	storage_key: string;
+	position: number;
+	is_cover: number;
+}
+
+interface MarketDayRow {
+	id: string;
+	name: string;
+	date: string | null;
+	start_time: string | null;
+	end_time: string | null;
+	location: string;
+	notes: string;
+	closed_at: string | null;
+	created_at: string;
 }
 
 const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
 const authHardeningVersion = '2026083001_auth_hardening';
+const itemScopedImageKeysVersion = '2026083101_item_scoped_image_keys';
+const saleStatusVersion = '2026083102_item_sale_status';
+const itemDetailFieldsVersion = '2026090101_item_detail_fields';
+const itemReservationVersion = '2026090201_item_reservation';
+const userAvatarVersion = '2026090202_user_avatar';
+const collectionStandIntroVersion = '2026090203_collection_stand_intro';
+const marketDaysVersion = '2026090901_market_days';
+const expensesVersion = '2026091001_expenses';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -146,17 +433,25 @@ const minutesPerHour = 60;
 const hoursPerDay = 24;
 const loginAttemptWindowMinutes = 15;
 const sessionLifetimeDays = 30;
-const loginAttemptWindowMilliseconds = loginAttemptWindowMinutes * secondsPerMinute * millisecondsPerSecond;
-const sessionLifetimeMilliseconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
+const loginAttemptWindowMilliseconds =
+	loginAttemptWindowMinutes * secondsPerMinute * millisecondsPerSecond;
+const sessionLifetimeMilliseconds =
+	sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
 const databaseBusyTimeoutMilliseconds = 5000;
 const minimumRequestIpLength = 1;
 const maximumRequestIpLength = 45;
 const minimumUsernameLength = 3;
 const maximumUsernameLength = 64;
-const usernamePattern = new RegExp(`^[a-z0-9._+-]{${minimumUsernameLength},${maximumUsernameLength}}$`);
-const requestIpPattern = new RegExp(`^[0-9a-fA-F:.]{${minimumRequestIpLength},${maximumRequestIpLength}}$`);
+const usernamePattern = new RegExp(
+	`^[a-z0-9._+-]{${minimumUsernameLength},${maximumUsernameLength}}$`
+);
+const requestIpPattern = new RegExp(
+	`^[0-9a-fA-F:.]{${minimumRequestIpLength},${maximumRequestIpLength}}$`
+);
 const categoryValues = itemCategories.map((category) => `'${category}'`).join(', ');
 const conditionValues = itemConditions.map((condition) => `'${condition}'`).join(', ');
+const saleChannelValues = saleChannels.map((channel) => `'${channel}'`).join(', ');
+const expenseCategoryValues = expenseCategories.map((category) => `'${category}'`).join(', ');
 
 /**
  * Create a SQLite-backed repository for the core collection domain.
@@ -239,7 +534,9 @@ export function createCollectionRepository(
 			runImmediateTransaction(database, () => {
 				const hasAccounts = Boolean(database.prepare('SELECT 1 FROM users LIMIT 1').get());
 				const existingAdministratorCount = (
-					database.prepare("SELECT COUNT(*) AS count FROM instance_roles WHERE role = 'instance_admin'").get() as {
+					database
+						.prepare("SELECT COUNT(*) AS count FROM instance_roles WHERE role = 'instance_admin'")
+						.get() as {
 						count: number;
 					}
 				).count;
@@ -258,12 +555,15 @@ export function createCollectionRepository(
 					}
 					return false;
 				});
-				const newAdministratorCount = accountsToCreate.filter(({ instanceAdmin }) => instanceAdmin).length;
+				const newAdministratorCount = accountsToCreate.filter(
+					({ instanceAdmin }) => instanceAdmin
+				).length;
 
 				if (
 					!hasAccounts &&
 					normalizedAccounts.length > 0 &&
-					normalizedAccounts.filter(({ instanceAdmin }) => instanceAdmin).length !== requiredInstanceAdministratorCount
+					normalizedAccounts.filter(({ instanceAdmin }) => instanceAdmin).length !==
+						requiredInstanceAdministratorCount
 				) {
 					throw new Error('bootstrap configuration requires exactly one instance administrator');
 				}
@@ -286,7 +586,14 @@ export function createCollectionRepository(
 							`INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at)
 							 VALUES (?, ?, ?, ?, ?, ?)`
 						)
-						.run(userId, tenantId, account.username, account.displayName, account.passwordHash, createdAt);
+						.run(
+							userId,
+							tenantId,
+							account.username,
+							account.displayName,
+							account.passwordHash,
+							createdAt
+						);
 					if (account.instanceAdmin) {
 						database
 							.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
@@ -318,7 +625,7 @@ export function createCollectionRepository(
 						password_hash: string;
 						tenant_name: string;
 						instance_admin: number;
-					  }
+				  }
 				| undefined;
 			return row
 				? {
@@ -346,7 +653,7 @@ export function createCollectionRepository(
 						display_name: string;
 						password_hash: string;
 						password_reset_required: number;
-					  }
+				  }
 				| undefined;
 			return row
 				? {
@@ -374,27 +681,40 @@ export function createCollectionRepository(
 			if (result.changes !== singleDatabaseRowChange) {
 				throw new Error('authenticated owner was not found');
 			}
-			return { id: collectionId, name, ownerName: getOwnerDisplayName(database, scope) };
+			return {
+				id: collectionId,
+				name,
+				ownerName: getOwnerDisplayName(database, scope),
+				standIntro: ''
+			};
 		},
 
 		getCollectionForOwner(collectionId, scope) {
 			const row = database
 				.prepare(
-					`SELECT collections.id, collections.name, users.display_name AS owner_name
+					`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 				)
 				.get(collectionId, scope.userId, scope.tenantId) as
-				| { id: string; name: string; owner_name: string }
-				| undefined;
-			return row ? { id: row.id, name: row.name, ownerName: row.owner_name } : null;
+				{ id: string; name: string; stand_intro: string; owner_name: string } | undefined;
+			return row
+				? { id: row.id, name: row.name, ownerName: row.owner_name, standIntro: row.stand_intro }
+				: null;
+		},
+
+		getItemForOwner(itemId, scope) {
+			const row = database
+				.prepare('SELECT * FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+				.get(itemId, scope.userId, scope.tenantId) as ItemRow | undefined;
+			return row ? mapItemRow(row) : null;
 		},
 
 		listCollectionsForOwner(scope) {
 			return database
 				.prepare(
-					`SELECT collections.id, collections.name, users.display_name AS owner_name
+					`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.owner_id = ? AND collections.tenant_id = ?
@@ -402,8 +722,18 @@ export function createCollectionRepository(
 				)
 				.all(scope.userId, scope.tenantId)
 				.map((row) => {
-					const collection = row as { id: string; name: string; owner_name: string };
-					return { id: collection.id, name: collection.name, ownerName: collection.owner_name };
+					const collection = row as {
+						id: string;
+						name: string;
+						owner_name: string;
+						stand_intro: string;
+					};
+					return {
+						id: collection.id,
+						name: collection.name,
+						ownerName: collection.owner_name,
+						standIntro: collection.stand_intro
+					};
 				});
 		},
 
@@ -437,8 +767,7 @@ export function createCollectionRepository(
 					 WHERE sessions.token_hash = ? AND sessions.revoked_at IS NULL AND sessions.expires_at > ?`
 				)
 				.get(tokenHash, new Date().toISOString()) as
-				| { user_id: string; tenant_id: string }
-				| undefined;
+				{ user_id: string; tenant_id: string } | undefined;
 			return row ? { userId: row.user_id, tenantId: row.tenant_id } : null;
 		},
 
@@ -475,8 +804,64 @@ export function createCollectionRepository(
 
 		revokeSessionsForUser(scope) {
 			database
-				.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?')
+				.prepare(
+					'UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?'
+				)
 				.run(new Date().toISOString(), scope.userId, scope.tenantId);
+		},
+
+		deleteAccount(scope) {
+			return runImmediateTransaction(database, () => {
+				const profile = database
+					.prepare('SELECT username, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?')
+					.get(scope.userId, scope.tenantId) as
+					{ username: string; avatar_storage_key: string | null } | undefined;
+				if (!profile) {
+					throw new Error('authenticated owner was not found');
+				}
+				const itemImageStorageKeys = (
+					database
+						.prepare(
+							`SELECT DISTINCT item_images.storage_key
+							 FROM item_images
+							 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+							 WHERE items.owner_id = ? AND items.tenant_id = ?`
+						)
+						.all(scope.userId, scope.tenantId) as { storage_key: string }[]
+				).map(({ storage_key }) => storage_key);
+				database
+					.prepare("DELETE FROM login_attempts WHERE scope = 'username' AND subject = ?")
+					.run(profile.username);
+				database
+					.prepare('DELETE FROM items WHERE owner_id = ? AND tenant_id = ?')
+					.run(scope.userId, scope.tenantId);
+				database
+					.prepare('DELETE FROM market_days WHERE owner_id = ? AND tenant_id = ?')
+					.run(scope.userId, scope.tenantId);
+				database
+					.prepare('DELETE FROM expenses WHERE owner_id = ? AND tenant_id = ?')
+					.run(scope.userId, scope.tenantId);
+				database
+					.prepare('DELETE FROM collections WHERE owner_id = ? AND tenant_id = ?')
+					.run(scope.userId, scope.tenantId);
+				database
+					.prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?')
+					.run(scope.userId, scope.tenantId);
+				const remainingUsers = database
+					.prepare('SELECT 1 FROM users WHERE tenant_id = ? LIMIT 1')
+					.get(scope.tenantId);
+				if (!remainingUsers) {
+					database.prepare('DELETE FROM tenants WHERE id = ?').run(scope.tenantId);
+				}
+				return {
+					avatarStorageKey: profile.avatar_storage_key,
+					itemImageStorageKeys
+				};
+			});
+		},
+
+		transaction(callback) {
+			return database.transaction(callback)();
 		},
 
 		getLoginAttemptStatus(username, requestIp, now = new Date()) {
@@ -489,7 +874,9 @@ export function createCollectionRepository(
 			const nowMilliseconds = now.getTime();
 			runImmediateTransaction(database, () => {
 				const windowStartedAt = nowMilliseconds - loginAttemptWindowMilliseconds;
-				database.prepare('DELETE FROM login_attempts WHERE window_started_at <= ?').run(windowStartedAt);
+				database
+					.prepare('DELETE FROM login_attempts WHERE window_started_at <= ?')
+					.run(windowStartedAt);
 				for (const attempt of [
 					{ scope: 'username', subject: normalizedUsername },
 					{ scope: 'ip', subject: normalizedIp }
@@ -499,12 +886,27 @@ export function createCollectionRepository(
 						.get(attempt.scope, attempt.subject) as { failure_count: number } | undefined;
 					if (existing) {
 						database
-							.prepare('UPDATE login_attempts SET failure_count = ?, last_attempt_at = ? WHERE scope = ? AND subject = ?')
-							.run(existing.failure_count + initialFailureCount, nowMilliseconds, attempt.scope, attempt.subject);
+							.prepare(
+								'UPDATE login_attempts SET failure_count = ?, last_attempt_at = ? WHERE scope = ? AND subject = ?'
+							)
+							.run(
+								existing.failure_count + initialFailureCount,
+								nowMilliseconds,
+								attempt.scope,
+								attempt.subject
+							);
 					} else {
 						database
-							.prepare('INSERT INTO login_attempts (scope, subject, failure_count, window_started_at, last_attempt_at) VALUES (?, ?, ?, ?, ?)')
-							.run(attempt.scope, attempt.subject, initialFailureCount, nowMilliseconds, nowMilliseconds);
+							.prepare(
+								'INSERT INTO login_attempts (scope, subject, failure_count, window_started_at, last_attempt_at) VALUES (?, ?, ?, ?, ?)'
+							)
+							.run(
+								attempt.scope,
+								attempt.subject,
+								initialFailureCount,
+								nowMilliseconds,
+								nowMilliseconds
+							);
 					}
 				}
 			});
@@ -529,12 +931,31 @@ export function createCollectionRepository(
 					return false;
 				}
 				const now = new Date().toISOString();
-				database.prepare('UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL').run(now, account.id, account.tenant_id);
-				database.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?').run(now, account.id, account.tenant_id);
 				database
-					.prepare('INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-					.run(randomUUID(), account.id, account.tenant_id, validatedSecretHash, validatedExpiry, now);
-				database.prepare('UPDATE users SET password_reset_required = 1 WHERE id = ? AND tenant_id = ?').run(account.id, account.tenant_id);
+					.prepare(
+						'UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL'
+					)
+					.run(now, account.id, account.tenant_id);
+				database
+					.prepare(
+						'UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?'
+					)
+					.run(now, account.id, account.tenant_id);
+				database
+					.prepare(
+						'INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+					)
+					.run(
+						randomUUID(),
+						account.id,
+						account.tenant_id,
+						validatedSecretHash,
+						validatedExpiry,
+						now
+					);
+				database
+					.prepare('UPDATE users SET password_reset_required = 1 WHERE id = ? AND tenant_id = ?')
+					.run(account.id, account.tenant_id);
 				return true;
 			});
 		},
@@ -552,15 +973,28 @@ export function createCollectionRepository(
 						 WHERE users.username = ? AND password_resets.secret_hash = ?
 						 AND password_resets.consumed_at IS NULL AND password_resets.expires_at > ?`
 					)
-					.get(normalizedUsername, validatedSecretHash, new Date().toISOString()) as { user_id: string; tenant_id: string } | undefined;
+					.get(normalizedUsername, validatedSecretHash, new Date().toISOString()) as
+					{ user_id: string; tenant_id: string } | undefined;
 				if (!row) {
 					return null;
 				}
 				const scope = { userId: row.user_id, tenantId: row.tenant_id };
 				const now = new Date().toISOString();
-				database.prepare('UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL').run(now, scope.userId, scope.tenantId);
-				database.prepare('UPDATE users SET password_hash = ?, password_reset_required = 0 WHERE id = ? AND tenant_id = ?').run(validatedPasswordHash, scope.userId, scope.tenantId);
-				database.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?').run(now, scope.userId, scope.tenantId);
+				database
+					.prepare(
+						'UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL'
+					)
+					.run(now, scope.userId, scope.tenantId);
+				database
+					.prepare(
+						'UPDATE users SET password_hash = ?, password_reset_required = 0 WHERE id = ? AND tenant_id = ?'
+					)
+					.run(validatedPasswordHash, scope.userId, scope.tenantId);
+				database
+					.prepare(
+						'UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?'
+					)
+					.run(now, scope.userId, scope.tenantId);
 				return scope;
 			});
 		},
@@ -574,16 +1008,83 @@ export function createCollectionRepository(
 
 		updatePassword(scope, passwordHash) {
 			const result = database
-				.prepare('UPDATE users SET password_hash = ?, password_reset_required = 0 WHERE id = ? AND tenant_id = ?')
+				.prepare(
+					'UPDATE users SET password_hash = ?, password_reset_required = 0 WHERE id = ? AND tenant_id = ?'
+				)
 				.run(requireText(passwordHash, 'passwordHash'), scope.userId, scope.tenantId);
 			if (result.changes !== singleDatabaseRowChange) {
 				throw new Error('authenticated owner was not found');
 			}
 		},
 
+		getProfile(scope) {
+			const row = database
+				.prepare(
+					'SELECT username, display_name, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?'
+				)
+				.get(scope.userId, scope.tenantId) as
+				{ username: string; display_name: string; avatar_storage_key: string | null } | undefined;
+			if (!row) {
+				return null;
+			}
+			return {
+				username: row.username,
+				displayName: row.display_name,
+				avatarStorageKey: row.avatar_storage_key
+			};
+		},
+
+		updateProfile(scope, input) {
+			const displayName = requireText(input.displayName, 'displayName');
+			const result = database
+				.prepare('UPDATE users SET display_name = ? WHERE id = ? AND tenant_id = ?')
+				.run(displayName, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('authenticated owner was not found');
+			}
+			const profile = database
+				.prepare(
+					'SELECT username, display_name, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?'
+				)
+				.get(scope.userId, scope.tenantId) as {
+				username: string;
+				display_name: string;
+				avatar_storage_key: string | null;
+			};
+			return {
+				username: profile.username,
+				displayName: profile.display_name,
+				avatarStorageKey: profile.avatar_storage_key
+			};
+		},
+
+		setProfileAvatar(scope, avatarStorageKey) {
+			const result = database
+				.prepare('UPDATE users SET avatar_storage_key = ? WHERE id = ? AND tenant_id = ?')
+				.run(avatarStorageKey, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('authenticated owner was not found');
+			}
+			const profile = database
+				.prepare(
+					'SELECT username, display_name, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?'
+				)
+				.get(scope.userId, scope.tenantId) as {
+				username: string;
+				display_name: string;
+				avatar_storage_key: string | null;
+			};
+			return {
+				username: profile.username,
+				displayName: profile.display_name,
+				avatarStorageKey: profile.avatar_storage_key
+			};
+		},
+
 		createItem(input, scope) {
 			const title = requireText(input.title, 'title');
 			const internalNotes = input.internalNotes.trim();
+			const externalDescription = input.externalDescription.trim();
 			validateItemInput(input);
 			const item: Item = {
 				id: randomUUID(),
@@ -592,14 +1093,22 @@ export function createCollectionRepository(
 				priceCents: input.priceCents,
 				category: input.category,
 				condition: input.condition,
-				internalNotes
+				internalNotes,
+				externalDescription,
+				isComplete: input.isComplete,
+				isFunctional: input.isFunctional,
+				reservedAt: null,
+				saleChannel: null,
+				soldAt: null,
+				saleProceedsCents: null,
+				marketDayId: null
 			};
 
 			const result = database
 				.prepare(
 					`INSERT INTO items (
-						id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, created_at
-					) SELECT ?, collections.tenant_id, collections.owner_id, collections.id, ?, ?, ?, ?, ?, ?
+						id, tenant_id, owner_id, collection_id, title, price_cents, category, condition, internal_notes, external_description, is_complete, is_functional, created_at
+					) SELECT ?, collections.tenant_id, collections.owner_id, collections.id, ?, ?, ?, ?, ?, ?, ?, ?, ?
 					FROM collections
 					WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 				)
@@ -610,6 +1119,9 @@ export function createCollectionRepository(
 					item.category,
 					item.condition,
 					item.internalNotes,
+					item.externalDescription,
+					item.isComplete ? 1 : 0,
+					item.isFunctional ? 1 : 0,
 					new Date().toISOString(),
 					item.collectionId,
 					scope.userId,
@@ -621,10 +1133,528 @@ export function createCollectionRepository(
 			return item;
 		},
 
+		listMarketDays(scope) {
+			return database
+				.prepare(
+					'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE owner_id = ? AND tenant_id = ? ORDER BY closed_at IS NULL DESC, COALESCE(date, created_at) DESC, id DESC'
+				)
+				.all(scope.userId, scope.tenantId)
+				.map((row) => mapMarketDayRow(row as MarketDayRow));
+		},
+
+		createMarketDay(input, scope) {
+			const marketDay = validateMarketDayInput(input);
+			const marketDayId = randomUUID();
+			const createdAt = new Date().toISOString();
+			database
+				.prepare(
+					'INSERT INTO market_days (id, tenant_id, owner_id, name, date, start_time, end_time, location, notes, closed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)'
+				)
+				.run(
+					marketDayId,
+					scope.tenantId,
+					scope.userId,
+					marketDay.name,
+					marketDay.date,
+					marketDay.startTime,
+					marketDay.endTime,
+					marketDay.location,
+					marketDay.notes,
+					createdAt
+				);
+			return {
+				id: marketDayId,
+				name: marketDay.name,
+				date: marketDay.date,
+				startTime: marketDay.startTime,
+				endTime: marketDay.endTime,
+				location: marketDay.location,
+				notes: marketDay.notes,
+				closedAt: null,
+				createdAt
+			};
+		},
+
+		updateMarketDay(marketDayId, input, scope) {
+			const marketDay = validateMarketDayInput(input);
+			const result = database
+				.prepare(
+					'UPDATE market_days SET name = ?, date = ?, start_time = ?, end_time = ?, location = ?, notes = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.run(
+					marketDay.name,
+					marketDay.date,
+					marketDay.startTime,
+					marketDay.endTime,
+					marketDay.location,
+					marketDay.notes,
+					marketDayId,
+					scope.userId,
+					scope.tenantId
+				);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('market day was not found');
+			}
+			return mapMarketDayRow(
+				database
+					.prepare(
+						'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?'
+					)
+					.get(marketDayId, scope.tenantId) as MarketDayRow
+			);
+		},
+
+		deleteMarketDay(marketDayId, scope) {
+			const result = database
+				.prepare('DELETE FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+				.run(marketDayId, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('market day was not found');
+			}
+		},
+
+		closeMarketDay(marketDayId, scope) {
+			const closedAt = new Date().toISOString();
+			const result = database
+				.prepare(
+					'UPDATE market_days SET closed_at = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.run(closedAt, marketDayId, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('market day was not found');
+			}
+			return mapMarketDayRow(
+				database
+					.prepare(
+						'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?'
+					)
+					.get(marketDayId, scope.tenantId) as MarketDayRow
+			);
+		},
+
+		reopenMarketDay(marketDayId, scope) {
+			const result = database
+				.prepare(
+					'UPDATE market_days SET closed_at = NULL WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.run(marketDayId, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('market day was not found');
+			}
+			return mapMarketDayRow(
+				database
+					.prepare(
+						'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?'
+					)
+					.get(marketDayId, scope.tenantId) as MarketDayRow
+			);
+		},
+
+		createExpense(input, scope) {
+			const expense = validateExpenseInput(input);
+			if (expense.marketDayId !== null) {
+				assertOwnMarketDay(database, expense.marketDayId, scope);
+			}
+			const expenseId = randomUUID();
+			const createdAt = new Date().toISOString();
+			database
+				.prepare(
+					'INSERT INTO expenses (id, tenant_id, owner_id, market_day_id, label, category, amount_cents, expense_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+				)
+				.run(
+					expenseId,
+					scope.tenantId,
+					scope.userId,
+					expense.marketDayId,
+					expense.label,
+					expense.category,
+					expense.amountCents,
+					expense.expenseDate,
+					createdAt
+				);
+			return getExpenseRow(database, expenseId, scope);
+		},
+
+		listExpenses(scope) {
+			return listExpenseRows(database, scope);
+		},
+
+		updateExpense(expenseId, input, scope) {
+			const expense = validateExpenseInput(input);
+			return runImmediateTransaction(database, () => {
+				if (expense.marketDayId !== null) {
+					assertOwnMarketDay(database, expense.marketDayId, scope);
+				}
+				const updated = database
+					.prepare(
+						'UPDATE expenses SET market_day_id = ?, label = ?, category = ?, amount_cents = ?, expense_date = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+					)
+					.run(
+						expense.marketDayId,
+						expense.label,
+						expense.category,
+						expense.amountCents,
+						expense.expenseDate,
+						expenseId,
+						scope.userId,
+						scope.tenantId
+					);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('expense was not found');
+				}
+				return getExpenseRow(database, expenseId, scope);
+			});
+		},
+
+		deleteExpense(expenseId, scope) {
+			const deleted = database
+				.prepare('DELETE FROM expenses WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+				.run(expenseId, scope.userId, scope.tenantId);
+			if (deleted.changes !== singleDatabaseRowChange) {
+				throw new Error('expense was not found');
+			}
+		},
+
+		getMarketDaySettlement(marketDayId, scope) {
+			const marketDayRow = database
+				.prepare(
+					'SELECT id, name, date, closed_at FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.get(marketDayId, scope.userId, scope.tenantId) as
+				{ id: string; name: string; date: string | null; closed_at: string | null } | undefined;
+			if (!marketDayRow) {
+				return null;
+			}
+			const sales = database
+				.prepare(
+					'SELECT COUNT(*) AS sold_item_count, COALESCE(SUM(sale_proceeds_cents), 0) AS total_proceeds_cents FROM items WHERE owner_id = ? AND tenant_id = ? AND market_day_id = ? AND sold_at IS NOT NULL'
+				)
+				.get(scope.userId, scope.tenantId, marketDayId) as {
+				sold_item_count: number;
+				total_proceeds_cents: number;
+			};
+			const expenses = database
+				.prepare(
+					'SELECT COALESCE(SUM(amount_cents), 0) AS total_expenses_cents FROM expenses WHERE owner_id = ? AND tenant_id = ? AND market_day_id = ?'
+				)
+				.get(scope.userId, scope.tenantId, marketDayId) as { total_expenses_cents: number };
+			return {
+				marketDayId: marketDayRow.id,
+				marketDayName: marketDayRow.name,
+				date: marketDayRow.date,
+				closedAt: marketDayRow.closed_at,
+				soldItemCount: sales.sold_item_count,
+				totalProceedsCents: sales.total_proceeds_cents,
+				totalExpensesCents: expenses.total_expenses_cents,
+				netResultCents: sales.total_proceeds_cents - expenses.total_expenses_cents
+			};
+		},
+
+		markItemSold(itemId, sale, scope) {
+			const channel = requireValidSaleChannel(sale.channel);
+			const soldAt = requireIsoTimestamp(sale.soldAt);
+			const proceedsCents = requireNonNegativeInteger(sale.proceedsCents, 'proceedsCents');
+			const marketDayId = sale.marketDayId ?? null;
+			return runImmediateTransaction(database, () => {
+				const item = database
+					.prepare('SELECT sold_at FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+					.get(itemId, scope.userId, scope.tenantId) as { sold_at: string | null } | undefined;
+				if (!item) {
+					throw new Error('item was not found');
+				}
+				if (item.sold_at !== null) {
+					throw new Error('item is already sold');
+				}
+				if (marketDayId !== null) {
+					const marketDay = database
+						.prepare('SELECT 1 FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+						.get(marketDayId, scope.userId, scope.tenantId);
+					if (!marketDay) {
+						throw new Error('market day was not found');
+					}
+				}
+				const updated = database
+					.prepare(
+						'UPDATE items SET sale_channel = ?, sold_at = ?, sale_proceeds_cents = ?, market_day_id = ? WHERE id = ? AND owner_id = ? AND tenant_id = ? AND sold_at IS NULL'
+					)
+					.run(channel, soldAt, proceedsCents, marketDayId, itemId, scope.userId, scope.tenantId);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('item is already sold');
+				}
+				return mapItemRow(
+					database
+						.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
+						.get(itemId, scope.tenantId) as ItemRow
+				);
+			});
+		},
+
+		unmarkItemSold(itemId, scope) {
+			return runImmediateTransaction(database, () => {
+				const updated = database
+					.prepare(
+						'UPDATE items SET sale_channel = NULL, sold_at = NULL, sale_proceeds_cents = NULL, market_day_id = NULL WHERE id = ? AND owner_id = ? AND tenant_id = ? AND sold_at IS NOT NULL'
+					)
+					.run(itemId, scope.userId, scope.tenantId);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('sold item was not found');
+				}
+				return mapItemRow(
+					database
+						.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
+						.get(itemId, scope.tenantId) as ItemRow
+				);
+			});
+		},
+
+		getSaleHistory(scope, filters) {
+			const clauses = ['items.owner_id = ?', 'items.tenant_id = ?', 'items.sold_at IS NOT NULL'];
+			const parameters: string[] = [scope.userId, scope.tenantId];
+			if (filters.channel) {
+				clauses.push('items.sale_channel = ?');
+				parameters.push(requireValidSaleChannel(filters.channel));
+			}
+			if (filters.category) {
+				clauses.push('items.category = ?');
+				parameters.push(filters.category);
+			}
+			if (filters.proceedsMinCents !== null) {
+				clauses.push('items.sale_proceeds_cents >= ?');
+				parameters.push(String(filters.proceedsMinCents));
+			}
+			if (filters.proceedsMaxCents !== null) {
+				clauses.push('items.sale_proceeds_cents <= ?');
+				parameters.push(String(filters.proceedsMaxCents));
+			}
+			return (
+				database
+					.prepare(
+						`SELECT items.id AS item_id, items.title, items.category, items.sale_channel, items.sold_at,
+							items.sale_proceeds_cents, items.market_day_id, market_days.name AS market_day_name
+						 FROM items
+						 LEFT JOIN market_days ON market_days.id = items.market_day_id
+							AND market_days.owner_id = items.owner_id AND market_days.tenant_id = items.tenant_id
+						 WHERE ${clauses.join(' AND ')}
+						 ORDER BY items.sold_at DESC, items.id DESC`
+					)
+					.all(...parameters) as {
+					item_id: string;
+					title: string;
+					category: ItemCategory;
+					sale_channel: SaleChannel;
+					sold_at: string;
+					sale_proceeds_cents: number;
+					market_day_id: string | null;
+					market_day_name: string | null;
+				}[]
+			).map((row) => ({
+				itemId: row.item_id,
+				itemTitle: row.title,
+				category: row.category,
+				saleChannel: row.sale_channel,
+				soldAt: row.sold_at,
+				saleProceedsCents: row.sale_proceeds_cents,
+				marketDayId: row.market_day_id,
+				marketDayName: row.market_day_name
+			}));
+		},
+
+		getSaleStatistics(scope) {
+			const saleMonthExpression = 'substr(sold_at, 1, 7)';
+			const soldItemFilter = 'WHERE tenant_id = ? AND owner_id = ? AND sold_at IS NOT NULL';
+			const totals = database
+				.prepare(
+					`SELECT COUNT(*) AS sold_item_count, COALESCE(SUM(sale_proceeds_cents), 0) AS total_proceeds_cents FROM items ${soldItemFilter}`
+				)
+				.get(scope.tenantId, scope.userId) as {
+				sold_item_count: number;
+				total_proceeds_cents: number;
+			};
+			const proceedsByChannel = (
+				database
+					.prepare(
+						`SELECT sale_channel AS channel, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
+						 FROM items ${soldItemFilter} GROUP BY sale_channel ORDER BY total_proceeds_cents DESC, channel ASC`
+					)
+					.all(scope.tenantId, scope.userId) as {
+					channel: SaleChannel;
+					sold_item_count: number;
+					total_proceeds_cents: number;
+				}[]
+			).map((row) => ({
+				channel: row.channel,
+				soldItemCount: row.sold_item_count,
+				totalProceedsCents: row.total_proceeds_cents
+			}));
+			const proceedsByMonth = (
+				database
+					.prepare(
+						`SELECT ${saleMonthExpression} AS month, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
+						 FROM items ${soldItemFilter} GROUP BY ${saleMonthExpression} ORDER BY month ASC`
+					)
+					.all(scope.tenantId, scope.userId) as {
+					month: string;
+					sold_item_count: number;
+					total_proceeds_cents: number;
+				}[]
+			).map((row) => ({
+				month: row.month,
+				soldItemCount: row.sold_item_count,
+				totalProceedsCents: row.total_proceeds_cents
+			}));
+			return {
+				soldItemCount: totals.sold_item_count,
+				totalProceedsCents: totals.total_proceeds_cents,
+				proceedsByChannel,
+				proceedsByMonth
+			};
+		},
+
+		getPublicStandView(collectionId) {
+			const collection = database
+				.prepare(
+					'SELECT collections.name, collections.stand_intro, users.avatar_storage_key AS owner_avatar_storage_key FROM collections JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id WHERE collections.id = ?'
+				)
+				.get(collectionId) as
+				{ name: string; stand_intro: string; owner_avatar_storage_key: string | null } | undefined;
+			if (!collection) {
+				return null;
+			}
+			const items = (
+				database
+					.prepare(
+						'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
+					)
+					.all(collectionId) as {
+					id: string;
+					title: string;
+					price_cents: number;
+					category: ItemCategory;
+					condition: ItemCondition;
+					external_description: string;
+					reserved_at: string | null;
+					is_complete: number;
+					is_functional: number;
+				}[]
+			).map((row) => ({
+				id: row.id,
+				title: row.title,
+				priceCents: row.price_cents,
+				category: row.category,
+				condition: row.condition,
+				externalDescription: row.external_description,
+				reservedAt: row.reserved_at,
+				isComplete: Boolean(row.is_complete),
+				isFunctional: Boolean(row.is_functional),
+				images: listPublicItemImages(database, row.id)
+			}));
+			return {
+				collectionId,
+				collectionName: collection.name,
+				ownerAvatarStorageKey: collection.owner_avatar_storage_key,
+				intro: collection.stand_intro,
+				items
+			};
+		},
+
+		searchPublicStandItems(collectionId, filters) {
+			const clauses = ['items.collection_id = ?', 'items.sold_at IS NULL'];
+			const parameters: (string | number)[] = [collectionId];
+			if (filters.query && filters.query.trim().length > 0) {
+				const escapedQuery = filters.query.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
+				const pattern = `%${escapedQuery}%`;
+				// Search only buyer-visible fields; matching on internal notes would leak that a
+				// private note matches without revealing its content.
+				clauses.push(
+					"(items.title LIKE ? ESCAPE '\\' OR items.external_description LIKE ? ESCAPE '\\')"
+				);
+				parameters.push(pattern, pattern);
+			}
+			if (filters.category) {
+				clauses.push('items.category = ?');
+				parameters.push(filters.category);
+			}
+			if (filters.condition) {
+				clauses.push('items.condition = ?');
+				parameters.push(filters.condition);
+			}
+			// Public status semantics: only unsold items are listed, so 'open' vs 'reserved'.
+			if (filters.status === 'reserved') {
+				clauses.push('items.reserved_at IS NOT NULL');
+			} else if (filters.status === 'open') {
+				clauses.push('items.reserved_at IS NULL');
+			}
+			const items = database
+				.prepare(
+					`SELECT id, title, price_cents, category, condition, external_description, reserved_at
+					 FROM items
+					 WHERE ${clauses.join(' AND ')}
+					 ORDER BY items.created_at DESC, items.id DESC`
+				)
+				.all(...parameters) as {
+				id: string;
+				title: string;
+				price_cents: number;
+				category: ItemCategory;
+				condition: ItemCondition;
+				external_description: string;
+				reserved_at: string | null;
+				is_complete: number;
+				is_functional: number;
+			}[];
+			return items.map((row) => ({
+				id: row.id,
+				title: row.title,
+				priceCents: row.price_cents,
+				category: row.category,
+				condition: row.condition,
+				externalDescription: row.external_description,
+				reservedAt: row.reserved_at,
+				isComplete: Boolean(row.is_complete),
+				isFunctional: Boolean(row.is_functional),
+				images: listPublicItemImages(database, row.id)
+			}));
+		},
+
+		getPublicStandItem(collectionId, itemId) {
+			const item = database
+				.prepare(
+					'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE id = ? AND collection_id = ? AND sold_at IS NULL'
+				)
+				.get(itemId, collectionId) as
+				| {
+						id: string;
+						title: string;
+						price_cents: number;
+						category: ItemCategory;
+						condition: ItemCondition;
+						external_description: string;
+						reserved_at: string | null;
+						is_complete: number;
+						is_functional: number;
+				  }
+				| undefined;
+			if (!item) {
+				return null;
+			}
+			return {
+				id: item.id,
+				title: item.title,
+				priceCents: item.price_cents,
+				category: item.category,
+				condition: item.condition,
+				externalDescription: item.external_description,
+				reservedAt: item.reserved_at,
+				isComplete: Boolean(item.is_complete),
+				isFunctional: Boolean(item.is_functional),
+				images: listPublicItemImages(database, item.id)
+			};
+		},
+
 		listItemsForOwner(collectionId, scope) {
 			return database
 				.prepare(
-					`SELECT items.id, items.collection_id, items.title, items.price_cents, items.category, items.condition, items.internal_notes
+					`SELECT ${ITEM_SELECT_COLUMNS}
 					 FROM items
 					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
@@ -633,6 +1663,296 @@ export function createCollectionRepository(
 				)
 				.all(collectionId, scope.userId, scope.tenantId)
 				.map((row) => mapItemRow(row as ItemRow));
+		},
+
+		searchItemsForOwner(collectionId, filters, scope) {
+			const clauses = ['items.collection_id = ?', 'items.owner_id = ?', 'items.tenant_id = ?'];
+			const parameters: (string | number)[] = [collectionId, scope.userId, scope.tenantId];
+			if (filters.query && filters.query.trim().length > 0) {
+				const escapedQuery = filters.query.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
+				const pattern = `%${escapedQuery}%`;
+				clauses.push(
+					"(items.title LIKE ? ESCAPE '\\' OR items.internal_notes LIKE ? ESCAPE '\\' OR items.external_description LIKE ? ESCAPE '\\')"
+				);
+				parameters.push(pattern, pattern, pattern);
+			}
+			if (filters.category) {
+				clauses.push('items.category = ?');
+				parameters.push(filters.category);
+			}
+			if (filters.condition) {
+				clauses.push('items.condition = ?');
+				parameters.push(filters.condition);
+			}
+			if (filters.status === 'sold') {
+				clauses.push('items.sold_at IS NOT NULL');
+			} else if (filters.status === 'reserved') {
+				clauses.push('items.sold_at IS NULL AND items.reserved_at IS NOT NULL');
+			} else if (filters.status === 'open') {
+				clauses.push('items.sold_at IS NULL AND items.reserved_at IS NULL');
+			}
+			return database
+				.prepare(
+					`SELECT ${ITEM_SELECT_COLUMNS}
+					 FROM items
+					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
+					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+					 WHERE ${clauses.join(' AND ')}
+					 ORDER BY items.created_at DESC, items.id DESC`
+				)
+				.all(...parameters)
+				.map((row) => mapItemRow(row as ItemRow));
+		},
+
+		addItemImage(itemId, storageKey, scope) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			return runImmediateTransaction(database, () => {
+				const item = requireOwnedItem(database, itemId, scope);
+				const existingImage = database
+					.prepare(
+						'SELECT id, storage_key, position, is_cover FROM item_images WHERE item_id = ? AND tenant_id = ? AND storage_key = ?'
+					)
+					.get(item.id, scope.tenantId, validatedStorageKey) as ImageRow | undefined;
+				if (existingImage) {
+					return mapImageRow(existingImage);
+				}
+				const nextPosition = (
+					database
+						.prepare(
+							'SELECT COALESCE(MAX(position), -1) + 1 AS next_position FROM item_images WHERE item_id = ? AND tenant_id = ?'
+						)
+						.get(item.id, scope.tenantId) as { next_position: number }
+				).next_position;
+				const imageCount = (
+					database
+						.prepare(
+							'SELECT COUNT(*) AS count FROM item_images WHERE item_id = ? AND tenant_id = ?'
+						)
+						.get(item.id, scope.tenantId) as { count: number }
+				).count;
+				const isCover = imageCount === 0;
+				const imageId = randomUUID();
+				database
+					.prepare(
+						'INSERT INTO item_images (id, tenant_id, item_id, storage_key, position, is_cover, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+					)
+					.run(
+						imageId,
+						scope.tenantId,
+						item.id,
+						validatedStorageKey,
+						nextPosition,
+						isCover ? sqliteTrue : 0,
+						new Date().toISOString()
+					);
+				return { id: imageId, storageKey: validatedStorageKey, position: nextPosition, isCover };
+			});
+		},
+
+		setItemCover(itemId, imageId, scope) {
+			return runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const updated = database
+					.prepare(
+						'UPDATE item_images SET is_cover = ? WHERE id = ? AND item_id = ? AND tenant_id = ?'
+					)
+					.run(sqliteTrue, requireText(imageId, 'imageId'), itemId, scope.tenantId);
+				if (updated.changes !== singleDatabaseRowChange) {
+					throw new Error('image was not found');
+				}
+				database
+					.prepare(
+						'UPDATE item_images SET is_cover = 0 WHERE item_id = ? AND tenant_id = ? AND id != ?'
+					)
+					.run(itemId, scope.tenantId, imageId);
+				return mapImageRow(
+					database
+						.prepare(
+							'SELECT id, storage_key, position, is_cover FROM item_images WHERE id = ? AND tenant_id = ?'
+						)
+						.get(imageId, scope.tenantId) as ImageRow
+				);
+			});
+		},
+
+		listItemImages(itemId, scope) {
+			if (!itemIsOwnedBy(database, itemId, scope)) {
+				return [];
+			}
+			return (
+				database
+					.prepare(
+						'SELECT id, storage_key, position, is_cover FROM item_images WHERE item_id = ? AND tenant_id = ? ORDER BY position ASC, id ASC'
+					)
+					.all(itemId, scope.tenantId) as ImageRow[]
+			).map(mapImageRow);
+		},
+
+		deleteItemImage(itemId, imageId, scope) {
+			runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const deletedImage = database
+					.prepare(
+						'SELECT id, is_cover FROM item_images WHERE id = ? AND item_id = ? AND tenant_id = ?'
+					)
+					.get(requireText(imageId, 'imageId'), itemId, scope.tenantId) as
+					{ id: string; is_cover: number } | undefined;
+				if (!deletedImage) {
+					throw new Error('image was not found');
+				}
+				database
+					.prepare('DELETE FROM item_images WHERE id = ? AND item_id = ? AND tenant_id = ?')
+					.run(deletedImage.id, itemId, scope.tenantId);
+				const remainingImages = database
+					.prepare(
+						'SELECT id, storage_key, position, is_cover FROM item_images WHERE item_id = ? AND tenant_id = ? ORDER BY position ASC, id ASC'
+					)
+					.all(itemId, scope.tenantId) as ImageRow[];
+				renormalizeImagePositions(remainingImages, database, scope.tenantId);
+				const wasCover = deletedImage.is_cover === sqliteTrue;
+				if (wasCover && remainingImages.length > 0) {
+					database
+						.prepare(
+							'UPDATE item_images SET is_cover = ? WHERE id = ? AND item_id = ? AND tenant_id = ?'
+						)
+						.run(sqliteTrue, remainingImages[0].id, itemId, scope.tenantId);
+				}
+			});
+		},
+
+		deleteItem(itemId, scope) {
+			runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const result = database
+					.prepare('DELETE FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+					.run(itemId, scope.userId, scope.tenantId);
+				if (result.changes !== singleDatabaseRowChange) {
+					throw new Error('item was not found');
+				}
+			});
+		},
+
+		updateItem(itemId, input, scope) {
+			const title = requireText(input.title, 'title');
+			const internalNotes = input.internalNotes.trim();
+			const externalDescription = input.externalDescription.trim();
+			const priceCents = requireNonNegativeInteger(input.priceCents, 'priceCents');
+			if (!itemCategories.includes(input.category)) {
+				throw new Error('category is not supported');
+			}
+			if (!itemConditions.includes(input.condition)) {
+				throw new Error('condition is not supported');
+			}
+			return runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const result = database
+					.prepare(
+						`UPDATE items
+						 SET title = ?, price_cents = ?, category = ?, condition = ?, internal_notes = ?, external_description = ?, is_complete = ?, is_functional = ?
+						 WHERE id = ? AND owner_id = ? AND tenant_id = ?`
+					)
+					.run(
+						title,
+						priceCents,
+						input.category,
+						input.condition,
+						internalNotes,
+						externalDescription,
+						input.isComplete ? sqliteTrue : 0,
+						input.isFunctional ? sqliteTrue : 0,
+						itemId,
+						scope.userId,
+						scope.tenantId
+					);
+				if (result.changes !== singleDatabaseRowChange) {
+					throw new Error('item was not found');
+				}
+				const row = database
+					.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
+					.get(itemId, scope.tenantId) as ItemRow;
+				return mapItemRow(row);
+			});
+		},
+
+		setItemReservation(itemId, reserved, scope) {
+			return runImmediateTransaction(database, () => {
+				requireOwnedItem(database, itemId, scope);
+				const result = database
+					.prepare(
+						'UPDATE items SET reserved_at = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+					)
+					.run(reserved ? new Date().toISOString() : null, itemId, scope.userId, scope.tenantId);
+				if (result.changes !== singleDatabaseRowChange) {
+					throw new Error('item was not found');
+				}
+				const row = database
+					.prepare('SELECT * FROM items WHERE id = ? AND tenant_id = ?')
+					.get(itemId, scope.tenantId) as ItemRow;
+				return mapItemRow(row);
+			});
+		},
+
+		findImageMetadataForTenant(storageKey, scope) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare(
+					`SELECT item_images.id, item_images.storage_key, item_images.position, item_images.is_cover
+					 FROM item_images
+					 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
+					 WHERE item_images.storage_key = ? AND item_images.tenant_id = ? AND collections.owner_id = ?`
+				)
+				.get(validatedStorageKey, scope.tenantId, scope.userId) as ImageRow | undefined;
+			return row ? mapImageRow(row) : null;
+		},
+
+		findProfileAvatarForTenant(storageKey, scope) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare('SELECT 1 FROM users WHERE avatar_storage_key = ? AND id = ? AND tenant_id = ?')
+				.get(validatedStorageKey, scope.userId, scope.tenantId);
+			return Boolean(row);
+		},
+
+		findPublicOwnerAvatar(storageKey) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare(
+					'SELECT 1 FROM users JOIN collections ON collections.owner_id = users.id AND collections.tenant_id = users.tenant_id WHERE users.avatar_storage_key = ?'
+				)
+				.get(validatedStorageKey);
+			return Boolean(row);
+		},
+
+		findPublicItemImage(storageKey) {
+			const validatedStorageKey = requireText(storageKey, 'storageKey');
+			const row = database
+				.prepare(
+					`SELECT item_images.storage_key, item_images.is_cover
+					 FROM item_images
+					 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+					 WHERE item_images.storage_key = ? AND items.sold_at IS NULL`
+				)
+				.get(validatedStorageKey) as { storage_key: string; is_cover: number } | undefined;
+			return row ? { storageKey: row.storage_key, isCover: Boolean(row.is_cover) } : null;
+		},
+
+		updateStandIntro(collectionId, intro, scope) {
+			const normalizedIntro = typeof intro === 'string' ? intro.trim() : '';
+			const result = database
+				.prepare(
+					'UPDATE collections SET stand_intro = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.run(
+					normalizedIntro,
+					requireText(collectionId, 'collectionId'),
+					scope.userId,
+					scope.tenantId
+				);
+			if (result.changes !== singleDatabaseRowChange) {
+				throw new Error('collection was not found');
+			}
+			return getCollectionForOwnerRow(database, collectionId, scope);
 		}
 	};
 }
@@ -644,7 +1964,10 @@ export function createCollectionRepository(
  * @param {string} username - Normalized account username.
  * @returns {BootstrapAccountDetails | null} Existing account details or null.
  */
-function readBootstrapAccount(database: Database.Database, username: string): BootstrapAccountDetails | null {
+function readBootstrapAccount(
+	database: Database.Database,
+	username: string
+): BootstrapAccountDetails | null {
 	const row = database
 		.prepare(
 			`SELECT users.username, users.display_name, users.password_hash, tenants.name AS tenant_name,
@@ -660,7 +1983,7 @@ function readBootstrapAccount(database: Database.Database, username: string): Bo
 				password_hash: string;
 				tenant_name: string;
 				instance_admin: number;
-			  }
+		  }
 		| undefined;
 	return row
 		? {
@@ -697,6 +2020,9 @@ function requirePassword(value: string): string {
  * @throws {unknown} When the operation fails after rolling back its writes.
  */
 function runImmediateTransaction<T>(database: Database.Database, operation: () => T): T {
+	if (database.inTransaction) {
+		return operation();
+	}
 	database.exec('BEGIN IMMEDIATE');
 	try {
 		const result = operation();
@@ -706,6 +2032,324 @@ function runImmediateTransaction<T>(database: Database.Database, operation: () =
 		database.exec('ROLLBACK');
 		throw error;
 	}
+}
+
+/**
+ * Require that an item exists and belongs to the authenticated owner and tenant.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} itemId - Identifier of the targeted item.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {{ id: string }} The owned item row.
+ * @throws {Error} If no item is visible to the authenticated owner.
+ */
+function requireOwnedItem(
+	database: Database.Database,
+	itemId: string,
+	scope: SessionScope
+): { id: string } {
+	const row = database
+		.prepare('SELECT id FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+		.get(itemId, scope.userId, scope.tenantId) as { id: string } | undefined;
+	if (!row) {
+		throw new Error('item was not found');
+	}
+	return row;
+}
+
+/**
+ * Load one owner-scoped collection row as a {@link Collection}.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} collectionId - The target collection identifier.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {Collection} The collection with its stand intro.
+ */
+function getCollectionForOwnerRow(
+	database: Database.Database,
+	collectionId: string,
+	scope: SessionScope
+): Collection {
+	const row = database
+		.prepare(
+			`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
+			 FROM collections
+			 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+			 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
+		)
+		.get(collectionId, scope.userId, scope.tenantId) as
+		{ id: string; name: string; stand_intro: string; owner_name: string } | undefined;
+	if (!row) {
+		throw new Error('collection was not found');
+	}
+	return {
+		id: row.id,
+		name: row.name,
+		ownerName: row.owner_name,
+		standIntro: row.stand_intro
+	};
+}
+
+/**
+ * Check tenant-scoped visibility of an item without throwing.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} itemId - The target item identifier.
+ * @param {SessionScope} scope - Authenticated user and tenant scope.
+ * @returns {boolean} Whether the item belongs to the authenticated owner and tenant.
+ */
+function itemIsOwnedBy(database: Database.Database, itemId: string, scope: SessionScope): boolean {
+	return (
+		database
+			.prepare('SELECT 1 FROM items WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+			.get(itemId, scope.userId, scope.tenantId) !== undefined
+	);
+}
+
+/**
+ * Map a persisted image row to its public shape.
+ *
+ * @param {ImageRow} row - Raw image row from SQLite.
+ * @returns {ItemImage} The tenant-agnostic image value.
+ */
+function mapImageRow(row: ImageRow): ItemImage {
+	return {
+		id: row.id,
+		storageKey: row.storage_key,
+		position: row.position,
+		isCover: row.is_cover === sqliteTrue
+	};
+}
+
+/**
+ * List the public buyer-facing images of one item, cover image first.
+ *
+ * Only storage keys and the cover flag are exposed; no internal metadata.
+ *
+ * @param {Database} database - The tenant's database handle.
+ * @param {string} itemId - Public item identifier.
+ * @returns {PublicItemImage[]} Images in cover-first, position order.
+ */
+function listPublicItemImages(database: Database.Database, itemId: string): PublicItemImage[] {
+	const rows = database
+		.prepare(
+			'SELECT storage_key, is_cover FROM item_images WHERE item_id = ? ORDER BY is_cover DESC, position ASC'
+		)
+		.all(itemId) as { storage_key: string; is_cover: number }[];
+	return rows.map((row) => ({ storageKey: row.storage_key, isCover: Boolean(row.is_cover) }));
+}
+
+/**
+ * Map a market-days database row to the public repository value.
+ *
+ * @param {MarketDayRow} row - The raw market day row.
+ * @returns {MarketDay} The tenant-agnostic market day value.
+ */
+function mapMarketDayRow(row: MarketDayRow): MarketDay {
+	return {
+		id: row.id,
+		name: row.name,
+		date: row.date,
+		startTime: row.start_time,
+		endTime: row.end_time,
+		location: row.location,
+		notes: row.notes,
+		closedAt: row.closed_at,
+		createdAt: row.created_at
+	};
+}
+
+/**
+ * Validate and normalize market-day input before persistence.
+ *
+ * @param {CreateMarketDayInput} input - Raw market day values.
+ * @returns {CreateMarketDayInput} Normalized values (trimmed text, optional date/times).
+ */
+function validateMarketDayInput(input: CreateMarketDayInput): CreateMarketDayInput {
+	const name = requireText(input.name, 'name');
+	const date = input.date === null ? null : requireIsoDate(input.date, 'date');
+	const startTime =
+		input.startTime === null || input.startTime === ''
+			? null
+			: requireText(input.startTime, 'startTime');
+	const endTime =
+		input.endTime === null || input.endTime === '' ? null : requireText(input.endTime, 'endTime');
+	if (startTime && endTime && endTime <= startTime) {
+		throw new Error('endTime must be after startTime');
+	}
+	return {
+		name,
+		date,
+		startTime,
+		endTime,
+		location: (input.location ?? '').trim(),
+		notes: (input.notes ?? '').trim()
+	};
+}
+
+/**
+ * Ensure a market day exists for the authenticated owner and tenant.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} marketDayId - Referenced market day id.
+ * @param {SessionScope} scope - Authenticated owner scope.
+ * @returns {void}
+ * @throws When the market day does not belong to the owner.
+ */
+function assertOwnMarketDay(
+	database: Database.Database,
+	marketDayId: string,
+	scope: SessionScope
+): void {
+	const marketDay = database
+		.prepare('SELECT 1 FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?')
+		.get(marketDayId, scope.userId, scope.tenantId);
+	if (!marketDay) {
+		throw new Error('market day was not found');
+	}
+}
+
+/**
+ * Read one expense with its optional market day name for the owner.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} expenseId - Expense id to read.
+ * @param {SessionScope} scope - Authenticated owner scope.
+ * @returns {Expense} The mapped expense.
+ * @throws {Error} When the expense does not exist for the owner.
+ */
+function getExpenseRow(
+	database: Database.Database,
+	expenseId: string,
+	scope: SessionScope
+): Expense {
+	const row = database
+		.prepare(
+			`SELECT expenses.id, expenses.label, expenses.category, expenses.amount_cents, expenses.expense_date,
+				expenses.market_day_id, expenses.created_at, market_days.name AS market_day_name
+			 FROM expenses
+			 LEFT JOIN market_days ON market_days.id = expenses.market_day_id
+				AND market_days.owner_id = expenses.owner_id AND market_days.tenant_id = expenses.tenant_id
+			 WHERE expenses.id = ? AND expenses.owner_id = ? AND expenses.tenant_id = ?`
+		)
+		.get(expenseId, scope.userId, scope.tenantId) as
+		| {
+				id: string;
+				label: string;
+				category: ExpenseCategory;
+				amount_cents: number;
+				expense_date: string;
+				market_day_id: string | null;
+				created_at: string;
+				market_day_name: string | null;
+		  }
+		| undefined;
+	if (!row) {
+		throw new Error('expense was not found');
+	}
+	return {
+		id: row.id,
+		label: row.label,
+		category: row.category,
+		amountCents: row.amount_cents,
+		expenseDate: row.expense_date,
+		marketDayId: row.market_day_id,
+		marketDayName: row.market_day_name,
+		createdAt: row.created_at
+	};
+}
+
+/**
+ * List all expenses of the authenticated owner, newest first.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {SessionScope} scope - Authenticated owner scope.
+ * @returns {Expense[]} Owner-scoped expenses ordered by date and creation time.
+ */
+function listExpenseRows(database: Database.Database, scope: SessionScope): Expense[] {
+	const rows = database
+		.prepare(
+			`SELECT expenses.id, expenses.label, expenses.category, expenses.amount_cents, expenses.expense_date,
+				expenses.market_day_id, expenses.created_at, market_days.name AS market_day_name
+			 FROM expenses
+			 LEFT JOIN market_days ON market_days.id = expenses.market_day_id
+				AND market_days.owner_id = expenses.owner_id AND market_days.tenant_id = expenses.tenant_id
+			 WHERE expenses.owner_id = ? AND expenses.tenant_id = ?
+			 ORDER BY expenses.expense_date DESC, expenses.created_at DESC, expenses.id DESC`
+		)
+		.all(scope.userId, scope.tenantId) as {
+		id: string;
+		label: string;
+		category: ExpenseCategory;
+		amount_cents: number;
+		expense_date: string;
+		market_day_id: string | null;
+		created_at: string;
+		market_day_name: string | null;
+	}[];
+	return rows.map((row) => ({
+		id: row.id,
+		label: row.label,
+		category: row.category,
+		amountCents: row.amount_cents,
+		expenseDate: row.expense_date,
+		marketDayId: row.market_day_id,
+		marketDayName: row.market_day_name,
+		createdAt: row.created_at
+	}));
+}
+
+/**
+ * Validate and normalize an expense input.
+ *
+ * @param {CreateExpenseInput} input - Raw expense values.
+ * @returns {CreateExpenseInput} Normalized values (trimmed label, validated amount and date).
+ */
+function validateExpenseInput(input: CreateExpenseInput): CreateExpenseInput {
+	const label = requireText(input.label, 'label');
+	const category = requireValidExpenseCategory(input.category);
+	const amountCents = requireNonNegativeInteger(input.amountCents, 'amountCents');
+	const expenseDate = requireIsoDate(input.expenseDate, 'expenseDate');
+	return {
+		label,
+		category,
+		amountCents,
+		expenseDate,
+		marketDayId: input.marketDayId ?? null
+	};
+}
+
+/**
+ * Validate that a category is one of the supported expense categories.
+ *
+ * @param {ExpenseCategory} category - Raw category value.
+ * @returns {ExpenseCategory} The validated category.
+ */
+function requireValidExpenseCategory(category: ExpenseCategory): ExpenseCategory {
+	if (!(expenseCategories as readonly string[]).includes(category)) {
+		throw new Error('category is not a supported expense category');
+	}
+	return category;
+}
+
+/**
+ * Rewrite image position numbers so they stay gap-free after a deletion.
+ *
+ * @param {ImageRow[]} orderedImages - Remaining images sorted by current position.
+ * @param {Database.Database} database - The SQLite connection to update.
+ * @returns {void}
+ */
+function renormalizeImagePositions(
+	orderedImages: ImageRow[],
+	database: Database.Database,
+	tenantId: string
+): void {
+	const renumberStatement = database.prepare(
+		'UPDATE item_images SET position = ? WHERE id = ? AND tenant_id = ?'
+	);
+	orderedImages.forEach((image, index) => {
+		renumberStatement.run(index, image.id, tenantId);
+	});
 }
 
 /**
@@ -722,8 +2366,31 @@ function initializeSchema(database: Database.Database): void {
 			createIndexes(database);
 			const appliedAt = new Date().toISOString();
 			database
-				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?)')
-				.run(tenantSchemaFoundationVersion, appliedAt, authHardeningVersion, appliedAt);
+				.prepare(
+					'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)'
+				)
+				.run(
+					tenantSchemaFoundationVersion,
+					appliedAt,
+					authHardeningVersion,
+					appliedAt,
+					itemScopedImageKeysVersion,
+					appliedAt,
+					saleStatusVersion,
+					appliedAt,
+					itemDetailFieldsVersion,
+					appliedAt,
+					itemReservationVersion,
+					appliedAt,
+					userAvatarVersion,
+					appliedAt,
+					collectionStandIntroVersion,
+					appliedAt,
+					marketDaysVersion,
+					appliedAt,
+					expensesVersion,
+					appliedAt
+				);
 		})();
 		return;
 	}
@@ -739,7 +2406,9 @@ function initializeSchema(database: Database.Database): void {
  */
 function isEmptyDatabase(database: Database.Database): boolean {
 	return !database
-		.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1")
+		.prepare(
+			"SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
+		)
 		.get();
 }
 
@@ -763,6 +2432,7 @@ function createSchema(database: Database.Database): void {
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
 			password_hash TEXT,
 			password_reset_required INTEGER NOT NULL DEFAULT 0 CHECK (password_reset_required IN (0, 1)),
+			avatar_storage_key TEXT,
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id)
 		);
@@ -805,6 +2475,7 @@ function createSchema(database: Database.Database): void {
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+			stand_intro TEXT NOT NULL DEFAULT '',
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
@@ -819,6 +2490,14 @@ function createSchema(database: Database.Database): void {
 			category TEXT NOT NULL CHECK (category IN (${categoryValues})),
 			condition TEXT NOT NULL CHECK (condition IN (${conditionValues})),
 			internal_notes TEXT NOT NULL DEFAULT '',
+			external_description TEXT NOT NULL DEFAULT '',
+			is_complete INTEGER NOT NULL DEFAULT 0 CHECK (is_complete IN (0, 1)),
+			is_functional INTEGER NOT NULL DEFAULT 0 CHECK (is_functional IN (0, 1)),
+			sale_channel TEXT CHECK (sale_channel IS NULL OR sale_channel IN (${saleChannelValues})),
+			sold_at TEXT,
+			reserved_at TEXT,
+			sale_proceeds_cents INTEGER CHECK (sale_proceeds_cents IS NULL OR sale_proceeds_cents >= 0),
+			market_day_id TEXT REFERENCES market_days(id) ON DELETE SET NULL,
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
@@ -828,12 +2507,42 @@ function createSchema(database: Database.Database): void {
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
 			item_id TEXT NOT NULL,
-			storage_key TEXT NOT NULL UNIQUE,
+			storage_key TEXT NOT NULL,
 			position INTEGER NOT NULL CHECK (position >= 0),
 			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (item_id, tenant_id, position),
+			UNIQUE (item_id, tenant_id, storage_key),
 			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
+		);
+		CREATE TABLE IF NOT EXISTS market_days (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			owner_id TEXT NOT NULL,
+			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+			date TEXT,
+			start_time TEXT,
+			end_time TEXT,
+			location TEXT NOT NULL DEFAULT '',
+			notes TEXT NOT NULL DEFAULT '',
+			closed_at TEXT,
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id),
+			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
+		);
+		CREATE TABLE IF NOT EXISTS expenses (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+			owner_id TEXT NOT NULL,
+			market_day_id TEXT,
+			label TEXT NOT NULL CHECK (length(trim(label)) > 0),
+			category TEXT NOT NULL CHECK (category IN ('fee', 'supplies', 'transport', 'purchase', 'other')),
+			amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
+			expense_date TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			UNIQUE (id, tenant_id),
+			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
+			FOREIGN KEY (market_day_id, tenant_id) REFERENCES market_days(id, tenant_id) ON DELETE SET NULL
 		);
 		CREATE TABLE IF NOT EXISTS schema_migrations (
 			version TEXT PRIMARY KEY,
@@ -861,6 +2570,7 @@ function createIndexes(database: Database.Database): void {
 		CREATE INDEX IF NOT EXISTS items_tenant_collection_created_idx ON items(tenant_id, collection_id, created_at, id);
 		CREATE INDEX IF NOT EXISTS items_tenant_owner_created_idx ON items(tenant_id, owner_id, created_at, id);
 		CREATE INDEX IF NOT EXISTS item_images_tenant_item_position_idx ON item_images(tenant_id, item_id, position);
+		CREATE INDEX IF NOT EXISTS expenses_tenant_owner_date_idx ON expenses(tenant_id, owner_id, expense_date, id);
 	`);
 }
 
@@ -877,9 +2587,9 @@ function migrateSchema(database: Database.Database): void {
 			database.transaction(() => {
 				createSchema(database);
 				const legacyAdminUserIds = hasColumn(database, 'users', 'is_admin')
-					? (database.prepare('SELECT id FROM users WHERE is_admin = 1').all() as { id: string }[]).map(
-							({ id }) => id
-						)
+					? (
+							database.prepare('SELECT id FROM users WHERE is_admin = 1').all() as { id: string }[]
+						).map(({ id }) => id)
 					: [];
 				rebuildUsers(database);
 				rebuildSessions(database);
@@ -906,6 +2616,312 @@ function migrateSchema(database: Database.Database): void {
 	}
 
 	migrateAuthHardeningSchema(database);
+	migrateTenantScopedImageKeys(database);
+	migrateSaleStatus(database);
+	migrateItemDetailFields(database);
+	migrateItemReservation(database);
+	migrateUserAvatar(database);
+	migrateCollectionStandIntro(database);
+	migrateMarketDays(database);
+	migrateExpenses(database);
+}
+
+/**
+ * Add the public stand introduction to collections on databases that predate stand intros.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateCollectionStandIntro(database: Database.Database): void {
+	if (hasMigrationVersion(database, collectionStandIntroVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'collections', 'stand_intro')) {
+			database.exec("ALTER TABLE collections ADD COLUMN stand_intro TEXT NOT NULL DEFAULT ''");
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(collectionStandIntroVersion, new Date().toISOString());
+	});
+}
+
+/**
+ * Add the market-days tables once, preserving every existing record.
+ *
+ * Market days belong to one tenant and one owner; a sale references its
+ * market day through the optional `market_day_id` column on `items`.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateMarketDays(database: Database.Database): void {
+	if (hasMigrationVersion(database, marketDaysVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		database.exec(`
+			CREATE TABLE IF NOT EXISTS market_days (
+				id TEXT PRIMARY KEY,
+				tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+				owner_id TEXT NOT NULL,
+				name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+				date TEXT,
+				start_time TEXT,
+				end_time TEXT,
+				location TEXT NOT NULL DEFAULT '',
+				notes TEXT NOT NULL DEFAULT '',
+				closed_at TEXT,
+				created_at TEXT NOT NULL,
+				UNIQUE (id, tenant_id),
+				FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
+			);
+			CREATE INDEX IF NOT EXISTS market_days_tenant_owner_created_idx ON market_days(tenant_id, owner_id, created_at, id);
+			ALTER TABLE items ADD COLUMN market_day_id TEXT REFERENCES market_days(id) ON DELETE SET NULL;
+		`);
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(marketDaysVersion, new Date().toISOString());
+	})();
+}
+
+/**
+ * Add the expenses table once, preserving every existing record.
+ *
+ * Expenses belong to one tenant and one owner and optionally reference a
+ * market day so a market day settlement can subtract them from the proceeds.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateExpenses(database: Database.Database): void {
+	if (hasMigrationVersion(database, expensesVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		database.exec(`
+			CREATE TABLE IF NOT EXISTS expenses (
+				id TEXT PRIMARY KEY,
+				tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+				owner_id TEXT NOT NULL,
+				market_day_id TEXT,
+				label TEXT NOT NULL CHECK (length(trim(label)) > 0),
+				category TEXT NOT NULL CHECK (category IN (${expenseCategoryValues})),
+				amount_cents INTEGER NOT NULL CHECK (amount_cents >= 0),
+				expense_date TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				UNIQUE (id, tenant_id),
+				FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
+				FOREIGN KEY (market_day_id, tenant_id) REFERENCES market_days(id, tenant_id) ON DELETE SET NULL
+			);
+			CREATE INDEX IF NOT EXISTS expenses_tenant_owner_date_idx ON expenses(tenant_id, owner_id, expense_date, id);
+		`);
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(expensesVersion, new Date().toISOString());
+	})();
+}
+
+/**
+ * Add the avatar storage key to users on databases that predate profile avatars./**
+ * Add the avatar storage key to users on databases that predate profile avatars.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateUserAvatar(database: Database.Database): void {
+	if (hasMigrationVersion(database, userAvatarVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'users', 'avatar_storage_key')) {
+			database.exec('ALTER TABLE users ADD COLUMN avatar_storage_key TEXT');
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(userAvatarVersion, new Date().toISOString());
+	});
+}
+
+/**
+ * Add the reservation timestamp to items on databases that predate reservations.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateItemReservation(database: Database.Database): void {
+	if (hasMigrationVersion(database, itemReservationVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'items', 'reserved_at')) {
+			database.exec('ALTER TABLE items ADD COLUMN reserved_at TEXT');
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(itemReservationVersion, new Date().toISOString());
+	});
+}
+
+/**
+ * Add buyer-facing description and completeness/functionality flags to items
+ * on databases that predate the detail-page fields.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateItemDetailFields(database: Database.Database): void {
+	if (hasMigrationVersion(database, itemDetailFieldsVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'items', 'external_description')) {
+			database.exec("ALTER TABLE items ADD COLUMN external_description TEXT NOT NULL DEFAULT ''");
+		}
+		if (!hasColumn(database, 'items', 'is_complete')) {
+			database.exec(
+				'ALTER TABLE items ADD COLUMN is_complete INTEGER NOT NULL DEFAULT 0 CHECK (is_complete IN (0, 1))'
+			);
+		}
+		if (!hasColumn(database, 'items', 'is_functional')) {
+			database.exec(
+				'ALTER TABLE items ADD COLUMN is_functional INTEGER NOT NULL DEFAULT 0 CHECK (is_functional IN (0, 1))'
+			);
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(itemDetailFieldsVersion, new Date().toISOString());
+	});
+}
+
+/**
+ * Add sale-tracking fields to items on databases that predate sale support.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateSaleStatus(database: Database.Database): void {
+	if (hasMigrationVersion(database, saleStatusVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'items', 'sale_channel')) {
+			database.exec(
+				'ALTER TABLE items ADD COLUMN sale_channel TEXT CHECK (sale_channel IS NULL OR sale_channel IN (' +
+					saleChannelValues +
+					'))'
+			);
+		}
+		if (!hasColumn(database, 'items', 'sold_at')) {
+			database.exec('ALTER TABLE items ADD COLUMN sold_at TEXT');
+		}
+		if (!hasColumn(database, 'items', 'sale_proceeds_cents')) {
+			database.exec(
+				'ALTER TABLE items ADD COLUMN sale_proceeds_cents INTEGER CHECK (sale_proceeds_cents IS NULL OR sale_proceeds_cents >= 0)'
+			);
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(saleStatusVersion, new Date().toISOString());
+	});
+}
+
+/**
+ * Scope item-image storage keys per item so one item cannot attach the same
+ * file twice, while different items and tenants may reference identical content.
+ *
+ * Existing databases with the global `UNIQUE(storage_key)` column constraint are
+ * rebuilt onto the tenant-scoped composite constraint while preserving every row.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateTenantScopedImageKeys(database: Database.Database): void {
+	if (hasMigrationVersion(database, itemScopedImageKeysVersion)) {
+		return;
+	}
+
+	database.pragma('foreign_keys = OFF');
+	try {
+		database.transaction(() => {
+			const hasGlobalStorageKeyUnique = (
+				database.prepare('PRAGMA index_list(item_images)').all() as {
+					name: string;
+					unique: number;
+					origin: string;
+				}[]
+			).some(
+				(index) =>
+					index.unique === sqliteTrue &&
+					index.origin === 'u' &&
+					getIndexColumns(database, index.name).length === 1 &&
+					getIndexColumns(database, index.name)[0] === 'storage_key'
+			);
+			if (hasGlobalStorageKeyUnique) {
+				database.pragma('foreign_keys = OFF');
+				database.transaction(() => {
+					rebuildItemImagesForTenantScopedKeys(database);
+					assertCopiedRowCount(database, 'item_images', 'item_images_next');
+					database.exec(
+						'DROP TABLE item_images; ALTER TABLE item_images_next RENAME TO item_images;'
+					);
+				})();
+			}
+			assertForeignKeys(database);
+			createIndexes(database);
+			database
+				.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+				.run(itemScopedImageKeysVersion, new Date().toISOString());
+		})();
+	} finally {
+		database.pragma('foreign_keys = ON');
+	}
+}
+
+/**
+ * Copy every image row into the tenant-scoped-key replacement table.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function rebuildItemImagesForTenantScopedKeys(database: Database.Database): void {
+	database.exec(`
+		CREATE TABLE item_images_next (
+			id TEXT PRIMARY KEY,
+			tenant_id TEXT NOT NULL,
+			item_id TEXT NOT NULL,
+			storage_key TEXT NOT NULL,
+			position INTEGER NOT NULL CHECK (position >= 0),
+			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
+			created_at TEXT NOT NULL,
+			UNIQUE (item_id, tenant_id, position),
+			UNIQUE (item_id, tenant_id, storage_key),
+			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
+		);
+		INSERT INTO item_images_next (id, tenant_id, item_id, storage_key, position, is_cover, created_at)
+		SELECT id, tenant_id, item_id, storage_key, position, is_cover, created_at
+		FROM item_images;
+	`);
+}
+
+/**
+ * Read the indexed columns of a trusted SQLite index.
+ *
+ * @param {Database.Database} database - The SQLite connection.
+ * @param {string} indexName - Trusted index name from `PRAGMA index_list`.
+ * @returns {string[]} Ordered column names of the index.
+ */
+function getIndexColumns(database: Database.Database, indexName: string): string[] {
+	return (database.prepare(`PRAGMA index_info(${indexName})`).all() as { name: string }[]).map(
+		({ name }) => name
+	);
 }
 
 /**
@@ -924,7 +2940,9 @@ function migrateAuthHardeningSchema(database: Database.Database): void {
 
 	database.transaction(() => {
 		if (!hasColumn(database, 'users', 'password_reset_required')) {
-			database.exec('ALTER TABLE users ADD COLUMN password_reset_required INTEGER NOT NULL DEFAULT 0 CHECK (password_reset_required IN (0, 1))');
+			database.exec(
+				'ALTER TABLE users ADD COLUMN password_reset_required INTEGER NOT NULL DEFAULT 0 CHECK (password_reset_required IN (0, 1))'
+			);
 		}
 		database.exec(`
 			CREATE TABLE IF NOT EXISTS password_resets (
@@ -961,7 +2979,10 @@ function migrateAuthHardeningSchema(database: Database.Database): void {
  * @returns {boolean} Whether the version has been recorded.
  */
 function hasMigrationVersion(database: Database.Database, version: string): boolean {
-	return hasTable(database, 'schema_migrations') && Boolean(database.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(version));
+	return (
+		hasTable(database, 'schema_migrations') &&
+		Boolean(database.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(version))
+	);
 }
 
 /**
@@ -981,6 +3002,7 @@ function rebuildUsers(database: Database.Database): void {
 			display_name TEXT NOT NULL CHECK (length(trim(display_name)) > 0),
 			password_hash TEXT,
 			password_reset_required INTEGER NOT NULL DEFAULT 0 CHECK (password_reset_required IN (0, 1)),
+			avatar_storage_key TEXT,
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id)
 		);
@@ -1027,6 +3049,7 @@ function rebuildCollections(database: Database.Database): void {
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
+			stand_intro TEXT NOT NULL DEFAULT '',
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
@@ -1055,6 +3078,13 @@ function rebuildItems(database: Database.Database): void {
 			category TEXT NOT NULL CHECK (category IN (${categoryValues})),
 			condition TEXT NOT NULL CHECK (condition IN (${conditionValues})),
 			internal_notes TEXT NOT NULL DEFAULT '',
+			external_description TEXT NOT NULL DEFAULT '',
+			is_complete INTEGER NOT NULL DEFAULT 0 CHECK (is_complete IN (0, 1)),
+			is_functional INTEGER NOT NULL DEFAULT 0 CHECK (is_functional IN (0, 1)),
+			sale_channel TEXT CHECK (sale_channel IS NULL OR sale_channel IN (${saleChannelValues})),
+			sold_at TEXT,
+			reserved_at TEXT,
+			sale_proceeds_cents INTEGER CHECK (sale_proceeds_cents IS NULL OR sale_proceeds_cents >= 0),
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT,
@@ -1084,11 +3114,12 @@ function rebuildItemImages(database: Database.Database): void {
 			id TEXT PRIMARY KEY,
 			tenant_id TEXT NOT NULL,
 			item_id TEXT NOT NULL,
-			storage_key TEXT NOT NULL UNIQUE,
+			storage_key TEXT NOT NULL,
 			position INTEGER NOT NULL CHECK (position >= 0),
 			is_cover INTEGER NOT NULL DEFAULT 0 CHECK (is_cover IN (0, 1)),
 			created_at TEXT NOT NULL,
 			UNIQUE (item_id, tenant_id, position),
+			UNIQUE (item_id, tenant_id, storage_key),
 			FOREIGN KEY (item_id, tenant_id) REFERENCES items(id, tenant_id) ON DELETE CASCADE
 		);
 		INSERT INTO item_images_next (id, tenant_id, item_id, storage_key, position, is_cover, created_at)
@@ -1130,7 +3161,11 @@ function replaceFoundationTables(database: Database.Database): void {
  * @returns {void}
  * @throws {Error} If a relationship prevented a complete copy.
  */
-function assertCopiedRowCount(database: Database.Database, sourceTable: string, targetTable: string): void {
+function assertCopiedRowCount(
+	database: Database.Database,
+	sourceTable: string,
+	targetTable: string
+): void {
 	const sourceCount = getTableRowCount(database, sourceTable);
 	const targetCount = getTableRowCount(database, targetTable);
 	if (sourceCount !== targetCount) {
@@ -1146,7 +3181,8 @@ function assertCopiedRowCount(database: Database.Database, sourceTable: string, 
  * @returns {number} Row count.
  */
 function getTableRowCount(database: Database.Database, tableName: string): number {
-	return (database.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count: number }).count;
+	return (database.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get() as { count: number })
+		.count;
 }
 
 /**
@@ -1222,8 +3258,79 @@ function mapItemRow(row: ItemRow): Item {
 		priceCents: row.price_cents,
 		category: row.category,
 		condition: row.condition,
-		internalNotes: row.internal_notes
+		internalNotes: row.internal_notes,
+		externalDescription: row.external_description,
+		isComplete: row.is_complete === 1,
+		isFunctional: row.is_functional === 1,
+		reservedAt: row.reserved_at,
+		saleChannel: row.sale_channel,
+		soldAt: row.sold_at,
+		saleProceedsCents: row.sale_proceeds_cents,
+		marketDayId: row.market_day_id
 	};
+}
+
+const isoTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+
+/**
+ * Validate the submitted sale channel against the supported allowlist.
+ *
+ * @param {SaleChannel} channel - Channel claimed by the caller.
+ * @returns {SaleChannel} The validated channel.
+ * @throws {Error} If the channel is not supported.
+ */
+function requireValidSaleChannel(channel: SaleChannel): SaleChannel {
+	if (!(saleChannels as readonly string[]).includes(channel)) {
+		throw new Error('channel is not a supported sale channel');
+	}
+	return channel;
+}
+
+/**
+ * Require a canonical ISO-8601 UTC timestamp string.
+ *
+ * @param {string} value - Timestamp supplied by the caller.
+ * @returns {string} The validated timestamp.
+ * @throws {Error} If the timestamp is not canonical UTC ISO format.
+ */
+function requireIsoTimestamp(value: string): string {
+	if (!isoTimestampPattern.test(value) || Number.isNaN(Date.parse(value))) {
+		throw new Error('soldAt must be a canonical UTC ISO timestamp');
+	}
+	return value;
+}
+
+/**
+ * Require a YYYY-MM-DD calendar date string.
+ *
+ * @param {string} value - The untrusted date value.
+ * @param {string} fieldName - Field name for the error message.
+ * @returns {string} The validated date value.
+ */
+function requireIsoDate(value: string, fieldName: string): string {
+	const validated = requireText(value, fieldName);
+	if (
+		!/^\d{4}-\d{2}-\d{2}$/.test(validated) ||
+		Number.isNaN(Date.parse(`${validated}T00:00:00.000Z`))
+	) {
+		throw new Error(`${fieldName} must be a YYYY-MM-DD calendar date`);
+	}
+	return validated;
+}
+
+/**
+ * Require a safe non-negative integer amount.
+ *
+ * @param {number} value - Amount supplied by the caller.
+ * @param {string} fieldName - Field name used in validation errors.
+ * @returns {number} The validated amount.
+ * @throws {Error} If the amount is not a safe non-negative integer.
+ */
+function requireNonNegativeInteger(value: number, fieldName: string): number {
+	if (!Number.isSafeInteger(value) || value < 0) {
+		throw new Error(`${fieldName} must be a non-negative integer`);
+	}
+	return value;
 }
 
 /**
@@ -1251,7 +3358,12 @@ function requireText(value: string, fieldName: string): string {
  * @param {Date} now - Current time used for the bounded window.
  * @returns {LoginRateLimitStatus} Whether login is blocked and its retry delay.
  */
-function getLoginAttemptStatus(database: Database.Database, username: string, requestIp: string, now: Date): LoginRateLimitStatus {
+function getLoginAttemptStatus(
+	database: Database.Database,
+	username: string,
+	requestIp: string,
+	now: Date
+): LoginRateLimitStatus {
 	const normalizedUsername = normalizeLoginAttemptUsername(username);
 	const normalizedIp = normalizeRequestIp(requestIp);
 	const nowMilliseconds = now.getTime();
@@ -1261,7 +3373,10 @@ function getLoginAttemptStatus(database: Database.Database, username: string, re
 		.prepare(
 			"SELECT failure_count, window_started_at FROM login_attempts WHERE (scope = 'username' AND subject = ?) OR (scope = 'ip' AND subject = ?)"
 		)
-		.all(normalizedUsername, normalizedIp) as { failure_count: number; window_started_at: number }[];
+		.all(normalizedUsername, normalizedIp) as {
+		failure_count: number;
+		window_started_at: number;
+	}[];
 	const blockingAttempt = attempts.find(({ failure_count }) => failure_count >= loginAttemptLimit);
 	if (!blockingAttempt) {
 		return { blocked: false, retryAfterSeconds: 0 };
@@ -1270,7 +3385,10 @@ function getLoginAttemptStatus(database: Database.Database, username: string, re
 		blocked: true,
 		retryAfterSeconds: Math.max(
 			minimumRetryAfterSeconds,
-			Math.ceil((blockingAttempt.window_started_at + loginAttemptWindowMilliseconds - nowMilliseconds) / millisecondsPerSecond)
+			Math.ceil(
+				(blockingAttempt.window_started_at + loginAttemptWindowMilliseconds - nowMilliseconds) /
+					millisecondsPerSecond
+			)
 		)
 	};
 }

@@ -9,15 +9,18 @@ long-lived branches require different merge methods to keep Git ancestry intact.
 
 - Require a pull request and one approval.
 - Allow merge commits only. Do not allow squash or rebase merges.
-- Require the `build` and `test` status checks.
+- Require the `build` and `test` status checks. `build` is the aggregate gate:
+  it depends on audit, unit tests, E2E tests and the Trivy `docker-scan`, and
+  fails explicitly if any of them did not succeed. (GitHub treats skipped
+  required checks as passing, so the gate must fail rather than be skipped.)
 - Do not require linear history: each release promotion is a deliberate merge commit.
 - Use merge commits for both `develop -> main` release candidates and Release Please PRs.
 
 ### `develop`
 
 - Require a pull request and one approval.
-- Require the `build` status check. `build` depends on audit, unit tests and E2E
-  tests, so those gates must pass first.
+- Require the `build` status check. `build` is the aggregate gate described
+  above and also runs lint and the type check.
 - Allow both squash and merge commits.
 - Use squash for normal feature and fix pull requests.
 - Use a merge commit only for `main -> develop` backmerge pull requests.
@@ -34,7 +37,22 @@ that token do not trigger the CI workflow.
 The token needs repository contents and pull request write access. Store it only
 as a GitHub Actions repository secret.
 
+## Security gates and release coupling
+
+- The CI workflow runs `pnpm audit` (first job) and Trivy container/filesystem
+  scans (`docker-scan`, after `build`) as separate jobs. A green `build` does
+  **not** imply a green security scan.
+- The `develop` pipeline (`.github/workflows/release-pr.yml`) opens/updates the
+  release candidate and publishes the `develop-<sha7>` / `develop` images. It
+  does not depend on the separate CI workflow; treat the published revision as
+  release-worthy only when the CI run for that exact commit is fully green,
+  including `docker-scan`.
+- Before merging a release candidate to `main`, verify the CI run for its head
+  commit: all jobs green, including `audit` and `docker-scan`.
+
 ## Release sequence
+
+![Release process diagram](./release-process.png)
 
 1. Merge feature and fix pull requests into `develop` using squash.
 2. The Develop pipeline validates the resulting commit, publishes

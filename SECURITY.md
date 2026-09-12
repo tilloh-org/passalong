@@ -11,7 +11,7 @@ that vulnerabilities are reported and fixed responsibly.
 Instead, report vulnerabilities privately:
 
 - **Preferred:** GitHub's private security advisory
-  → Repository → *Security* tab → *Report a vulnerability*
+  → Repository → _Security_ tab → _Report a vulnerability_
 - **Alternative:** email the maintainer (address in the repository metadata)
 
 You will receive a response within **5 business days**. We will keep you
@@ -37,5 +37,6 @@ Out of scope:
   default)
 - Put passalong behind a reverse proxy with HTTPS (e.g. Caddy, Traefik,
   nginx)
-- Keep `PASSALONG_PUBLIC_URL` aligned with your actual public URL
+- Keep `PASSALONG_ORIGIN` aligned with your actual public URL (it is passed
+  to the container as `ORIGIN`; see `docker-compose.yml`)
 - Protect the data volume — it contains the SQLite database and uploads

@@ -10,7 +10,9 @@ const minutesPerHour = 60;
 const minimumUsernameLength = 3;
 const maximumUsernameLength = 64;
 const resetSecretLifetimeMilliseconds = minutesPerHour * secondsPerMinute * millisecondsPerSecond;
-const usernamePattern = new RegExp(`^[a-z0-9._+-]{${minimumUsernameLength},${maximumUsernameLength}}$`);
+const usernamePattern = new RegExp(
+	`^[a-z0-9._+-]{${minimumUsernameLength},${maximumUsernameLength}}$`
+);
 
 interface AccountScope {
 	id: string;
@@ -18,7 +20,8 @@ interface AccountScope {
 }
 
 const username = process.argv[2]?.trim().toLowerCase();
-const databasePath = process.env.PASSALONG_DATABASE_PATH ?? join(process.cwd(), 'data', 'passalong.sqlite');
+const databasePath =
+	process.env.PASSALONG_DATABASE_PATH ?? join(process.cwd(), 'data', 'passalong.sqlite');
 
 if (!username || !usernamePattern.test(username)) {
 	console.error('Usage: node build/scripts/create-password-reset.js <username>');
@@ -39,15 +42,21 @@ if (!username || !usernamePattern.test(username)) {
 			const expiresAt = new Date(Date.now() + resetSecretLifetimeMilliseconds).toISOString();
 			database.transaction(() => {
 				database
-					.prepare('UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL')
+					.prepare(
+						'UPDATE password_resets SET consumed_at = ? WHERE user_id = ? AND tenant_id = ? AND consumed_at IS NULL'
+					)
 					.run(now, account.id, account.tenant_id);
 				database
-					.prepare('UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?')
+					.prepare(
+						'UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE user_id = ? AND tenant_id = ?'
+					)
 					.run(now, account.id, account.tenant_id);
 				database
-					.prepare('INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+					.prepare(
+						'INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+					)
 					.run(randomUUID(), account.id, account.tenant_id, secretHash, expiresAt, now);
-			database
+				database
 					.prepare('UPDATE users SET password_reset_required = 1 WHERE id = ? AND tenant_id = ?')
 					.run(account.id, account.tenant_id);
 			})();

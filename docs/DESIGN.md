@@ -1,0 +1,75 @@
+# Design conventions
+
+Binding visual/UX conventions for passalong UI work. Follow these in every PR that touches the
+UI; deviations need an explicit decision (e.g. in the PR description).
+
+## Buttons
+
+- **Primary/confirm actions of a modal or form** (e.g. „Änderungen speichern", „Als verkauft
+  erfassen", „Foto speichern") are rendered at the **bottom right** of their container/modal —
+  never top-left or centered. This applies to every existing and future modal, panel, and card
+  (e.g. the profile page cards). Within a shared action row, secondary controls sit to the left
+  of the primary confirm button.
+- **Design rules take precedence over the Marktbude reference.** The Marktbude UI is a migration
+  source, not a style authority: where a Marktbude pattern conflicts with a passalong design rule,
+  the rule wins and the migrated feature adapts to it.
+- **Action-button spacing is token-driven.** Gaps between action buttons (and between the action
+  row and adjacent content) use the shared spacing variables (`--gap-action-row`,
+  `--gap-action-block`) instead of ad-hoc values, so spacing stays consistent everywhere.
+- **Actions that depend on prior input render a disabled state** until the prerequisite is met
+  (e.g. „Avatar speichern" until a file is chosen, „Einleitung speichern" until the text differs,
+  „Restore ausführen" until a backup file is selected). Disabled buttons use reduced contrast,
+  keep their position, and carry `disabled` + `aria-disabled`.
+- The app-wide primary button style is a dark-teal gradient fill with white bold label.
+- Destructive actions use the red danger tint (e.g. „🗑 Artikel löschen").
+- Secondary/tinted action buttons in the item action row follow the Marktbude scheme:
+  red = destructive, blue = edit/media, amber = reservation.
+
+## Header
+
+- The global header row is a single flex line: the brand sits on the left, the navigation and
+  the action buttons (theme toggle, profile avatar) form **one group at the right edge**.
+  A vertical divider (`--color-border`) separates the navigation from the action buttons,
+  with balanced spacing on both sides of the divider.
+- The navigation is only rendered inline when it fits; when it overflows it collapses into the
+  right-side drawer behind the burger button, which then appears left of the theme toggle. The
+  action buttons stay pinned to the right edge in both states.
+- The drawer is an overlay: it slides in above the page, dims the background with the
+  theme-aware scrim token (`--scrim`), and carries a soft shadow toward the content side
+  (`--shadow-drawer`) so it reads as an elevated layer. The scrim, drawer, and shadow colors
+  are theme tokens — never hard-coded — because a dark scrim on a dark page is invisible.
+  The header action buttons (burger/close, theme toggle, profile) stay above the drawer
+  (higher z-index) and remain clickable; the burger icon morphs into a close icon.
+  Tapping the scrim or pressing Escape closes the drawer; keyboard focus moves into the
+  drawer on open and back to the burger on close.
+- Navigation buttons never run off the right edge of the viewport.
+
+## Modals
+
+- Native `<dialog>` elements with a dimmed backdrop.
+- Every modal has a header row with a bold title on the left and a light „Schließen" button on
+  the right; Escape and the close button dismiss it.
+- Form fields inside modals share the page-wide field styling: rounded corners, light border,
+  sans-serif inherited font, visible focus ring.
+
+## Form fields
+
+- All inputs, selects, and textareas share the same treatment (rounded, light border, inherited
+  font); never ship browser-default styling.
+- Monetary amounts are entered in **euro with decimal comma** (e.g. `12,50`); the database stores
+  euro cents. Sale dates are captured automatically at submit time, never asked from the user.
+- Checkbox groups pair the control inline with its label; semantic colors must match the
+  corresponding pills elsewhere in the app (green = „Vollständig", blue = „Funktionsfähig").
+
+## Marktbude reference
+
+The visual language mirrors the old Marktbude UI (flohmarkt.tilloh.dev), analyzed read-only.
+Item cards: category pill overlaid top-left on the image, status pill and quick-sale button in
+the tile footer. Detail page: action row (delete/images/edit/reserve) right-aligned below the
+sale panel.
+
+## Code language
+
+All code, comments, test titles, CSS class names, `data-testid` values, and identifiers are
+written in **English**. German appears only in user-facing UI copy (labels, messages) — the
+UI language for visitors is German by product decision.
