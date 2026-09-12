@@ -167,11 +167,38 @@ export interface SaleMonthProceeds {
 	totalProceedsCents: number;
 }
 
+export interface SaleCategoryProceeds {
+	category: ItemCategory;
+	soldItemCount: number;
+	totalProceedsCents: number;
+}
+
+export interface SaleMarketDayProceeds {
+	marketDayName: string | null;
+	soldItemCount: number;
+	totalProceedsCents: number;
+}
+
+export interface ExpenseCategoryTotals {
+	category: ExpenseCategory;
+	totalExpensesCents: number;
+}
+
+export interface SaleStatisticsPeriod {
+	fromInclusive: string | null;
+	toInclusive: string | null;
+}
+
 export interface SaleStatistics {
 	soldItemCount: number;
 	totalProceedsCents: number;
+	totalExpensesCents: number;
+	netResultCents: number;
 	proceedsByChannel: SaleChannelProceeds[];
 	proceedsByMonth: SaleMonthProceeds[];
+	proceedsByCategory: SaleCategoryProceeds[];
+	proceedsByMarketDay: SaleMarketDayProceeds[];
+	expensesByCategory: ExpenseCategoryTotals[];
 }
 
 export interface SaleHistoryEntry {
@@ -344,8 +371,7 @@ export interface CollectionRepository {
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
 	getSaleHistory(scope: SessionScope, filters: SaleHistoryFilters): SaleHistoryEntry[];
-	getSaleStatistics(scope: SessionScope): SaleStatistics;
-	getPublicStandView(collectionId: string): PublicStandView | null;
+		getSaleStatistics(scope: SessionScope, period?: SaleStatisticsPeriod): SaleStatistics;	getPublicStandView(collectionId: string): PublicStandView | null;
 	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
 	searchPublicStandItems(collectionId: string, filters: ItemFilters): PublicStandItem[];
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
@@ -1324,35 +1350,102 @@ export function createCollectionRepository(
 			}));
 		},
 
-		getSaleStatistics(scope) {
-			const saleMonthExpression = "substr(sold_at, 1, 7)";
-			const soldItemFilter = 'WHERE tenant_id = ? AND owner_id = ? AND sold_at IS NOT NULL';
+		getSaleStatistics(scope, period) {
+			const fromInclusive = period?.fromInclusive ?? null;
+			const toInclusive = period?.toInclusive ?? null;
+			const saleClauses = ['tenant_id = ?', 'owner_id = ?', 'sold_at IS NOT NULL'];
+			const saleParameters: (string | null)[] = [scope.tenantId, scope.userId];
+			if (fromInclusive !== null) {
+				saleClauses.push('substr(sold_at, 1, 10) >= ?');
+				saleParameters.push(fromInclusive);
+			}
+			if (toInclusive !== null) {
+				saleClauses.push('substr(sold_at, 1, 10) <= ?');
+				saleParameters.push(toInclusive);
+			}
+			const saleFilter = `WHERE ${saleClauses.join(' AND ')}`;
+			const expenseClauses = ['tenant_id = ?', 'owner_id = ?'];
+			const expenseParameters: (string | null)[] = [scope.tenantId, scope.userId];
+			if (fromInclusive !== null) {
+				expenseClauses.push('expense_date >= ?');
+				expenseParameters.push(fromInclusive);
+			}
+			if (toInclusive !== null) {
+				expenseClauses.push('expense_date <= ?');
+				expenseParameters.push(toInclusive);
+			}
+			const expenseFilter = `WHERE ${expenseClauses.join(' AND ')}`;
+			const saleMonthExpression = 'substr(sold_at, 1, 7)';
 			const totals = database
 				.prepare(
-					`SELECT COUNT(*) AS sold_item_count, COALESCE(SUM(sale_proceeds_cents), 0) AS total_proceeds_cents FROM items ${soldItemFilter}`
+					`SELECT COUNT(*) AS sold_item_count, COALESCE(SUM(sale_proceeds_cents), 0) AS total_proceeds_cents FROM items ${saleFilter}`
 				)
-				.get(scope.tenantId, scope.userId) as { sold_item_count: number; total_proceeds_cents: number };
+				.get(...saleParameters) as { sold_item_count: number; total_proceeds_cents: number };
+			const expenseTotals = database
+				.prepare(`SELECT COALESCE(SUM(amount_cents), 0) AS total_expenses_cents FROM expenses ${expenseFilter}`)
+				.get(...expenseParameters) as { total_expenses_cents: number };
 			const proceedsByChannel = (
 				database
 					.prepare(
 						`SELECT sale_channel AS channel, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
-						 FROM items ${soldItemFilter} GROUP BY sale_channel ORDER BY total_proceeds_cents DESC, channel ASC`
+						 FROM items ${saleFilter} GROUP BY sale_channel ORDER BY total_proceeds_cents DESC, channel ASC`
 					)
-					.all(scope.tenantId, scope.userId) as { channel: SaleChannel; sold_item_count: number; total_proceeds_cents: number }[]
+					.all(...saleParameters) as { channel: SaleChannel; sold_item_count: number; total_proceeds_cents: number }[]
 			).map((row) => ({ channel: row.channel, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
 			const proceedsByMonth = (
 				database
 					.prepare(
 						`SELECT ${saleMonthExpression} AS month, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
-						 FROM items ${soldItemFilter} GROUP BY ${saleMonthExpression} ORDER BY month ASC`
+						 FROM items ${saleFilter} GROUP BY ${saleMonthExpression} ORDER BY month ASC`
 					)
-					.all(scope.tenantId, scope.userId) as { month: string; sold_item_count: number; total_proceeds_cents: number }[]
+					.all(...saleParameters) as { month: string; sold_item_count: number; total_proceeds_cents: number }[]
 			).map((row) => ({ month: row.month, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+			const proceedsByCategory = (
+				database
+					.prepare(
+						`SELECT category, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
+						 FROM items ${saleFilter} GROUP BY category ORDER BY total_proceeds_cents DESC, category ASC`
+					)
+					.all(...saleParameters) as { category: ItemCategory; sold_item_count: number; total_proceeds_cents: number }[]
+			).map((row) => ({ category: row.category, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+			const proceedsByMarketDay = (
+				database
+					.prepare(
+						`SELECT market_days.name AS market_day_name, COUNT(*) AS sold_item_count, SUM(items.sale_proceeds_cents) AS total_proceeds_cents
+						 FROM items LEFT JOIN market_days ON market_days.id = items.market_day_id
+							AND market_days.owner_id = items.owner_id AND market_days.tenant_id = items.tenant_id
+						 WHERE items.tenant_id = ? AND items.owner_id = ? AND items.sold_at IS NOT NULL
+							AND (${fromInclusive === null ? '1' : 'substr(items.sold_at, 1, 10) >= ?'})
+							AND (${toInclusive === null ? '1' : 'substr(items.sold_at, 1, 10) <= ?'})
+						 GROUP BY market_days.name ORDER BY total_proceeds_cents DESC, market_day_name ASC`
+					)
+					.all(
+						scope.tenantId,
+						scope.userId,
+						...(fromInclusive !== null ? [fromInclusive] : []),
+						...(toInclusive !== null ? [toInclusive] : [])
+					) as { market_day_name: string | null; sold_item_count: number; total_proceeds_cents: number }[]
+			)
+				.filter((row) => row.market_day_name !== null)
+				.map((row) => ({ marketDayName: row.market_day_name, soldItemCount: row.sold_item_count, totalProceedsCents: row.total_proceeds_cents }));
+			const expensesByCategory = (
+				database
+					.prepare(
+						`SELECT category, SUM(amount_cents) AS total_expenses_cents
+						 FROM expenses ${expenseFilter} GROUP BY category ORDER BY total_expenses_cents DESC, category ASC`
+					)
+					.all(...expenseParameters) as { category: ExpenseCategory; total_expenses_cents: number }[]
+			).map((row) => ({ category: row.category, totalExpensesCents: row.total_expenses_cents }));
 			return {
 				soldItemCount: totals.sold_item_count,
 				totalProceedsCents: totals.total_proceeds_cents,
+				totalExpensesCents: expenseTotals.total_expenses_cents,
+				netResultCents: totals.total_proceeds_cents - expenseTotals.total_expenses_cents,
 				proceedsByChannel,
-				proceedsByMonth
+				proceedsByMonth,
+				proceedsByCategory,
+				proceedsByMarketDay,
+				expensesByCategory
 			};
 		},
 

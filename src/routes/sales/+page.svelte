@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
-	import type { SaleHistoryEntry } from '$lib/server/collection-repository';
+	import type { ExpenseCategory, ItemCategory, SaleHistoryEntry, SaleStatistics } from '$lib/server/collection-repository';
 
 	let { data } = $props();
 
@@ -23,6 +23,26 @@
 	 */
 	function categoryLabel(category: string): string {
 		return t(`category.${category}`);
+	}
+
+	/**
+	 * Translate an expense category identifier for display.
+	 *
+	 * @param {ExpenseCategory} category - Technical expense-category identifier.
+	 * @returns {string} Localized expense-category label.
+	 */
+	function expenseCategoryLabel(category: ExpenseCategory): string {
+		return t(`expenses.category.${category}`);
+	}
+
+	/**
+	 * Label a market-day statistics bucket with a fallback for unassigned sales.
+	 *
+	 * @param {string | null} marketDayName - Market day name or null.
+	 * @returns {string} The display label.
+	 */
+	function marketDayStatsLabel(marketDayName: string | null): string {
+		return marketDayName ?? t('saleHistory.withoutMarketDayStats');
 	}
 
 	/**
@@ -53,6 +73,75 @@
 	<section class="summary" data-testid="sale-history-summary">
 		<strong>{t('saleHistory.summary', { count: data.summary.soldItemCount, proceeds: formatPrice(data.summary.totalProceedsCents) })}</strong>
 	</section>
+
+	{#if data.statistics.soldItemCount > 0 || data.statistics.totalExpensesCents > 0 || data.period.fromInclusive !== null || data.period.toInclusive !== null}
+		<section class="statistics" aria-labelledby="sale-statistics-title" data-testid="sale-statistics">
+			<h2 id="sale-statistics-title">{t('saleHistory.statistics')}</h2>
+			<p class="statistics-total" data-testid="sale-statistics-total">
+				{t('saleHistory.statisticsTotal', {
+					count: data.statistics.soldItemCount,
+					proceeds: formatPrice(data.statistics.totalProceedsCents),
+					expenses: formatPrice(data.statistics.totalExpensesCents),
+					net: formatPrice(data.statistics.netResultCents)
+				})}
+			</p>
+			<div class="statistics-grid">
+				<div class="statistics-group">
+					<h3>{t('saleHistory.byCategory')}</h3>
+					<ul data-testid="sale-statistics-categories">
+						{#each data.statistics.proceedsByCategory as entry (entry.category)}
+							<li>
+								<span>{categoryLabel(entry.category)}</span>
+								<span class="statistics-value">{entry.soldItemCount}× · {formatPrice(entry.totalProceedsCents)} €</span>
+							</li>
+						{/each}
+					</ul>
+				</div>
+				<div class="statistics-group">
+					<h3>{t('saleHistory.byMarketDay')}</h3>
+					<ul data-testid="sale-statistics-market-days">
+						{#each data.statistics.proceedsByMarketDay as entry (entry.marketDayName)}
+							<li>
+								<span>{marketDayStatsLabel(entry.marketDayName)}</span>
+								<span class="statistics-value">{entry.soldItemCount}× · {formatPrice(entry.totalProceedsCents)} €</span>
+							</li>
+						{/each}
+					</ul>
+					<h3>{t('saleHistory.expensesByCategory')}</h3>
+					<ul data-testid="sale-statistics-expenses">
+						{#each data.statistics.expensesByCategory as entry (entry.category)}
+							<li>
+								<span>{expenseCategoryLabel(entry.category)}</span>
+								<span class="statistics-value">{formatPrice(entry.totalExpensesCents)} €</span>
+							</li>
+						{:else}
+							<li><span>—</span></li>
+						{/each}
+					</ul>
+				</div>
+				<div class="statistics-group statistics-group-period">
+					<h3>{t('saleHistory.byPeriod')}</h3>
+					<form method="GET" class="period-form" data-testid="sale-statistics-period">
+						<input type="hidden" name="channel" value={data.filters.channel ?? ''} />
+						<input type="hidden" name="category" value={data.filters.category ?? ''} />
+						<label>
+							<span>{t('saleHistory.periodFrom')}</span>
+							<input name="from" type="date" value={data.period.fromInclusive ?? ''} />
+						</label>
+						<label>
+							<span>{t('saleHistory.periodTo')}</span>
+							<input name="to" type="date" value={data.period.toInclusive ?? ''} />
+						</label>
+						<div class="period-actions">
+							<a class="secondary-link" href="/sales">{t('saleHistory.resetFilters')}</a>
+							<button type="submit" class="filter-submit">{t('saleHistory.applyFilters')}</button>
+						</div>
+					</form>
+				</div>
+
+			</div>
+		</section>
+	{/if}
 
 	<section class="filter-panel" aria-labelledby="sale-filter-title">
 		<h2 id="sale-filter-title">{t('saleHistory.filters')}</h2>
@@ -170,6 +259,78 @@
 		margin-bottom: 1rem;
 		padding: 1rem 1.2rem;
 		text-align: center;
+	}
+
+	.statistics {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-card);
+		box-shadow: var(--shadow-card);
+		margin-bottom: 1rem;
+		padding: 1rem;
+	}
+
+	.statistics h2 {
+		font-size: 1rem;
+		margin: 0 0 0.5rem;
+	}
+
+	.statistics-total {
+		color: var(--color-accent-strong);
+		font-weight: 700;
+		margin: 0 0 0.8rem;
+	}
+
+	.statistics-grid {
+		display: grid;
+		gap: 1rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.statistics-group h3 {
+		color: var(--color-text-muted);
+		font-size: 0.8rem;
+		margin: 0 0 0.4rem;
+	}
+
+	.statistics-group ul {
+		color: var(--color-text);
+		display: grid;
+		font-size: 0.85rem;
+		gap: 0.3rem;
+		list-style: none;
+		margin: 0 0 0.8rem;
+		padding: 0;
+	}
+
+	.statistics-group li {
+		align-items: center;
+		display: flex;
+		gap: 0.5rem;
+		justify-content: space-between;
+	}
+
+	.statistics-value {
+		color: var(--color-text-muted);
+		white-space: nowrap;
+	}
+
+	.statistics-group-period {
+		grid-column: 1 / -1;
+	}
+
+	.period-form {
+		display: grid;
+		gap: 0.5rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.period-actions,
+	.period-form .period-actions {
+		display: flex;
+		gap: var(--gap-action-row);
+		justify-content: flex-end;
+		grid-column: 1 / -1;
 	}
 
 	.filter-panel {

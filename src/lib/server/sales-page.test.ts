@@ -27,6 +27,7 @@ function createSalesFixture() {
 		{ name: 'May market', date: '2026-05-16', startTime: null, endTime: null, location: '', notes: '' },
 		scope
 	);
+	repository.createExpense({ label: 'Standgebühr', category: 'fee', amountCents: 500, expenseDate: '2026-05-16', marketDayId: marketDay.id }, scope);
 	const vase = repository.createItem(
 		{ collectionId: collection.id, title: 'Vase', priceCents: 800, category: 'decor', condition: 'good', internalNotes: '', externalDescription: '', isComplete: false, isFunctional: false },
 		scope
@@ -53,12 +54,12 @@ function createSalesFixture() {
 	return { repository, scope, vase, book, marketDay, rawSessionToken };
 }
 
-function loadWithFilters(token: string | undefined, query: string) {
+function loadWithFilters(token: string | undefined, query: string): Promise<Record<string, unknown>> {
 	return import('../../routes/sales/+page.server').then(({ load }) =>
 		load({
 			cookies: { get: (name: string) => (name === sessionCookieName ? token : undefined) },
 			url: new URL(`http://localhost/sales${query}`)
-		} as never)
+		} as never) as Promise<Record<string, unknown>>
 	);
 }
 
@@ -144,6 +145,48 @@ describe('sales page', () => {
 		// assume
 		expect(invalidAmount).toMatchObject({ invalidRange: true, sales: [], summary: { soldItemCount: 0 } });
 		expect(invertedRange).toMatchObject({ invalidRange: true, sales: [], summary: { soldItemCount: 0 } });
+	});
+
+	it('loads statistics by category, market day and period with expenses', async () => {
+		// arrange
+		const { rawSessionToken } = createSalesFixture();
+
+		// act
+		const allTime = await loadWithFilters(rawSessionToken, '');
+
+		// assume — statistics cover categories, market days and expenses
+		expect(allTime.statistics).toMatchObject({
+			soldItemCount: 2,
+			totalProceedsCents: 1000,
+			totalExpensesCents: 500,
+			netResultCents: 500,
+			proceedsByCategory: [
+				{ category: 'decor', soldItemCount: 1, totalProceedsCents: 750 },
+				{ category: 'books', soldItemCount: 1, totalProceedsCents: 250 }
+			],
+			proceedsByMarketDay: [{ marketDayName: 'May market', soldItemCount: 1, totalProceedsCents: 750 }],
+			expensesByCategory: [{ category: 'fee', totalExpensesCents: 500 }]
+		});
+
+		// act — a period filter that excludes every sale empties the statistics
+		const juneOnly = await loadWithFilters(rawSessionToken, '?from=2026-06-01&to=2026-06-30');
+
+		// assume
+		expect(juneOnly.statistics).toMatchObject({
+			soldItemCount: 0,
+			totalProceedsCents: 0,
+			totalExpensesCents: 0
+		});
+
+		// act — a period that covers only the May sales
+		const mayOnly = await loadWithFilters(rawSessionToken, '?from=2026-05-01&to=2026-05-31');
+
+		// assume
+		expect(mayOnly.statistics).toMatchObject({
+			soldItemCount: 2,
+			totalProceedsCents: 1000,
+			totalExpensesCents: 500
+		});
 	});
 
 	it('ignores unknown channel and category filter values', async () => {
