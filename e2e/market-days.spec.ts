@@ -132,6 +132,9 @@ test.describe('Market days', () => {
 			.filter({ hasText: `${marketDayName} (verschoben)` });
 		await expect(settlementRow).toContainText('Ausgaben: 15,00 €');
 
+		// assume — the settlement shows the per-day expense bars (no sales yet, so no proceeds donut)
+		await expect(settlementRow.locator('[data-testid^=settlement-expenses-]')).toBeVisible();
+
 		// act — edit the expense through the dialog
 		await expenseRow.getByTestId('expenses-edit-trigger').click();
 		await expect(page.getByTestId('expenses-edit-dialog')).toBeVisible();

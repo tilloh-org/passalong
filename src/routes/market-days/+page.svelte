@@ -10,6 +10,8 @@
 </script>
 
 <script lang="ts">
+	import BarList from '$lib/components/statistics/bar-list.svelte';
+	import DonutChart from '$lib/components/statistics/donut-chart.svelte';
 	import { t, getLocale } from '$lib/i18n/index.svelte';
 	import { formatPrice } from '$lib/utils/format';
 	import type { Expense, ExpenseCategory, MarketDay } from '$lib/server/collection-repository';
@@ -20,6 +22,26 @@
 	 * Whether the create form is currently open.
 	 */
 	let createFormOpen = $state(false);
+
+	/**
+	 * Translate a technical item-category identifier for display.
+	 *
+	 * @param {string} category - Technical item-category identifier.
+	 * @returns {string} Localized item-category label.
+	 */
+	function categoryLabel(category: string): string {
+		return t(`category.${category}`);
+	}
+
+	/**
+	 * Format a sold-item count with correct German singular/plural.
+	 *
+	 * @param {number} count - Number of sold items.
+	 * @returns {string} Localized count label.
+	 */
+	function soldCountLabel(count: number): string {
+		return count === 1 ? t('statistics.soldCountOne') : t('statistics.soldCount', { count });
+	}
 
 	/**
 	 * Format a YYYY-MM-DD date as a localized long date for display.
@@ -271,8 +293,8 @@
 		<div class="settlement-list" data-testid="settlement-list">
 			{#each data.settlements as settlement (settlement.marketDayId)}
 				{#if settlement.soldItemCount > 0 || settlement.totalExpensesCents > 0}
-					<div class="settlement-row" data-testid="settlement-item">
-						<div>
+					<article class="settlement-row" data-testid="settlement-item">
+						<div class="settlement-head">
 							<strong>{settlement.marketDayName}</strong>
 							<span class="meta"
 								>{t('settlement.soldCount', { count: settlement.soldItemCount })}</span
@@ -293,7 +315,31 @@
 								>{t('settlement.net', { net: formatPrice(settlement.netResultCents) })}</strong
 							>
 						</div>
-					</div>
+						{#if settlement.proceedsByCategory.length > 0 || settlement.expensesByCategory.length > 0}
+							<div class="settlement-charts">
+								{#if settlement.proceedsByCategory.length > 0}
+									<DonutChart
+										slices={settlement.proceedsByCategory.map((entry) => ({
+											label: categoryLabel(entry.category),
+											valueCents: entry.totalProceedsCents,
+											countLabel: soldCountLabel(entry.soldItemCount)
+										}))}
+										testId={`settlement-donut-${settlement.marketDayId}`}
+										centerLabel={t('statistics.proceedsShort')}
+										centerValueCents={settlement.totalProceedsCents}
+									/>
+								{/if}
+								<BarList
+									accent="expenses"
+									entries={settlement.expensesByCategory.map((entry) => ({
+										label: expenseCategoryLabel(entry.category),
+										valueCents: entry.totalExpensesCents
+									}))}
+									testId={`settlement-expenses-${settlement.marketDayId}`}
+								/>
+							</div>
+						{/if}
+					</article>
 				{/if}
 			{/each}
 		</div>
@@ -790,14 +836,28 @@
 	}
 
 	.settlement-row {
-		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: 0.65rem;
+		display: grid;
+		gap: 0.7rem;
+		padding: 0.8rem 0.9rem;
+	}
+
+	.settlement-head {
+		align-items: baseline;
 		display: flex;
-		gap: 0.8rem;
+		flex-wrap: wrap;
+		gap: 0.3rem 0.6rem;
 		justify-content: space-between;
-		padding: 0.7rem 0.9rem;
+	}
+
+	.settlement-charts {
+		display: grid;
+		gap: 1rem;
+		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+		border-top: 1px dashed var(--color-border);
+		padding-top: 0.7rem;
 	}
 
 	.settlement-row .meta {

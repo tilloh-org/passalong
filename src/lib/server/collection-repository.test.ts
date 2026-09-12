@@ -2097,6 +2097,14 @@ describe('collection repository', () => {
 			totalExpensesCents: 700,
 			netResultCents: 300
 		});
+		expect(settlement?.proceedsByCategory).toEqual([
+			{ category: 'decor', soldItemCount: 1, totalProceedsCents: 750 },
+			{ category: 'books', soldItemCount: 1, totalProceedsCents: 250 }
+		]);
+		expect(settlement?.expensesByCategory).toEqual([
+			{ category: 'fee', totalExpensesCents: 500 },
+			{ category: 'supplies', totalExpensesCents: 200 }
+		]);
 		expect(foreignSettlement).toBeNull();
 	});
 	it('lists owner-scoped sales and filters them by channel, category and proceeds range', () => {

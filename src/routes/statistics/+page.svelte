@@ -1,6 +1,10 @@
 <script lang="ts">
+	import BarList from '$lib/components/statistics/bar-list.svelte';
+	import DonutChart from '$lib/components/statistics/donut-chart.svelte';
+	import SummaryCards from '$lib/components/statistics/summary-cards.svelte';
+	import TrendChart from '$lib/components/statistics/trend-chart.svelte';
 	import { formatPrice } from '$lib/utils/format';
-	import { getLocale, t } from '$lib/i18n/index.svelte';
+	import { t } from '$lib/i18n/index.svelte';
 	import type { ExpenseCategory } from '$lib/server/collection-repository';
 
 	let { data } = $props();
@@ -58,19 +62,6 @@
 	}
 
 	/**
-	 * Format an ISO day key as a localized date.
-	 *
-	 * @param {string} day - ISO date (YYYY-MM-DD).
-	 * @returns {string} Localized date label.
-	 */
-	function dayLabel(day: string): string {
-		const parsed = new Date(`${day}T00:00:00.000Z`);
-		return Number.isNaN(parsed.getTime())
-			? day
-			: parsed.toLocaleDateString(getLocale(), { dateStyle: 'short', timeZone: 'UTC' });
-	}
-
-	/**
 	 * Label a market-day bucket with a fallback for unassigned sales.
 	 *
 	 * @param {string | null} marketDayName - Market day name or null.
@@ -79,47 +70,6 @@
 	function marketDayLabel(marketDayName: string | null): string {
 		return marketDayName ?? t('statistics.withoutMarketDay');
 	}
-
-	/**
-	 * Compute the CSS width percentage for a horizontal bar.
-	 *
-	 * @param {number} value - The bucket value.
-	 * @param {number} maximum - The largest bucket value in the series.
-	 * @returns {number} The bar width in percent (0–100).
-	 */
-	function barWidth(value: number, maximum: number): number {
-		return maximum > 0 ? Math.max(2, Math.round((value / maximum) * 100)) : 0;
-	}
-
-	/** The largest single-day proceeds value for the trend chart. */
-	const maxDailyProceeds = $derived(
-		Math.max(0, ...data.proceedsByDay.map((entry) => entry.totalProceedsCents))
-	);
-
-	/** The largest category proceeds value for the category chart. */
-	const maxCategoryProceeds = $derived(
-		Math.max(0, ...data.statistics.proceedsByCategory.map((entry) => entry.totalProceedsCents))
-	);
-
-	/** The largest monthly proceeds value for the month chart. */
-	const maxMonthlyProceeds = $derived(
-		Math.max(0, ...data.statistics.proceedsByMonth.map((entry) => entry.totalProceedsCents))
-	);
-
-	/** The largest expense-category total for the expense chart. */
-	const maxExpenseTotal = $derived(
-		Math.max(0, ...data.statistics.expensesByCategory.map((entry) => entry.totalExpensesCents))
-	);
-
-	/** The largest channel proceeds value for the channel chart. */
-	const maxChannelProceeds = $derived(
-		Math.max(0, ...data.statistics.proceedsByChannel.map((entry) => entry.totalProceedsCents))
-	);
-
-	/** The largest market-day proceeds value for the market-day chart. */
-	const maxMarketDayProceeds = $derived(
-		Math.max(0, ...data.statistics.proceedsByMarketDay.map((entry) => entry.totalProceedsCents))
-	);
 
 	/** Whether the statistics contain any sale or expense activity at all. */
 	const hasActivity = $derived(
@@ -138,161 +88,112 @@
 		<p class="sub">{t('statistics.sub')}</p>
 	</section>
 
-	<section class="totals" data-testid="statistics-totals">
-		<div class="total-card" data-testid="statistics-gross">
-			<span class="total-label">{t('statistics.gross')}</span>
-			<strong>{formatPrice(data.statistics.totalProceedsCents)} €</strong>
-			<span class="total-meta">{soldCountLabel(data.statistics.soldItemCount)}</span>
-		</div>
-		<div class="total-card" data-testid="statistics-expenses">
-			<span class="total-label">{t('statistics.expensesTotal')}</span>
-			<strong>{formatPrice(data.statistics.totalExpensesCents)} €</strong>
-			<span class="total-meta"
-				>{t('statistics.buckets', { count: data.statistics.expensesByCategory.length })}</span
-			>
-		</div>
-		<div
-			class="total-card"
-			class:negative={data.statistics.netResultCents < 0}
-			data-testid="statistics-net"
-		>
-			<span class="total-label">{t('statistics.net')}</span>
-			<strong>{formatPrice(data.statistics.netResultCents)} €</strong>
-			<span class="total-meta"
-				>{t('statistics.periodLabel', {
+	<SummaryCards
+		cards={[
+			{
+				label: t('statistics.gross'),
+				value: formatPrice(data.statistics.totalProceedsCents),
+				meta: soldCountLabel(data.statistics.soldItemCount)
+			},
+			{
+				label: t('statistics.expensesTotal'),
+				value: formatPrice(data.statistics.totalExpensesCents),
+				meta:
+					data.statistics.expensesByCategory.length === 1
+						? t('statistics.bucketsOne')
+						: t('statistics.buckets', { count: data.statistics.expensesByCategory.length })
+			},
+			{
+				label: t('statistics.net'),
+				value: formatPrice(data.statistics.netResultCents),
+				meta: t('statistics.periodLabel', {
 					from: data.period.fromInclusive ?? t('statistics.periodAny'),
 					to: data.period.toInclusive ?? t('statistics.periodAny')
-				})}</span
-			>
-		</div>
-	</section>
+				}),
+				negative: data.statistics.netResultCents < 0
+			}
+		]}
+		testIdPrefix="statistics-card"
+	/>
 
 	{#if hasActivity}
 		<section class="chart-card" aria-labelledby="trend-title">
 			<h2 id="trend-title">{t('statistics.byDay')}</h2>
-			{#if data.proceedsByDay.length > 0}
-				<div class="trend-chart" data-testid="statistics-trend">
-					{#each data.proceedsByDay as entry (entry.day)}
-						<div class="trend-column">
-							<span class="trend-value">{formatPrice(entry.totalProceedsCents)} €</span>
-							<div class="trend-bar-track">
-								<div
-									class="trend-bar"
-									style={`height: ${barWidth(entry.totalProceedsCents, maxDailyProceeds)}%`}
-								></div>
-							</div>
-							<span class="trend-day">{dayLabel(entry.day)}</span>
-						</div>
-					{/each}
-				</div>
-			{:else}
-				<p class="empty" data-testid="statistics-trend-empty">{t('statistics.empty')}</p>
-			{/if}
+			<TrendChart
+				entries={data.proceedsByDay}
+				testId="statistics-trend"
+				emptyLabel={t('statistics.empty')}
+			/>
 		</section>
 
 		<div class="chart-grid">
 			<section class="chart-card" aria-labelledby="channel-title">
 				<h2 id="channel-title">{t('portfolio.byChannel')}</h2>
-				<ul class="bar-list" data-testid="statistics-channels">
-					{#each data.statistics.proceedsByChannel as entry (entry.channel)}
-						<li>
-							<div class="bar-row">
-								<span class="bar-label">{saleChannelLabel(entry.channel)}</span>
-								<span class="statistics-value">{formatPrice(entry.totalProceedsCents)} €</span>
-							</div>
-							<div class="bar-track">
-								<div
-									class="bar-fill"
-									style={`width: ${barWidth(entry.totalProceedsCents, maxChannelProceeds)}%`}
-								></div>
-							</div>
-							<span class="bar-count">{soldCountLabel(entry.soldItemCount)}</span>
-						</li>
-					{/each}
-				</ul>
+				<DonutChart
+					slices={data.statistics.proceedsByChannel.map((entry) => ({
+						label: saleChannelLabel(entry.channel),
+						valueCents: entry.totalProceedsCents,
+						countLabel: soldCountLabel(entry.soldItemCount)
+					}))}
+					testId="statistics-channels"
+					centerLabel={t('statistics.proceedsShort')}
+					centerValueCents={data.statistics.totalProceedsCents}
+					emptyLabel={t('statistics.empty')}
+				/>
 			</section>
 
 			<section class="chart-card" aria-labelledby="category-title">
 				<h2 id="category-title">{t('saleHistory.byCategory')}</h2>
-				<ul class="bar-list" data-testid="statistics-categories">
-					{#each data.statistics.proceedsByCategory as entry (entry.category)}
-						<li>
-							<div class="bar-row">
-								<span class="bar-label">{categoryLabel(entry.category)}</span>
-								<span class="statistics-value">{formatPrice(entry.totalProceedsCents)} €</span>
-							</div>
-							<div class="bar-track">
-								<div
-									class="bar-fill"
-									style={`width: ${barWidth(entry.totalProceedsCents, maxCategoryProceeds)}%`}
-								></div>
-							</div>
-							<span class="bar-count">{soldCountLabel(entry.soldItemCount)}</span>
-						</li>
-					{/each}
-				</ul>
+				<DonutChart
+					slices={data.statistics.proceedsByCategory.map((entry) => ({
+						label: categoryLabel(entry.category),
+						valueCents: entry.totalProceedsCents,
+						countLabel: soldCountLabel(entry.soldItemCount)
+					}))}
+					testId="statistics-categories"
+					centerLabel={t('statistics.proceedsShort')}
+					centerValueCents={data.statistics.totalProceedsCents}
+					emptyLabel={t('statistics.empty')}
+				/>
 			</section>
 
 			<section class="chart-card" aria-labelledby="market-day-title">
 				<h2 id="market-day-title">{t('saleHistory.byMarketDay')}</h2>
-				<ul class="bar-list" data-testid="statistics-market-days">
-					{#each data.statistics.proceedsByMarketDay as entry (entry.marketDayName)}
-						<li>
-							<div class="bar-row">
-								<span class="bar-label">{marketDayLabel(entry.marketDayName)}</span>
-								<span class="statistics-value">{formatPrice(entry.totalProceedsCents)} €</span>
-							</div>
-							<div class="bar-track">
-								<div
-									class="bar-fill"
-									style={`width: ${barWidth(entry.totalProceedsCents, maxMarketDayProceeds)}%`}
-								></div>
-							</div>
-							<span class="bar-count">{soldCountLabel(entry.soldItemCount)}</span>
-						</li>
-					{/each}
-				</ul>
+				<BarList
+					entries={data.statistics.proceedsByMarketDay.map((entry) => ({
+						label: marketDayLabel(entry.marketDayName),
+						valueCents: entry.totalProceedsCents,
+						countLabel: soldCountLabel(entry.soldItemCount)
+					}))}
+					testId="statistics-market-days"
+					emptyLabel={t('statistics.empty')}
+				/>
 			</section>
 
 			<section class="chart-card" aria-labelledby="expense-title">
 				<h2 id="expense-title">{t('statistics.expensesByCategory')}</h2>
-				<ul class="bar-list" data-testid="statistics-expenses">
-					{#each data.statistics.expensesByCategory as entry (entry.category)}
-						<li>
-							<div class="bar-row">
-								<span class="bar-label">{expenseCategoryLabel(entry.category)}</span>
-								<span class="statistics-value">{formatPrice(entry.totalExpensesCents)} €</span>
-							</div>
-							<div class="bar-track expense">
-								<div
-									class="bar-fill"
-									style={`width: ${barWidth(entry.totalExpensesCents, maxExpenseTotal)}%`}
-								></div>
-							</div>
-						</li>
-					{/each}
-				</ul>
+				<BarList
+					accent="expenses"
+					entries={data.statistics.expensesByCategory.map((entry) => ({
+						label: expenseCategoryLabel(entry.category),
+						valueCents: entry.totalExpensesCents
+					}))}
+					testId="statistics-expenses"
+					emptyLabel={t('statistics.empty')}
+				/>
 			</section>
 
 			<section class="chart-card" aria-labelledby="month-title">
 				<h2 id="month-title">{t('portfolio.byMonth')}</h2>
-				<ul class="bar-list" data-testid="statistics-months">
-					{#each data.statistics.proceedsByMonth as entry (entry.month)}
-						<li>
-							<div class="bar-row">
-								<span class="bar-label">{monthLabel(entry.month)}</span>
-								<span class="statistics-value">{formatPrice(entry.totalProceedsCents)} €</span>
-							</div>
-							<div class="bar-track">
-								<div
-									class="bar-fill"
-									style={`width: ${barWidth(entry.totalProceedsCents, maxMonthlyProceeds)}%`}
-								></div>
-							</div>
-							<span class="bar-count">{soldCountLabel(entry.soldItemCount)}</span>
-						</li>
-					{/each}
-				</ul>
+				<BarList
+					entries={data.statistics.proceedsByMonth.map((entry) => ({
+						label: monthLabel(entry.month),
+						valueCents: entry.totalProceedsCents,
+						countLabel: soldCountLabel(entry.soldItemCount)
+					}))}
+					testId="statistics-months"
+					emptyLabel={t('statistics.empty')}
+				/>
 			</section>
 		</div>
 	{:else}
@@ -312,7 +213,7 @@
 			</label>
 			<div class="period-actions">
 				<a class="secondary-link" href="/statistics">{t('saleHistory.resetFilters')}</a>
-				<button type="submit" class="filter-submit">{t('saleHistory.applyFilters')}</button>
+				<button class="filter-submit" type="submit">{t('saleHistory.applyFilters')}</button>
 			</div>
 		</form>
 	</section>
@@ -321,7 +222,7 @@
 <style>
 	.statistics-page {
 		margin: 0 auto;
-		max-width: 56rem;
+		max-width: 52rem;
 		padding: 0 1.25rem 3rem;
 	}
 
@@ -351,44 +252,6 @@
 		max-width: 38rem;
 	}
 
-	.totals {
-		display: grid;
-		gap: 0.8rem;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		margin-bottom: 1rem;
-	}
-
-	.total-card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
-		display: grid;
-		gap: 0.2rem;
-		padding: 0.9rem 1rem;
-		text-align: center;
-	}
-
-	.total-label {
-		color: var(--color-text-muted);
-		font-size: 0.75rem;
-		font-weight: 700;
-	}
-
-	.total-card strong {
-		color: var(--color-accent-strong);
-		font-size: 1.3rem;
-	}
-
-	.total-card.negative strong {
-		color: var(--color-danger);
-	}
-
-	.total-meta {
-		color: var(--color-text-muted);
-		font-size: 0.72rem;
-	}
-
 	.chart-card {
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
@@ -406,111 +269,44 @@
 	.chart-grid {
 		display: grid;
 		gap: 1rem;
+		grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+	}
+
+	.chart-grid .chart-card {
+		margin-bottom: 0;
+	}
+
+	.period-form {
+		display: grid;
+		gap: 0.8rem;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	.bar-list {
-		color: var(--color-text);
+	label {
 		display: grid;
-		font-size: 0.85rem;
-		gap: 0.7rem;
-		list-style: none;
-		margin: 0;
-		padding: 0;
+		gap: 0.35rem;
 	}
 
-	.bar-row {
-		align-items: center;
-		display: flex;
-		gap: 0.5rem;
-		justify-content: space-between;
-	}
-
-	.bar-label {
-		font-weight: 700;
-	}
-
-	.statistics-value {
-		color: var(--color-text-muted);
-		white-space: nowrap;
-	}
-
-	.bar-track {
-		background: var(--color-accent-soft);
-		border-radius: 999px;
-		height: 8px;
-		overflow: hidden;
-	}
-
-	.bar-fill {
-		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
-		border-radius: 999px;
-		height: 100%;
-	}
-
-	.bar-track.expense .bar-fill {
-		background: var(--color-danger);
-	}
-
-	.bar-count {
+	label > span {
 		color: var(--color-text-muted);
 		font-size: 0.75rem;
-	}
-
-	.trend-chart {
-		align-items: stretch;
-		display: flex;
-		gap: 0.6rem;
-		overflow-x: auto;
-	}
-
-	.trend-column {
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-		min-width: 5.5rem;
-		text-align: center;
-	}
-
-	.trend-value {
-		color: var(--color-accent-strong);
-		font-size: 0.72rem;
 		font-weight: 700;
 	}
 
-	.trend-bar-track {
-		align-items: flex-end;
-		background: var(--color-accent-soft);
-		border-radius: 0.5rem;
-		display: flex;
-		flex: 1;
-		min-height: 7rem;
-		overflow: hidden;
-	}
-
-	.trend-bar {
-		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
-		border-radius: 0.5rem 0.5rem 0 0;
-		width: 100%;
-	}
-
-	.trend-day {
-		color: var(--color-text-muted);
-		font-size: 0.72rem;
-	}
-
-	.empty {
-		border: 1px dashed var(--color-border);
-		border-radius: var(--radius-card);
-		color: var(--color-text-muted);
-		padding: 1rem;
-		text-align: center;
+	input {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 0.65rem;
+		color: var(--color-text);
+		font: inherit;
+		padding: 0.65rem 0.75rem;
 	}
 
 	.period-actions {
 		align-items: center;
 		display: flex;
 		gap: var(--gap-action-row);
+		grid-column: 1 / -1;
 		justify-content: flex-end;
 	}
 
@@ -544,24 +340,9 @@
 		outline-offset: 2px;
 	}
 
-	label {
-		display: grid;
-		gap: 0.35rem;
-	}
-
-	label > span {
+	.empty {
 		color: var(--color-text-muted);
-		font-size: 0.75rem;
-		font-weight: 700;
-	}
-
-	input {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: 0.65rem;
-		color: var(--color-text);
-		font: inherit;
-		padding: 0.65rem 0.75rem;
+		text-align: center;
 	}
 
 	@media (max-width: 600px) {
@@ -569,11 +350,11 @@
 			padding-inline: 0.75rem;
 		}
 
-		.totals {
+		.chart-grid {
 			grid-template-columns: 1fr;
 		}
 
-		.chart-grid {
+		.period-form {
 			grid-template-columns: 1fr;
 		}
 	}

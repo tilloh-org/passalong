@@ -345,6 +345,8 @@ test.describe('Core collection', () => {
 		await expect(totals).toContainText('9,50 €');
 		await expect(page.getByTestId('statistics-trend')).toContainText('9,50');
 		await expect(page.getByTestId('statistics-categories')).toContainText('Haushalt');
+		await expect(page.getByTestId('statistics-channels')).toContainText('Flohmarkt');
+		await expect(page.getByTestId('statistics-trend').locator('.trend-column')).toHaveCount(1);
 		await expect(page.getByTestId('statistics-market-days')).toContainText(marketDayName);
 
 		// act — restrict the statistics period to a range without activity

@@ -61,6 +61,8 @@ export interface MarketDaySettlement {
 	totalProceedsCents: number;
 	totalExpensesCents: number;
 	netResultCents: number;
+	proceedsByCategory: SaleCategoryProceeds[];
+	expensesByCategory: ExpenseCategoryTotals[];
 }
 
 export interface Collection {
@@ -1372,6 +1374,35 @@ export function createCollectionRepository(
 					'SELECT COALESCE(SUM(amount_cents), 0) AS total_expenses_cents FROM expenses WHERE owner_id = ? AND tenant_id = ? AND market_day_id = ?'
 				)
 				.get(scope.userId, scope.tenantId, marketDayId) as { total_expenses_cents: number };
+			const proceedsByCategory = (
+				database
+					.prepare(
+						`SELECT category, COUNT(*) AS sold_item_count, SUM(sale_proceeds_cents) AS total_proceeds_cents
+						 FROM items WHERE owner_id = ? AND tenant_id = ? AND market_day_id = ? AND sold_at IS NOT NULL
+						 GROUP BY category ORDER BY total_proceeds_cents DESC, category ASC`
+					)
+					.all(scope.userId, scope.tenantId, marketDayId) as {
+					category: ItemCategory;
+					sold_item_count: number;
+					total_proceeds_cents: number;
+				}[]
+			).map((row) => ({
+				category: row.category,
+				soldItemCount: row.sold_item_count,
+				totalProceedsCents: row.total_proceeds_cents
+			}));
+			const expensesByCategory = (
+				database
+					.prepare(
+						`SELECT category, SUM(amount_cents) AS total_expenses_cents
+						 FROM expenses WHERE owner_id = ? AND tenant_id = ? AND market_day_id = ?
+						 GROUP BY category ORDER BY total_expenses_cents DESC, category ASC`
+					)
+					.all(scope.userId, scope.tenantId, marketDayId) as {
+					category: ExpenseCategory;
+					total_expenses_cents: number;
+				}[]
+			).map((row) => ({ category: row.category, totalExpensesCents: row.total_expenses_cents }));
 			return {
 				marketDayId: marketDayRow.id,
 				marketDayName: marketDayRow.name,
@@ -1380,7 +1411,9 @@ export function createCollectionRepository(
 				soldItemCount: sales.sold_item_count,
 				totalProceedsCents: sales.total_proceeds_cents,
 				totalExpensesCents: expenses.total_expenses_cents,
-				netResultCents: sales.total_proceeds_cents - expenses.total_expenses_cents
+				netResultCents: sales.total_proceeds_cents - expenses.total_expenses_cents,
+				proceedsByCategory,
+				expensesByCategory
 			};
 		},
 
