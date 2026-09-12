@@ -169,7 +169,7 @@
 			</form>
 			{#if data.collections.length}
 				<nav class="collection-list" aria-label={t('portfolio.yourCollections')}>
-					{#each data.collections as collection}
+					{#each data.collections as collection (collection.id)}
 						<a href={`/?collection=${encodeURIComponent(collection.id)}`}>{collection.name}</a>
 					{/each}
 				</nav>
@@ -228,7 +228,7 @@
 							<label>
 								<span>{t('portfolio.category')}</span>
 								<select name="category" aria-label={t('portfolio.category')}>
-									{#each data.categoryOptions as category}
+									{#each data.categoryOptions as category (category)}
 										<option value={category}>{categoryLabel(category)}</option>
 									{/each}
 								</select>
@@ -236,7 +236,7 @@
 							<label>
 								<span>{t('portfolio.condition')}</span>
 								<select name="condition" aria-label={t('portfolio.condition')}>
-									{#each data.conditionOptions as condition}
+									{#each data.conditionOptions as condition (condition)}
 										<option value={condition}>{conditionLabel(condition)}</option>
 									{/each}
 								</select>
@@ -308,7 +308,7 @@
 							<div class="statistics-group">
 								<h3>{t('portfolio.byChannel')}</h3>
 								<ul data-testid="sale-statistics-channels">
-									{#each data.saleStatistics.proceedsByChannel as entry}
+									{#each data.saleStatistics.proceedsByChannel as entry (entry.channel)}
 										<li>
 											<span>{saleChannelLabel(entry.channel)}</span>
 											<span class="statistics-value"
@@ -321,7 +321,7 @@
 							<div class="statistics-group">
 								<h3>{t('portfolio.byMonth')}</h3>
 								<ul data-testid="sale-statistics-months">
-									{#each data.saleStatistics.proceedsByMonth as entry}
+									{#each data.saleStatistics.proceedsByMonth as entry (entry.month)}
 										<li>
 											<span>{formatSaleMonth(entry.month)}</span>
 											<span class="statistics-value"

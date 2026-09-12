@@ -1,11 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
-import {
-	itemCategories,
-	itemConditions,
-	type SessionScope
-} from '$lib/server/collection-repository';
 import { getMediaRoot } from '$lib/server/media-root';
 import { getCollectionRepository } from '$lib/server/repository';
 import { hashSessionToken } from '$lib/server/session-token';

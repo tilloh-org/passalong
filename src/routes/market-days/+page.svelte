@@ -12,12 +12,7 @@
 <script lang="ts">
 	import { t, getLocale } from '$lib/i18n/index.svelte';
 	import { formatPrice } from '$lib/utils/format';
-	import type {
-		Expense,
-		ExpenseCategory,
-		MarketDay,
-		MarketDaySettlement
-	} from '$lib/server/collection-repository';
+	import type { Expense, ExpenseCategory, MarketDay } from '$lib/server/collection-repository';
 
 	let { data, form } = $props();
 
@@ -52,7 +47,6 @@
 		return marketDay.closedAt ? t('marketDays.closed') : t('marketDays.open');
 	}
 
-	let editMarketDayOpen = $state(false);
 	let editDialog: HTMLDialogElement | undefined = $state();
 	let editMarketDayId = $state('');
 	let editMarketDayName = $state('');
@@ -337,7 +331,7 @@
 				<label>
 					<span>{t('expenses.category')}</span>
 					<select name="category" required data-testid="expenses-category-input">
-						{#each expenseCategories as category}
+						{#each expenseCategories as category (category)}
 							<option value={category}>{expenseCategoryLabel(category)}</option>
 						{/each}
 					</select>
@@ -360,7 +354,7 @@
 					<span>{t('expenses.marketDay')}</span>
 					<select name="marketDayId" data-testid="expenses-market-day-input">
 						<option value="">{t('expenses.noMarketDay')}</option>
-						{#each data.marketDays as marketDay}
+						{#each data.marketDays as marketDay (marketDay.id)}
 							<option value={marketDay.id}>{marketDay.name}</option>
 						{/each}
 					</select>
@@ -432,7 +426,7 @@
 			<label>
 				<span>{t('expenses.category')}</span>
 				<select name="category" bind:value={editExpenseCategory} required>
-					{#each expenseCategories as category}
+					{#each expenseCategories as category (category)}
 						<option value={category}>{expenseCategoryLabel(category)}</option>
 					{/each}
 				</select>
@@ -455,7 +449,7 @@
 				<span>{t('expenses.marketDay')}</span>
 				<select name="marketDayId" bind:value={editExpenseMarketDayId}>
 					<option value="">{t('expenses.noMarketDay')}</option>
-					{#each data.marketDays as marketDay}
+					{#each data.marketDays as marketDay (marketDay.id)}
 						<option value={marketDay.id}>{marketDay.name}</option>
 					{/each}
 				</select>

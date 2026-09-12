@@ -109,7 +109,6 @@ describe('sales page', () => {
 	it('redirects unauthenticated visitors to the login', async () => {
 		// arrange
 		createSalesFixture();
-		const { load } = await import('../../routes/sales/+page.server');
 		let redirectOutcome: unknown;
 
 		// act

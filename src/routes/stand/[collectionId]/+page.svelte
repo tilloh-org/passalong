@@ -23,18 +23,16 @@
 	const conditionLabel = (condition: string) => t(`condition.${condition}`);
 
 	/**
-	 * Favorite item IDs of this stand page, hydrated on the client only.
-	 * Server-rendered markup always starts empty so SSR and client agree.
+	 * Favorite item IDs of this stand page, pruned to the rendered items and
+	 * hydrated on the client only: without a window, pruneFavorites returns an
+	 * empty list, so server-rendered markup always starts empty.
 	 */
-	let favoriteIds = $state<string[]>([]);
-
-	$effect(() => {
-		// Prune sold items and hydrate the persisted list in the browser.
-		favoriteIds = pruneFavorites(
+	let favoriteIds = $derived(
+		pruneFavorites(
 			data.stand.collectionId,
 			data.stand.items.map((item) => item.id)
-		);
-	});
+		)
+	);
 
 	/**
 	 * Check whether one item is currently marked as favorite.

@@ -191,7 +191,7 @@
 							<label>
 								<span>{t('item.channel')}</span>
 								<select name="channel" aria-label={t('item.channelLabel')}>
-									{#each saleChannelOptions as channel}
+									{#each saleChannelOptions as channel (channel.value)}
 										<option value={channel.value}>{channel.label}</option>
 									{/each}
 								</select>
@@ -212,7 +212,7 @@
 								<span>{t('item.marketDay')}</span>
 								<select name="marketDayId" data-testid="item-market-day">
 									<option value="">{t('item.noMarketDay')}</option>
-									{#each data.marketDays as marketDay}
+									{#each data.marketDays as marketDay (marketDay.id)}
 										<option value={marketDay.id}>{marketDay.name}</option>
 									{/each}
 								</select>
@@ -291,7 +291,7 @@
 				<label>
 					<span>{t('portfolio.category')}</span>
 					<select name="category" aria-label={t('portfolio.category')}>
-						{#each data.categoryOptions as category}
+						{#each data.categoryOptions as category (category)}
 							<option value={category} selected={category === data.item.category}
 								>{t(`category.${category}`)}</option
 							>
@@ -301,7 +301,7 @@
 				<label>
 					<span>{t('portfolio.condition')}</span>
 					<select name="condition" aria-label={t('portfolio.condition')}>
-						{#each data.conditionOptions as condition}
+						{#each data.conditionOptions as condition (condition)}
 							<option value={condition} selected={condition === data.item.condition}
 								>{t(`condition.${condition}`)}</option
 							>

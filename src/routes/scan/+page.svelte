@@ -12,13 +12,11 @@
 	let mediaStream = $state<MediaStream | null>(null);
 	let barcodeDetector = $state<BarcodeDetectorLike | null>(null);
 	let cameraActive = $state(false);
-	let scanStatus = $state('');
+	// Seed the idle status text; the translation lookup is available at init time.
+	let scanStatus = $state(t('scan.statusIdle'));
 	let scanError = $state<string | null>(null);
 	let manualValue = $state('');
 	let animationFrameId = $state<number | null>(null);
-
-	// Seed the idle status text after translation lookup is available.
-	scanStatus = t('scan.statusIdle');
 
 	/**
 	 * Start the live camera scanner and begin reading QR codes.

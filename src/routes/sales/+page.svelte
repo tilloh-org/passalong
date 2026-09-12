@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
-	import type { SaleHistoryEntry } from '$lib/server/collection-repository';
 
 	let { data } = $props();
 
@@ -66,7 +65,7 @@
 				<span>{t('item.channelLabel')}</span>
 				<select name="channel">
 					<option value="">{t('saleHistory.allChannels')}</option>
-					{#each data.saleChannelOptions as channel}
+					{#each data.saleChannelOptions as channel (channel)}
 						<option value={channel} selected={data.filters.channel === channel}
 							>{saleChannelLabel(channel)}</option
 						>
@@ -77,7 +76,7 @@
 				<span>{t('portfolio.category')}</span>
 				<select name="category">
 					<option value="">{t('saleHistory.allCategories')}</option>
-					{#each data.categoryOptions as category}
+					{#each data.categoryOptions as category (category)}
 						<option value={category} selected={data.filters.category === category}
 							>{categoryLabel(category)}</option
 						>

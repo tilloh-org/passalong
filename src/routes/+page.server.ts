@@ -9,15 +9,9 @@ import {
 	type ItemFilters,
 	type ItemImage,
 	type ItemStatusFilter,
-	type SaleChannel,
 	type SessionScope
 } from '$lib/server/collection-repository';
-import { readFileSync } from 'node:fs';
-import { isAbsolute, join, relative } from 'node:path';
 import { hasSameOrigin } from '$lib/server/csrf';
-import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
-import { getMediaRoot } from '$lib/server/media-root';
-import { saveUploadedImage } from '$lib/server/media-storage';
 import {
 	hashPassword,
 	needsPasswordRehash,
@@ -29,7 +23,6 @@ import { createSessionToken, hashSessionToken } from '$lib/server/session-token'
 import type { Actions, PageServerLoad } from './$types';
 
 const sessionCookieName = 'passalong_session';
-const millisecondsPerSecond = 1000;
 const secondsPerMinute = 60;
 const minutesPerHour = 60;
 const hoursPerDay = 24;
@@ -48,11 +41,6 @@ const httpStatus = {
 const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
-const pngFileExtension = '.png';
-const jpegFileExtension = '.jpg';
-const pngMimeType = 'image/png';
-const jpegMimeType = 'image/jpeg';
-const webpMimeType = 'image/webp';
 
 interface ItemWithImages extends Item {
 	images: ItemImage[];
@@ -448,34 +436,6 @@ function setSessionCookie(cookies: Cookies, scope: SessionScope, url: URL): void
  */
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : 'Die Eingabe konnte nicht gespeichert werden.';
-}
-
-const imageErrorMessage = 'Das Bild konnte nicht verarbeitet werden. Bitte prüfe Format und Größe.';
-const imageRemoveErrorMessage = 'Das Bild konnte nicht entfernt werden.';
-const userFacingImageMessages = [
-	'upload is not a supported image type',
-	'upload is empty',
-	'image exceeds the allowed size',
-	'upload is not a supported image',
-	'image was not found',
-	'item was not found'
-] as const;
-
-/**
- * Map image-action failures to fixed user-facing messages without leaking
- * internal storage or SQLite details.
- *
- * @param {unknown} error - The thrown value.
- * @returns {string} A safe, fixed user-facing message.
- */
-function imageActionError(error: unknown): string {
-	if (
-		error instanceof Error &&
-		(userFacingImageMessages as readonly string[]).includes(error.message)
-	) {
-		return error.message;
-	}
-	return imageErrorMessage;
 }
 
 const saleStatusErrorByInternalMessage: Record<string, string> = {

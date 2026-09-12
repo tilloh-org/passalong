@@ -308,7 +308,7 @@ export const actions: Actions = {
 				getFormText(formData, 'standIntro'),
 				scope
 			);
-		} catch (error) {
+		} catch {
 			return fail(httpStatus.badRequest, {
 				standIntroError: 'Die Einleitung konnte nicht gespeichert werden.'
 			});

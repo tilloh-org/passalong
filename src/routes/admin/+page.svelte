@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { page } from '$app/state';
 	import { t } from '$lib/i18n/index.svelte';
 
-	let { data, form } = $props();
+	let { form } = $props();
 
 	let restoreFile: File | undefined = $state();
 

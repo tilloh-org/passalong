@@ -329,9 +329,6 @@ export async function restoreInstanceBackup({
 		payload.subarray(databaseEntry.payloadOffset, databaseEntry.payloadOffset + databaseEntry.size)
 	);
 	const stagingMediaRoot = `${mediaRoot}.restore-staging`;
-	const mediaEntries = Object.keys(manifest.files).filter((name) =>
-		name.startsWith(mediaEntryPrefix)
-	);
 	for (const name of mediaEntriesOf(manifest)) {
 		const entry = entries.get(name);
 		if (!entry) {

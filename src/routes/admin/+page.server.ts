@@ -23,7 +23,6 @@ const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const millisecondsPerSecond = 1000;
 const secondsPerMinute = 60;
 const minutesPerHour = 60;
-const hoursPerDay = 24;
 const passwordResetLifetimeHours = 1;
 const passwordResetLifetimeMilliseconds =
 	passwordResetLifetimeHours * minutesPerHour * secondsPerMinute * millisecondsPerSecond;

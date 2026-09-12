@@ -120,18 +120,6 @@ function archivePathToBuffer(archive: Buffer, entry: ArchiveEntry): Buffer {
 	return archive.subarray(entry.payloadOffset, entry.payloadOffset + entry.size);
 }
 
-function readArchiveEntry(
-	archive: Buffer,
-	entries: Map<string, ArchiveEntry>,
-	path: string
-): Buffer {
-	const entry = entries.get(path);
-	if (!entry) {
-		throw new Error('export archive is missing a required file');
-	}
-	return archivePathToBuffer(archive, entry);
-}
-
 function verifyArchiveManifestFile(archive: Buffer): {
 	manifest: AccountExportManifest;
 	entries: Map<string, ArchiveEntry>;

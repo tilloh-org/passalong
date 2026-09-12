@@ -1,4 +1,4 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import {
 	itemCategories,
 	saleChannels,
@@ -18,7 +18,6 @@ const httpStatus = {
 	seeOther: 303,
 	badRequest: 400
 } as const;
-const invalidFilterError = 'invalid';
 
 /**
  * Resolve an authenticated owner scope from a raw session cookie.
@@ -28,18 +27,6 @@ const invalidFilterError = 'invalid';
  */
 function getSessionScope(token: string | undefined): SessionScope | null {
 	return token ? getCollectionRepository().getSession(hashSessionToken(token)) : null;
-}
-
-/**
- * Read and normalize one text value from submitted form data.
- *
- * @param {FormData} formData - Submitted form data.
- * @param {string} name - Field name to read.
- * @returns {string} The trimmed text or an empty string.
- */
-function getFormText(formData: FormData, name: string): string {
-	const value = formData.get(name);
-	return typeof value === 'string' ? value.trim() : '';
 }
 
 /**

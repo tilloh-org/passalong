@@ -3,10 +3,8 @@ import {
 	itemCategories,
 	itemConditions,
 	saleChannels,
-	type Item,
 	type ItemCategory,
 	type ItemCondition,
-	type ItemImage,
 	type SaleChannel
 } from '$lib/server/collection-repository';
 import { getMediaRoot } from '$lib/server/media-root';
@@ -311,7 +309,7 @@ export const actions: Actions = {
 
 		redirect(httpStatus.seeOther, `/items/${encodeURIComponent(itemId)}`);
 	},
-	setItemCover: async ({ cookies, request, url, params }) => {
+	setItemCover: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
 			return fail(httpStatus.forbidden, { csrfError });
 		}

@@ -13,6 +13,15 @@ export default ts.config(
 	{
 		languageOptions: {
 			globals: { ...globals.browser, ...globals.node }
+		},
+		rules: {
+			'@typescript-eslint/no-unused-vars': [
+				'error',
+				{ argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }
+			],
+			// The app is served without a base path, so plain hrefs are correct
+			// and wrapping every link in resolve() would only add noise.
+			'svelte/no-navigation-without-resolve': 'off'
 		}
 	},
 	{

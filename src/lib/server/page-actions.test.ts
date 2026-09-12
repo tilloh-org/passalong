@@ -1,7 +1,6 @@
 import { mkdtempSync, rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionRepository, type SessionScope } from '$lib/server/collection-repository';
 import { hashSessionToken } from '$lib/server/session-token';
@@ -97,22 +96,6 @@ function createActionFixtureWithOwner(): ActionFixture {
  */
 function buildTestPng(): Buffer {
 	return Buffer.concat([testPngHeader, Buffer.from('test-png-payload')]);
-}
-
-/**
- * Build the SvelteKit-style action input for an upload request.
- *
- * @param {FormData} formData - Submitted multipart form values.
- * @param {string | undefined} rawSessionToken - Session cookie value or undefined.
- * @returns {unknown} Action input with cookies, request, and url.
- */
-function actionInput(formData: FormData, rawSessionToken?: string): object {
-	const url = new URL('http://localhost/');
-	return {
-		cookies: { get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined) },
-		request: new Request(url, { body: formData, headers: { Origin: url.origin }, method: 'POST' }),
-		url
-	};
 }
 
 describe('instance-admin actions', () => {
@@ -458,7 +441,6 @@ describe('instance-admin actions', () => {
 
 		// act
 		let redirectOutcome: unknown;
-		let anonymousOutcome: unknown;
 		try {
 			await actions.updateProfile({
 				cookies: {
@@ -474,7 +456,7 @@ describe('instance-admin actions', () => {
 		} catch (error) {
 			redirectOutcome = error;
 		}
-		anonymousOutcome = await actions.updateProfile({
+		const anonymousOutcome = await actions.updateProfile({
 			cookies: { get: () => undefined },
 			request: new Request(url, {
 				body: new FormData(),
@@ -691,14 +673,8 @@ describe('instance-admin actions', () => {
 
 	it('rejects a corrupted backup archive with a 400 and an unchanged instance', async () => {
 		// arrange
-		const {
-			repository,
-			databasePath,
-			loadInstanceAdminActions,
-			scope,
-			rawSessionToken,
-			mediaRoot
-		} = createActionFixtureWithOwner();
+		const { databasePath, loadInstanceAdminActions, rawSessionToken, mediaRoot } =
+			createActionFixtureWithOwner();
 		const actions = await loadInstanceAdminActions();
 		const url = new URL('http://localhost/');
 		const { createInstanceBackup } = await import('$lib/server/backup');

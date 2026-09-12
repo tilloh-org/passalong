@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { sharedTestAccount } from './test-account';
 
 test.describe('Market days', () => {
-	test('requires login and manages the market day lifecycle', async ({ page, request }) => {
+	test('requires login and manages the market day lifecycle', async ({ page }) => {
 		// arrange — log in with the shared owner account (session cookie persisted by earlier specs)
 		await page.goto('/');
 		const setupVisible = await page

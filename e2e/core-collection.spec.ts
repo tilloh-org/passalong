@@ -68,7 +68,6 @@ test.describe('Core collection', () => {
 			.or(page.getByRole('heading', { name: 'Anmelden' }))
 			.waitFor()
 			.then(() => page.getByTestId('profile-avatar-link').isVisible());
-		let failedLoginCount = firstAccountWon ? 0 : 1;
 		const winningAccount = registrations[firstAccountWon ? 0 : 1]!;
 		const losingAccount = registrations[firstAccountWon ? 1 : 0]!;
 		if (!firstAccountWon) {
@@ -100,7 +99,6 @@ test.describe('Core collection', () => {
 
 		// assume
 		await expect(page.getByText('Benutzername oder Passwort ist nicht korrekt.')).toBeVisible();
-		failedLoginCount += 1;
 
 		// act
 		await loginForm.getByLabel('Benutzername').fill(winningAccount.username);

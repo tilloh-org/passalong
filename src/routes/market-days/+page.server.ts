@@ -25,8 +25,6 @@ const sessionExpiredError = 'Deine Sitzung ist abgelaufen. Bitte melde dich erne
 const marketDayInputError = 'Bitte prüfe Name, Datum und Zeiten.';
 const expenseCategories: ExpenseCategory[] = ['fee', 'supplies', 'transport', 'purchase', 'other'];
 const maximumExpenseCents = 10_000_000;
-const euroAmountPattern = /^\d{1,7}([.,]\d{1,2})?$/;
-const marketDayNotFoundError = 'Markttag nicht gefunden.';
 const expenseError = {
 	csrf: 'csrf',
 	sessionExpired: 'sessionExpired',

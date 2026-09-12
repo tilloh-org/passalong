@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createCollectionRepository } from '$lib/server/collection-repository';
 import { createInstanceBackup, restoreInstanceBackup } from '$lib/server/backup';
 
@@ -91,7 +91,7 @@ describe('instance backup and restore', () => {
 		writeFileSync(archivePath, backup.zip);
 
 		// act — mutate the live instance, then restore the snapshot
-		const secondCollection = repository.createCollection({ name: 'Extra' }, scope);
+		repository.createCollection({ name: 'Extra' }, scope);
 		const restoreOutcome = await restoreInstanceBackup({ archivePath, databasePath, mediaRoot });
 
 		// assume

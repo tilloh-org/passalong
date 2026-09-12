@@ -1399,15 +1399,12 @@ describe('collection repository', () => {
 			},
 			otherScope
 		);
-		let duplicateContentError: unknown;
-
 		// act
 		const firstOwnerImage = repository.addItemImage(firstItem.id, 'same-content.png', owner);
 		const secondOwnerImage = repository.addItemImage(secondItem.id, 'same-content.png', owner);
 		const otherTenantImage = repository.addItemImage(otherItem.id, 'same-content.png', otherScope);
 
 		// assume
-		expect(duplicateContentError).toBeUndefined();
 		expect(firstOwnerImage).toMatchObject({
 			storageKey: 'same-content.png',
 			position: 0,
@@ -2252,11 +2249,10 @@ describe('collection repository', () => {
 			owner
 		);
 		const unknownCollectionId = '00000000-0000-0000-0000-000000000000';
-		let unknownStandView: ReturnType<typeof repository.getPublicStandView>;
 
 		// act
 		const publicView = repository.getPublicStandView(standCollection.id);
-		unknownStandView = repository.getPublicStandView(unknownCollectionId);
+		const unknownStandView = repository.getPublicStandView(unknownCollectionId);
 
 		// assume
 		expect(publicView?.items).toHaveLength(2);
@@ -2353,14 +2349,12 @@ describe('collection repository', () => {
 			owner
 		);
 		const unknownId = '00000000-0000-0000-0000-000000000000';
-		let unknownItem: ReturnType<typeof repository.getPublicStandItem>;
-		let soldResult: ReturnType<typeof repository.getPublicStandItem>;
 
 		// act
 		const publicItem = repository.getPublicStandItem(standCollection.id, visibleItem.id);
 		const publicReserved = repository.getPublicStandItem(standCollection.id, reservedItem.id);
-		soldResult = repository.getPublicStandItem(standCollection.id, soldItem.id);
-		unknownItem = repository.getPublicStandItem(unknownId, visibleItem.id);
+		const soldResult = repository.getPublicStandItem(standCollection.id, soldItem.id);
+		const unknownItem = repository.getPublicStandItem(unknownId, visibleItem.id);
 
 		// assume
 		expect(publicItem).toEqual({
@@ -2418,7 +2412,6 @@ describe('collection repository', () => {
 		);
 		// note: the first added image ('hash-second.webp') was the automatic cover before the explicit set
 		const unknownKey = 'unknown-hash.png';
-		let publicViewAfterSale: ReturnType<typeof repository.getPublicStandView>;
 
 		// act
 		const publicView = repository.getPublicStandView(standCollection.id);
@@ -2448,7 +2441,7 @@ describe('collection repository', () => {
 			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
 			owner
 		);
-		publicViewAfterSale = repository.getPublicStandView(standCollection.id);
+		const publicViewAfterSale = repository.getPublicStandView(standCollection.id);
 
 		// assume
 		expect(publicViewAfterSale?.items).toHaveLength(0);
@@ -2466,13 +2459,12 @@ describe('collection repository', () => {
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
 		const unknownKey = 'unknown-avatar.png';
-		let avatarVisible: boolean;
 
 		// act
 		const publicViewBefore = repository.getPublicStandView(standCollection.id);
 		repository.setProfileAvatar(owner, 'avatar-hash.png');
 		const publicViewAfter = repository.getPublicStandView(standCollection.id);
-		avatarVisible = repository.findPublicOwnerAvatar('avatar-hash.png');
+		const avatarVisible = repository.findPublicOwnerAvatar('avatar-hash.png');
 
 		// assume
 		expect(publicViewBefore?.ownerAvatarStorageKey).toBeNull();
@@ -2552,8 +2544,6 @@ describe('collection repository', () => {
 			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
 			owner
 		);
-		const unknownFilters = { ...emptyItemFilters };
-		let reservedResults: ReturnType<typeof repository.searchPublicStandItems>;
 
 		// act
 		const titleResults = repository.searchPublicStandItems(standCollection.id, {
@@ -2572,7 +2562,7 @@ describe('collection repository', () => {
 			...emptyItemFilters,
 			status: 'open'
 		});
-		reservedResults = repository.searchPublicStandItems(standCollection.id, {
+		const reservedResults = repository.searchPublicStandItems(standCollection.id, {
 			...emptyItemFilters,
 			status: 'reserved'
 		});

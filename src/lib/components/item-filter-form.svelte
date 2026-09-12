@@ -88,7 +88,7 @@
 		<span>{t('portfolio.category')}</span>
 		<select name="category" data-testid={testId('-category-select')}>
 			<option value="">{t('portfolio.all')}</option>
-			{#each categoryOptions as category}
+			{#each categoryOptions as category (category)}
 				<option value={category} selected={appliedFilters.category === category}
 					>{categoryLabel(category)}</option
 				>
@@ -99,7 +99,7 @@
 		<span>{t('portfolio.condition')}</span>
 		<select name="condition" data-testid={testId('-condition-select')}>
 			<option value="">{t('portfolio.all')}</option>
-			{#each conditionOptions as condition}
+			{#each conditionOptions as condition (condition)}
 				<option value={condition} selected={appliedFilters.condition === condition}
 					>{conditionLabel(condition)}</option
 				>
@@ -110,7 +110,7 @@
 		<span>{t('portfolio.status')}</span>
 		<select name="status" data-testid={testId('-status-select')}>
 			<option value="">{t('portfolio.all')}</option>
-			{#each statusOptions as status}
+			{#each statusOptions as status (status)}
 				<option value={status} selected={appliedFilters.status === status}
 					>{statusFilterLabel(status)}</option
 				>

@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { sharedTestAccount } from './test-account';
 
 test.describe('Login rate limiting', () => {
 	test('locks further login attempts after the configured failure limit', async ({ page }) => {
