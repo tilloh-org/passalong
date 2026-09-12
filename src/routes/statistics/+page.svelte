@@ -194,8 +194,7 @@
 						mode="count"
 						slices={data.statistics.proceedsByCategory.map((entry) => ({
 							label: categoryLabel(entry.category),
-							valueCents: entry.soldItemCount,
-							countLabel: soldCountLabel(entry.soldItemCount)
+							valueCents: entry.soldItemCount
 						}))}
 						testId="statistics-category-counts"
 						centerLabel={t('statistics.totalLabel')}
@@ -204,10 +203,10 @@
 					/>
 				{:else}
 					<BarList
+						mode="count"
 						entries={data.statistics.proceedsByCategory.map((entry) => ({
 							label: categoryLabel(entry.category),
-							valueCents: entry.soldItemCount,
-							countLabel: soldCountLabel(entry.soldItemCount)
+							valueCents: entry.soldItemCount
 						}))}
 						testId="statistics-category-counts"
 						emptyLabel={t('statistics.empty')}

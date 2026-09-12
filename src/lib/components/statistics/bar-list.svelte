@@ -17,13 +17,29 @@
 		entries,
 		testId,
 		emptyLabel,
-		accent = 'proceeds'
+		accent = 'proceeds',
+		mode = 'money'
 	}: {
 		entries: BarEntry[];
 		testId: string;
 		emptyLabel?: string;
 		accent?: 'proceeds' | 'expenses';
+		/** How values render: euros ("10,00 €") or counts ("2x"). */
+		mode?: 'money' | 'count';
 	} = $props();
+
+	/**
+	 * Format one bar value according to the chart mode.
+	 *
+	 * @param {number} valueCents - The raw bar value.
+	 * @returns {string} The formatted row value.
+	 */
+	function barValue(valueCents: number): string {
+		if (mode === 'count') {
+			return `${valueCents}x`;
+		}
+		return `${accent === 'expenses' ? '-' : ''}${formatPrice(valueCents)} €`;
+	}
 
 	/** The largest bucket value in the series. */
 	const maximum = $derived(Math.max(0, ...entries.map((entry) => entry.valueCents)));
@@ -47,7 +63,7 @@
 				<div class="bar-row">
 					<span class="bar-label">{entry.label}</span>
 					<span class="bar-value" class:negative={accent === 'expenses'}
-						>{accent === 'expenses' ? '-' : ''}{formatPrice(entry.valueCents)} €</span
+						>{barValue(entry.valueCents)}</span
 					>
 				</div>
 				<div class="bar-track">
