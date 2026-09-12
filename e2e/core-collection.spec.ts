@@ -359,6 +359,24 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('statistics-trend').locator('.trend-column')).toHaveCount(1);
 		await expect(page.getByTestId('statistics-market-days')).toContainText(marketDayName);
 
+		// act — inspect the linked market-day settlement's category breakdowns
+		await page.getByTestId('nav-market-days-link').click();
+		const marketDaySettlement = page
+			.getByTestId('settlement-item')
+			.filter({ hasText: marketDayName });
+		await expect(
+			marketDaySettlement.locator('[data-testid^=settlement-proceeds-toggle-][role=group]')
+		).toBeVisible();
+		await expect(
+			marketDaySettlement.locator(
+				'[data-testid^="settlement-proceeds-"]:not([data-testid*="toggle"]).bar-list'
+			)
+		).toBeVisible();
+		await expect(
+			marketDaySettlement.locator('[data-testid^="settlement-sales-"]:not([data-testid*="toggle"])')
+		).toContainText('1x');
+		await page.getByTestId('nav-statistics-link').click();
+
 		// act — restrict the statistics period to a range without activity
 		await page.getByTestId('statistics-period').getByLabel('Von (Datum)').fill('2026-01-01');
 		await page.getByTestId('statistics-period').getByLabel('Bis (Datum)').fill('2026-01-31');

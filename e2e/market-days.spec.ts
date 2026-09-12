@@ -126,7 +126,7 @@ test.describe('Market days', () => {
 
 		// assume — the expense row and the settlement appear
 		const expenseRow = page.getByTestId('expense-item').filter({ hasText: 'Standgebühr' });
-		await expect(expenseRow).toContainText('15,00 €');
+		await expect(expenseRow).toContainText('-15,00 €');
 		const settlementRow = page
 			.getByTestId('settlement-item')
 			.filter({ hasText: `${marketDayName} (verschoben)` });
@@ -145,7 +145,7 @@ test.describe('Market days', () => {
 
 		// assume — the expense row and the settlement reflect the corrected amount
 		await expect(page.getByTestId('expense-item').filter({ hasText: 'Standgebühr' })).toContainText(
-			'18,00 €'
+			'-18,00 €'
 		);
 		await expect(
 			page.getByTestId('settlement-item').filter({ hasText: `${marketDayName} (verschoben)` })
