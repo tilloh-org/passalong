@@ -3061,4 +3061,58 @@ describe('collection repository', () => {
 		expect(labels.map((item) => item.title)).toEqual(['Book', 'Lamp']);
 		expect(foreignLabels).toEqual([]);
 	});
+
+	it('resolves only unsold items to a public stand item route', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const avery = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Avery collection' }, avery);
+		const openItem = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Open lamp',
+				priceCents: 1200,
+				category: 'home',
+				condition: 'good',
+				internalNotes: 'Only the owner may read this.',
+				externalDescription: 'A lamp',
+				isComplete: false,
+				isFunctional: false
+			},
+			avery
+		);
+		const soldItem = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Sold lamp',
+				priceCents: 900,
+				category: 'home',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			avery
+		);
+		repository.markItemSold(
+			soldItem.id,
+			{ channel: 'flea-market', soldAt: '2026-06-01T10:00:00.000Z', proceedsCents: 900 },
+			avery
+		);
+
+		// act
+		const openRoute = repository.getPublicStandItemRoute(openItem.id);
+		const soldRoute = repository.getPublicStandItemRoute(soldItem.id);
+		const unknownRoute = repository.getPublicStandItemRoute('missing-item');
+
+		// assume
+		expect(openRoute).toEqual({ collectionId: collection.id, itemId: openItem.id });
+		expect(soldRoute).toBeNull();
+		expect(unknownRoute).toBeNull();
+	});
 });

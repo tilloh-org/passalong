@@ -239,6 +239,11 @@ export interface PublicItemImage {
 	isCover: boolean;
 }
 
+export interface PublicStandItemRoute {
+	collectionId: string;
+	itemId: string;
+}
+
 export interface PublicStandView {
 	collectionId: string;
 	collectionName: string;
@@ -383,6 +388,7 @@ export interface CollectionRepository {
 	getSaleStatistics(scope: SessionScope, period?: SaleStatisticsPeriod): SaleStatistics;
 	getProceedsByDay(scope: SessionScope, period: SaleStatisticsPeriod | null): SaleDayProceeds[];
 	getPublicStandView(collectionId: string): PublicStandView | null;
+	getPublicStandItemRoute(itemId: string): PublicStandItemRoute | null;
 	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
 	searchPublicStandItems(collectionId: string, filters: ItemFilters): PublicStandItem[];
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
@@ -1715,6 +1721,19 @@ export function createCollectionRepository(
 				soldItemCount: row.sold_item_count,
 				totalProceedsCents: row.total_proceeds_cents
 			}));
+		},
+
+		/**
+		 * Resolve a currently public item to the collection route used by its buyer view.
+		 *
+		 * @param {string} itemId - Public item identifier from a neutral QR route.
+		 * @returns {PublicStandItemRoute | null} Buyer route identifiers, or null for sold or unknown items.
+		 */
+		getPublicStandItemRoute(itemId) {
+			const item = database
+				.prepare('SELECT id, collection_id FROM items WHERE id = ? AND sold_at IS NULL')
+				.get(itemId) as { id: string; collection_id: string } | undefined;
+			return item ? { collectionId: item.collection_id, itemId: item.id } : null;
 		},
 
 		getPublicStandView(collectionId) {

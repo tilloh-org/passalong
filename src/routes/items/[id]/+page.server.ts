@@ -178,7 +178,7 @@ export const load: PageServerLoad = async ({ cookies, params, url }) => {
 	if (!item) {
 		throw error(httpStatus.notFound, 'Artikel nicht gefunden');
 	}
-	const itemUrl = new URL(`/items/${encodeURIComponent(item.id)}`, url.origin).toString();
+	const itemUrl = new URL(`/q/${encodeURIComponent(item.id)}`, url.origin).toString();
 	const qrCodeDataUrl = await QRCode.toDataURL(itemUrl, {
 		width: qrCodeImageSizePixels,
 		margin: 1

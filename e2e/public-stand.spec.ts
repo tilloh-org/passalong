@@ -98,6 +98,19 @@ test.describe('Public stand page', () => {
 
 		// act
 		const standHref = await standLink.getAttribute('href');
+		const ownerVaseCard = page.getByTestId('item-card').filter({ hasText: 'Vase' }).first();
+		await ownerVaseCard.click();
+		await expect(page).toHaveURL(/\/items\//);
+		const ownerItemPath = new URL(page.url()).pathname;
+		const itemId = ownerItemPath.split('/').at(-1)!;
+
+		// act — the owner follows the neutral QR route
+		await page.goto(`/q/${itemId}`);
+
+		// assume — the owner is sent to the protected internal detail page
+		await expect(page).toHaveURL(ownerItemPath);
+
+		// act
 		const anonymousContext = await page.context().browser()!.newContext();
 		const anonymousPage = await anonymousContext.newPage();
 		await anonymousPage.goto(standHref!);
@@ -115,6 +128,19 @@ test.describe('Public stand page', () => {
 		await expect(
 			standCards.filter({ hasText: 'Buch' }).getByTestId('stand-item-description')
 		).toHaveCount(0);
+		const publicVasePath = await standCards
+			.filter({ hasText: 'Vase' })
+			.locator('.tile-link')
+			.getAttribute('href');
+
+		// act — a buyer follows the same neutral QR route without a seller session
+		await anonymousPage.goto(`/q/${itemId}`);
+
+		// assume — the buyer is sent to the reduced public item detail without internal notes
+		await expect(anonymousPage).toHaveURL(publicVasePath!);
+		await expect(anonymousPage.getByTestId('stand-item-detail')).toBeVisible();
+		await expect(anonymousPage.getByText('Nur abends abgeben')).toHaveCount(0);
+		await anonymousPage.goto(standHref!);
 
 		// act — favorite the first card, verify persistence across reload, then toggle off
 		const firstCard = anonymousPage.getByTestId('stand-item').first();
@@ -215,7 +241,38 @@ test.describe('Public stand page', () => {
 		const avatarMediaResponse = await anonymousPage.request.get(
 			`/media/${decodeURIComponent(avatarKey)}`
 		);
-		expect(avatarMediaResponse.status()).toBe(200);
+		await expect(avatarMediaResponse.status()).toBe(200);
+
+		// act — sell the QR-linked item after all public buyer assertions have completed
+		const saleResponse = await page.request.post(`${ownerItemPath}?/markItemSold`, {
+			form: {
+				itemId,
+				channel: 'flea-market',
+				proceedsEuros: '8,00',
+				marketDayId: ''
+			},
+			headers: { Origin: 'http://localhost:4173' },
+			maxRedirects: 0
+		});
+
+		// assume — sold and unknown QR identifiers reveal no detail to any visitor
+		expect(saleResponse.status()).toBe(200);
+		const ownerSoldQrResponse = await page.request.get(`/q/${itemId}`, { maxRedirects: 0 });
+		const buyerSoldQrResponse = await anonymousPage.request.get(`/q/${itemId}`, {
+			maxRedirects: 0
+		});
+		const ownerUnknownQrResponse = await page.request.get(
+			'/q/00000000-0000-0000-0000-000000000000',
+			{ maxRedirects: 0 }
+		);
+		const buyerUnknownQrResponse = await anonymousPage.request.get(
+			'/q/00000000-0000-0000-0000-000000000000',
+			{ maxRedirects: 0 }
+		);
+		expect(ownerSoldQrResponse.status()).toBe(404);
+		expect(buyerSoldQrResponse.status()).toBe(404);
+		expect(ownerUnknownQrResponse.status()).toBe(404);
+		expect(buyerUnknownQrResponse.status()).toBe(404);
 		anonymousContext.close?.();
 	});
 });

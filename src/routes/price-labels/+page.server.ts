@@ -29,7 +29,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 	const items = getCollectionRepository().listItemsForPriceLabels(scope);
 	const labels = await Promise.all(
 		items.map(async (item) => {
-			const itemUrl = new URL(`/items/${encodeURIComponent(item.id)}`, url.origin).toString();
+			const itemUrl = new URL(`/q/${encodeURIComponent(item.id)}`, url.origin).toString();
 			return {
 				item,
 				qrCodeDataUrl: await QRCode.toDataURL(itemUrl, {
