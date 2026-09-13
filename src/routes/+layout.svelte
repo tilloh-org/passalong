@@ -137,6 +137,13 @@
 			<a href="/market-days" onclick={() => setMenuOpen(false)} data-testid="nav-market-days-link">
 				{t('nav.marketDays')}
 			</a>
+			<a
+				href="/price-labels"
+				onclick={() => setMenuOpen(false)}
+				data-testid="nav-price-labels-link"
+			>
+				{t('nav.priceLabels')}
+			</a>
 			<a href="/sales" onclick={() => setMenuOpen(false)} data-testid="nav-sale-history-link">
 				{t('nav.saleHistory')}
 			</a>

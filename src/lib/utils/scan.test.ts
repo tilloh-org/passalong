@@ -24,7 +24,7 @@ describe('resolveArticleDetailPath', () => {
 		expect(targetPath).toBe('/items/abc-123');
 	});
 
-	it('converts a bare article id', () => {
+	it('converts a bare article id to the neutral QR route', () => {
 		// arrange
 		const scannedValue = 'abc-123';
 
@@ -32,7 +32,7 @@ describe('resolveArticleDetailPath', () => {
 		const targetPath = resolveArticleDetailPath(scannedValue, 'https://example.com');
 
 		// assume
-		expect(targetPath).toBe('/items/abc-123');
+		expect(targetPath).toBe('/q/abc-123');
 	});
 
 	it('accepts a shorthand article path without a leading slash', () => {
@@ -44,6 +44,17 @@ describe('resolveArticleDetailPath', () => {
 
 		// assume
 		expect(targetPath).toBe('/items/abc-123');
+	});
+
+	it('normalizes a neutral QR URL', () => {
+		// arrange
+		const scannedValue = 'https://example.com/q/abc-123';
+
+		// act
+		const targetPath = resolveArticleDetailPath(scannedValue, 'https://example.com');
+
+		// assume
+		expect(targetPath).toBe('/q/abc-123');
 	});
 
 	it('rejects values that do not point to an article', () => {

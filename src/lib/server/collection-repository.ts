@@ -239,6 +239,11 @@ export interface PublicItemImage {
 	isCover: boolean;
 }
 
+export interface PublicStandItemRoute {
+	collectionId: string;
+	itemId: string;
+}
+
 export interface PublicStandView {
 	collectionId: string;
 	collectionName: string;
@@ -375,6 +380,7 @@ export interface CollectionRepository {
 	deleteExpense(expenseId: string, scope: SessionScope): void;
 	getMarketDaySettlement(marketDayId: string, scope: SessionScope): MarketDaySettlement | null;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
+	listItemsForPriceLabels(scope: SessionScope): Item[];
 	searchItemsForOwner(collectionId: string, filters: ItemFilters, scope: SessionScope): Item[];
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
@@ -382,6 +388,7 @@ export interface CollectionRepository {
 	getSaleStatistics(scope: SessionScope, period?: SaleStatisticsPeriod): SaleStatistics;
 	getProceedsByDay(scope: SessionScope, period: SaleStatisticsPeriod | null): SaleDayProceeds[];
 	getPublicStandView(collectionId: string): PublicStandView | null;
+	getPublicStandItemRoute(itemId: string): PublicStandItemRoute | null;
 	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
 	searchPublicStandItems(collectionId: string, filters: ItemFilters): PublicStandItem[];
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
@@ -1716,6 +1723,19 @@ export function createCollectionRepository(
 			}));
 		},
 
+		/**
+		 * Resolve a currently public item to the collection route used by its buyer view.
+		 *
+		 * @param {string} itemId - Public item identifier from a neutral QR route.
+		 * @returns {PublicStandItemRoute | null} Buyer route identifiers, or null for sold or unknown items.
+		 */
+		getPublicStandItemRoute(itemId) {
+			const item = database
+				.prepare('SELECT id, collection_id FROM items WHERE id = ? AND sold_at IS NULL')
+				.get(itemId) as { id: string; collection_id: string } | undefined;
+			return item ? { collectionId: item.collection_id, itemId: item.id } : null;
+		},
+
 		getPublicStandView(collectionId) {
 			const collection = database
 				.prepare(
@@ -1855,6 +1875,26 @@ export function createCollectionRepository(
 				isFunctional: Boolean(item.is_functional),
 				images: listPublicItemImages(database, item.id)
 			};
+		},
+
+		/**
+		 * List every unsold item owned by the active user for printable price labels.
+		 *
+		 * @param {SessionScope} scope - Authenticated owner and tenant scope.
+		 * @returns {Item[]} Owner-scoped unsold items ordered by title.
+		 */
+		listItemsForPriceLabels(scope) {
+			return database
+				.prepare(
+					`SELECT ${ITEM_SELECT_COLUMNS}
+					 FROM items
+					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
+					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+					 WHERE items.owner_id = ? AND items.tenant_id = ? AND items.sold_at IS NULL
+					 ORDER BY items.title COLLATE NOCASE ASC, items.id ASC`
+				)
+				.all(scope.userId, scope.tenantId)
+				.map((row) => mapItemRow(row as ItemRow));
 		},
 
 		listItemsForOwner(collectionId, scope) {

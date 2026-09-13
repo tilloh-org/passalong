@@ -1,9 +1,13 @@
 const itemRoutePrefix = '/items/';
+const neutralQrRoutePrefix = '/q/';
+const supportedRoutePrefixes = [itemRoutePrefix, neutralQrRoutePrefix] as const;
 
 /**
- * Normalize a scanned value to a seller-facing article detail route.
+ * Normalize a scanned value to an article route that is safe to navigate to.
  *
  * Accepts absolute article URLs, relative article paths, or bare item IDs.
+ * Existing internal item URLs stay supported for previously printed labels;
+ * bare IDs use the neutral QR route so the server can choose the right view.
  *
  * @param {string} rawValue - The scanned QR payload or manual input.
  * @param {string} origin - The current site origin used to resolve relative URLs.
@@ -15,42 +19,42 @@ export function resolveArticleDetailPath(rawValue: string, origin: string): stri
 		return null;
 	}
 
-	if (trimmedValue.startsWith(itemRoutePrefix)) {
-		return normalizeItemPath(trimmedValue);
-	}
-	if (trimmedValue.startsWith('items/')) {
-		return normalizeItemPath(`/${trimmedValue}`);
+	const directPath = normalizeArticlePath(trimmedValue);
+	if (directPath) {
+		return directPath;
 	}
 
 	try {
 		const url = new URL(trimmedValue, origin);
-		if (url.pathname.startsWith(itemRoutePrefix)) {
-			return normalizeItemPath(url.pathname);
+		const urlPath = normalizeArticlePath(url.pathname);
+		if (urlPath) {
+			return urlPath;
 		}
 	} catch {
 		// Ignore invalid URLs and fall back to a bare article ID.
 	}
 
 	if (looksLikeArticleId(trimmedValue)) {
-		return `${itemRoutePrefix}${encodeURIComponent(trimmedValue)}`;
+		return `${neutralQrRoutePrefix}${encodeURIComponent(trimmedValue)}`;
 	}
 
 	return null;
 }
 
 /**
- * Remove a trailing slash from a valid article path while preserving the item ID.
+ * Remove trailing slashes from a supported article path while preserving its identifier.
  *
- * @param {string} pathname - A path that starts with `/items/`.
- * @returns {string | null} Normalized route path or null when the path does not include an ID.
+ * @param {string} pathname - A possible internal item or neutral QR path.
+ * @returns {string | null} Normalized route path or null for another route shape.
  */
-function normalizeItemPath(pathname: string): string | null {
-	const normalizedPath = pathname.replace(/\/+$/, '');
-	const articleId = normalizedPath.slice(itemRoutePrefix.length);
-	if (!articleId) {
+function normalizeArticlePath(pathname: string): string | null {
+	const prefix = supportedRoutePrefixes.find((candidate) => pathname.startsWith(candidate));
+	if (!prefix) {
 		return null;
 	}
-	return `${itemRoutePrefix}${articleId}`;
+	const normalizedPath = pathname.replace(/\/+$/, '');
+	const articleId = normalizedPath.slice(prefix.length);
+	return articleId ? `${prefix}${articleId}` : null;
 }
 
 /**

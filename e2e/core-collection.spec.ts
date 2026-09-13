@@ -252,6 +252,18 @@ test.describe('Core collection', () => {
 		await page.getByTestId('toggle-item-reservation').click();
 		await expect(page.getByTestId('item-reserved-badge')).toHaveCount(0);
 
+		// act — open the printable labels while the item is still unsold
+		await page.getByTestId('nav-price-labels-link').click();
+
+		// assume — the print view includes the owner-scoped item, price and QR payload
+		await expect(page.getByTestId('price-labels-title')).toBeVisible();
+		const priceLabel = page.getByTestId('price-label-item').filter({ hasText: 'Leselampe' });
+		await expect(priceLabel).toContainText('12,00 €');
+		await expect(priceLabel.getByRole('img')).toHaveAttribute('src', /^data:image\/png;base64,/);
+		await expect(page.getByTestId('price-labels-print')).toBeVisible();
+		await page.getByRole('link', { name: '+ Neu' }).click();
+		await itemCard.click();
+
 		// act — upload two photos once; retries reuse the leftover images (the dialog
 		// trigger label carries the stored image count, e.g. "🖼 Bilder (2)")
 		const storedImageCount = await page.getByTestId('images-dialog-trigger').evaluate((el) => {
