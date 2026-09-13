@@ -758,6 +758,15 @@
 		padding: 0.6rem 0.75rem;
 		width: 100%;
 	}
+	.form-grid select {
+		appearance: none;
+		background-image: var(--select-arrow);
+		background-position: right var(--select-arrow-inset) center;
+		background-repeat: no-repeat;
+		background-size: var(--select-arrow-size);
+		padding-right: var(--select-control-end-padding);
+	}
+
 	.form-grid input:focus,
 	.form-grid select:focus {
 		border-color: var(--color-ice);

@@ -38,6 +38,12 @@
 	--radius-card: 16px;
 	--radius-control: 12px;
 	--radius-small: 10px;
+	--select-arrow-inset: 1rem;
+	--select-arrow-size: 0.75rem;
+	--select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%231d4e63' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
+	--select-control-end-padding: calc(
+		var(--select-arrow-inset) + var(--select-arrow-size) + 0.75rem
+	);
 
 	--gap-action-row: 0.6rem;
 	--gap-action-block: 1.1rem;
@@ -74,6 +80,7 @@
 	--focus-ring: rgba(127, 168, 189, 0.4);
 	--scrim: rgba(0, 0, 0, 0.55);
 	--glass: rgba(15, 26, 34, 0.72);
+	--select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%237fa8bd' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
 
 	--shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
 	--shadow-tile: 0 4px 14px rgba(0, 0, 0, 0.3);
@@ -100,6 +107,7 @@ body {
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.28), transparent 60%),
 		radial-gradient(900px 500px at -10% 20%, rgba(232, 226, 213, 0.55), transparent 55%),
 		linear-gradient(180deg, var(--color-bg) 0%, #eef2f4 100%);
+	background-attachment: fixed;
 	color: var(--color-text);
 	font-family:
 		system-ui,
@@ -119,6 +127,7 @@ body {
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.12), transparent 60%),
 		radial-gradient(900px 500px at -10% 20%, rgba(224, 164, 88, 0.08), transparent 55%),
 		linear-gradient(180deg, #0f1a22 0%, #16242e 100%);
+	background-attachment: fixed;
 }
 
 /* dezente Wellen-Linie oben */

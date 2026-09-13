@@ -234,6 +234,15 @@
 		padding: 0.65rem 0.75rem;
 	}
 
+	select {
+		appearance: none;
+		background-image: var(--select-arrow);
+		background-position: right var(--select-arrow-inset) center;
+		background-repeat: no-repeat;
+		background-size: var(--select-arrow-size);
+		padding-right: var(--select-control-end-padding);
+	}
+
 	.filter-actions {
 		align-items: center;
 		display: flex;

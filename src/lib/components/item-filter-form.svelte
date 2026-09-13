@@ -163,6 +163,15 @@
 		width: 100%;
 	}
 
+	.item-filters select {
+		appearance: none;
+		background-image: var(--select-arrow);
+		background-position: right var(--select-arrow-inset) center;
+		background-repeat: no-repeat;
+		background-size: var(--select-arrow-size);
+		padding-right: var(--select-control-end-padding);
+	}
+
 	.item-filters input:focus,
 	.item-filters select:focus {
 		border-color: var(--color-ice);

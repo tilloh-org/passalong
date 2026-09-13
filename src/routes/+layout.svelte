@@ -239,7 +239,7 @@
 		border-bottom: 1px solid var(--color-border);
 		container-type: inline-size;
 		display: flex;
-		margin: 0 -1.5rem 2rem;
+		margin: 0 0 2rem;
 		padding: 0.65rem 1.5rem;
 	}
 	.brand-wrap {
