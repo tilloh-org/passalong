@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { sharedTestAccount } from './test-account';
 
 test.describe('Market days', () => {
-	test('requires login and manages the market day lifecycle', async ({ page }) => {
+	test('requires login and manages the market day lifecycle', async ({ page, browser }) => {
 		// arrange — log in with the shared owner account (session cookie persisted by earlier specs)
 		await page.goto('/');
 		const setupVisible = await page
@@ -45,22 +45,19 @@ test.describe('Market days', () => {
 		await expect(page).toHaveURL(/market-days/);
 		await expect(page.getByTestId('market-days-title')).toBeVisible();
 
-		// arrange — remove leftovers from earlier attempts so the lifecycle starts empty
-		// (the shared SQLite database persists across retry attempts)
-		for (const testId of ['expenses-delete', 'market-days-delete'] as const) {
-			while ((await page.getByTestId(testId).count()) > 0) {
-				const before = await page.getByTestId(testId).count();
-				await page.getByTestId(testId).first().click();
-				await expect(page.getByTestId(testId)).toHaveCount(before - 1, { timeout: 10_000 });
-			}
+		// arrange — remove market-day leftovers from earlier attempts so the lifecycle starts empty.
+		// The shared SQLite database persists across retry attempts.
+		while ((await page.getByTestId('market-day-item').count()) > 0) {
+			await page.getByTestId('market-day-item').first().click();
+			await page.getByTestId('market-days-delete').click();
+			await expect(page).toHaveURL(/\/market-days$/);
 		}
 
 		// assume — the page starts empty
 		await expect(page.getByTestId('market-days-empty')).toBeVisible();
 
-		// act — open the create form and submit a market day
+		// act — submit the always-visible landing-page form
 		const marketDayName = `Flohmarkt ${new Date().toISOString().slice(0, 16)}`;
-		await page.getByTestId('market-days-create-toggle').click();
 		await page.getByTestId('market-days-name-input').fill(marketDayName);
 		await page.getByTestId('market-days-date-input').fill('2026-05-16');
 		await page.getByTestId('market-days-start-input').fill('08:00');
@@ -75,27 +72,23 @@ test.describe('Market days', () => {
 		await expect(dayCard).toContainText(marketDayName);
 		await expect(dayCard).toContainText('Offen');
 
+		// act — open the day detail from its clickable landing card
+		await dayCard.click();
+		await expect(page).toHaveURL(/\/market-days\//);
+		await expect(page.getByTestId('market-day-detail-header')).toContainText(marketDayName);
+
 		// act — close the day
 		await page.getByTestId('market-days-close').click();
 
 		// assume — the status pill flips to closed
-		await expect(
-			page.getByTestId('market-day-item').filter({ hasText: marketDayName })
-		).toContainText('Abgeschlossen');
-		await expect(
-			page
-				.getByTestId('market-day-item')
-				.filter({ hasText: marketDayName })
-				.locator('[data-testid=market-days-reopen]')
-		).toBeVisible();
+		await expect(page.getByTestId('market-day-detail-header')).toContainText('Abgeschlossen');
+		await expect(page.getByTestId('market-days-reopen')).toBeVisible();
 
 		// act — reopen the day
 		await page.getByTestId('market-days-reopen').click();
 
 		// assume
-		await expect(
-			page.getByTestId('market-day-item').filter({ hasText: marketDayName })
-		).toContainText('Offen');
+		await expect(page.getByTestId('market-day-detail-header')).toContainText('Offen');
 
 		// act — edit the day through the dialog
 		await page.getByTestId('market-days-edit-trigger').click();
@@ -109,7 +102,7 @@ test.describe('Market days', () => {
 		await page.getByRole('button', { name: 'Änderungen speichern' }).click();
 
 		// assume — the list shows the updated name
-		await expect(page.getByTestId('market-day-item').first()).toContainText(
+		await expect(page.getByTestId('market-day-detail-header')).toContainText(
 			`${marketDayName} (verschoben)`
 		);
 
@@ -119,18 +112,16 @@ test.describe('Market days', () => {
 		await page.getByTestId('expenses-category-input').selectOption('fee');
 		await page.getByTestId('expenses-amount-input').fill('15,00');
 		await page.getByTestId('expenses-date-input').fill('2026-05-23');
-		await page
-			.getByTestId('expenses-market-day-input')
-			.selectOption({ label: `${marketDayName} (verschoben)` });
 		await page.getByTestId('expenses-create-submit').click();
 
 		// assume — the expense row and the settlement appear
 		const expenseRow = page.getByTestId('expense-item').filter({ hasText: 'Standgebühr' });
-		await expect(expenseRow).toContainText('15,00 €');
-		const settlementRow = page
-			.getByTestId('settlement-item')
-			.filter({ hasText: `${marketDayName} (verschoben)` });
-		await expect(settlementRow).toContainText('Ausgaben: 15,00 €');
+		await expect(expenseRow).toContainText('-15,00 €');
+		const settlementRow = page.getByTestId('market-day-statistics');
+		await expect(settlementRow).toContainText('Ausgaben: -15,00 €');
+
+		// assume — the detail statistics show the per-day expense bars (no sales yet)
+		await expect(page.getByTestId('market-day-expenses-chart')).toBeVisible();
 
 		// act — edit the expense through the dialog
 		await expenseRow.getByTestId('expenses-edit-trigger').click();
@@ -142,17 +133,23 @@ test.describe('Market days', () => {
 
 		// assume — the expense row and the settlement reflect the corrected amount
 		await expect(page.getByTestId('expense-item').filter({ hasText: 'Standgebühr' })).toContainText(
-			'18,00 €'
+			'-18,00 €'
 		);
-		await expect(
-			page.getByTestId('settlement-item').filter({ hasText: `${marketDayName} (verschoben)` })
-		).toContainText('Ausgaben: 18,00 €');
+		await expect(page.getByTestId('market-day-statistics')).toContainText('Ausgaben: -18,00 €');
 
 		// act — delete the expense
 		await page.getByTestId('expenses-delete').click();
 
 		// assume
 		await expect(page.getByTestId('expenses-empty')).toBeVisible();
+
+		// act — request the protected detail URL from a session-less browser context
+		const anonymousPage = await browser.newPage();
+		await anonymousPage.goto(page.url());
+
+		// assume — the detail never exposes data without a session
+		await expect(anonymousPage.getByRole('heading', { name: 'Anmelden' })).toBeVisible();
+		await anonymousPage.close();
 
 		// act — delete the day
 		await page.getByTestId('market-days-delete').click();

@@ -140,6 +140,9 @@
 			<a href="/sales" onclick={() => setMenuOpen(false)} data-testid="nav-sale-history-link">
 				{t('nav.saleHistory')}
 			</a>
+			<a href="/statistics" onclick={() => setMenuOpen(false)} data-testid="nav-statistics-link">
+				{t('nav.statistics')}
+			</a>
 			{#if data.header?.standPath}
 				<a
 					href={data.header.standPath}
