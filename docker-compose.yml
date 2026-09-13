@@ -2,7 +2,7 @@ services:
   passalong:
     image: ghcr.io/tilloh-org/passalong:latest
     build: .
-    container_name: passalong
+    container_name: ${PASSALONG_CONTAINER_NAME:-passalong}
     restart: unless-stopped
     ports:
       - '${PASSALONG_PORT:-4242}:4242'
