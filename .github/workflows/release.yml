@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Semantic image tag to publish, without a leading v"
+        description: 'Semantic image tag to publish, without a leading v'
         required: false
         type: string
       image_ref:
-        description: "Git ref to build for a manual image recovery"
+        description: 'Git ref to build for a manual image recovery'
         required: false
         type: string
 

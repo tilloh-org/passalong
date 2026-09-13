@@ -34,7 +34,9 @@ interface ParsedPasswordHash {
  */
 export function validatePassword(password: string): void {
 	if (password.length < minimumPasswordLength || password.length > maximumPasswordLength) {
-		throw new Error(`Password must be ${minimumPasswordLength} to ${maximumPasswordLength} characters long.`);
+		throw new Error(
+			`Password must be ${minimumPasswordLength} to ${maximumPasswordLength} characters long.`
+		);
 	}
 }
 
@@ -95,7 +97,12 @@ export function verifyPasswordSync(password: string, storedHash: string): boolea
 	}
 
 	try {
-		const actualKey = scryptSync(password, parsedHash.salt, keyLength, scryptOptions(parsedHash.parameters));
+		const actualKey = scryptSync(
+			password,
+			parsedHash.salt,
+			keyLength,
+			scryptOptions(parsedHash.parameters)
+		);
 		return timingSafeEqual(parsedHash.expectedKey, actualKey);
 	} catch {
 		return false;
@@ -110,7 +117,11 @@ export function verifyPasswordSync(password: string, storedHash: string): boolea
  * @param {PasswordHashParameters} parameters - Allowlisted scrypt parameters.
  * @returns {Promise<Buffer>} The derived password key.
  */
-function derivePasswordKey(password: string, salt: Buffer, parameters: PasswordHashParameters): Promise<Buffer> {
+function derivePasswordKey(
+	password: string,
+	salt: Buffer,
+	parameters: PasswordHashParameters
+): Promise<Buffer> {
 	return new Promise((resolve, reject) => {
 		scrypt(password, salt, keyLength, scryptOptions(parameters), (error, key) => {
 			if (error) {
@@ -128,7 +139,12 @@ function derivePasswordKey(password: string, salt: Buffer, parameters: PasswordH
  * @param {PasswordHashParameters} parameters - Allowlisted scrypt parameters.
  * @returns {{ N: number; r: number; p: number; maxmem: number }} Scrypt options with a fixed memory ceiling.
  */
-function scryptOptions(parameters: PasswordHashParameters): { N: number; r: number; p: number; maxmem: number } {
+function scryptOptions(parameters: PasswordHashParameters): {
+	N: number;
+	r: number;
+	p: number;
+	maxmem: number;
+} {
 	return { ...parameters, maxmem: scryptMemoryLimitBytes };
 }
 
@@ -152,7 +168,9 @@ function parsePasswordHash(storedHash: string): ParsedPasswordHash | null {
 		const [, encodedSalt, encodedKey] = parts;
 		const salt = decodeBase64Url(encodedSalt, saltLength);
 		const expectedKey = decodeBase64Url(encodedKey, keyLength);
-		return salt && expectedKey ? { legacy: true, parameters: currentScryptParameters, salt, expectedKey } : null;
+		return salt && expectedKey
+			? { legacy: true, parameters: currentScryptParameters, salt, expectedKey }
+			: null;
 	}
 	if (parts.length !== versionedPasswordHashPartCount) {
 		return null;
@@ -165,7 +183,9 @@ function parsePasswordHash(storedHash: string): ParsedPasswordHash | null {
 	const parameters = parseAllowedParameters(encodedN, encodedR, encodedP);
 	const salt = decodeBase64Url(encodedSalt, saltLength);
 	const expectedKey = decodeBase64Url(encodedKey, keyLength);
-	return parameters && salt && expectedKey ? { legacy: false, parameters, salt, expectedKey } : null;
+	return parameters && salt && expectedKey
+		? { legacy: false, parameters, salt, expectedKey }
+		: null;
 }
 
 /**
@@ -176,11 +196,19 @@ function parsePasswordHash(storedHash: string): ParsedPasswordHash | null {
  * @param {string | undefined} encodedP - Encoded scrypt p parameter.
  * @returns {PasswordHashParameters | null} Allowlisted parameters or null.
  */
-function parseAllowedParameters(encodedN: string | undefined, encodedR: string | undefined, encodedP: string | undefined): PasswordHashParameters | null {
+function parseAllowedParameters(
+	encodedN: string | undefined,
+	encodedR: string | undefined,
+	encodedP: string | undefined
+): PasswordHashParameters | null {
 	const N = parseInteger(encodedN);
 	const r = parseInteger(encodedR);
 	const p = parseInteger(encodedP);
-	return allowedScryptParameters.find((parameters) => parameters.N === N && parameters.r === r && parameters.p === p) ?? null;
+	return (
+		allowedScryptParameters.find(
+			(parameters) => parameters.N === N && parameters.r === r && parameters.p === p
+		) ?? null
+	);
 }
 
 /**
@@ -210,7 +238,9 @@ function decodeBase64Url(value: string | undefined, expectedLength: number): Buf
 	}
 	try {
 		const decoded = Buffer.from(value, 'base64url');
-		return decoded.length === expectedLength && decoded.toString('base64url') === value ? decoded : null;
+		return decoded.length === expectedLength && decoded.toString('base64url') === value
+			? decoded
+			: null;
 	} catch {
 		return null;
 	}

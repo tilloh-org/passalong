@@ -12,8 +12,11 @@ project values simplicity, so the contribution process is simple too.
 - **Simple and lightweight** — passalong stays free of heavy dependencies.
   When you add code, keep the dependency footprint small and justify it.
 - **Close to web standards** — plain HTML, CSS and JavaScript where possible.
-- **i18n first** — the app is German- and English-native. User-facing strings
-  are never hardcoded; they go through the message catalogs (paraglide).
+- **German UI, English everywhere else** — the visitor-facing UI copy is
+  German and served by the i18n layer (`src/lib/i18n/`), switchable to
+  English at runtime. Everything else in the repo is English: code,
+  comments, tests, CSS classes, test IDs, **commit messages, PR titles,
+  PR descriptions, issue texts and any other repo communication**.
 - **Accessible** — keyboard-navigable, readable contrast, sensible labels.
 
 ## Code of conduct
@@ -25,8 +28,9 @@ By participating in this project you agree to abide by the
 
 Prerequisites:
 
-- Node.js 20+ (or Deno — see the README for the deployment matrix)
-- pnpm or npm
+- Node.js 22 (CI and Docker use Node 22; the lockfile requires
+  `^20.19.0 || >=22.12.0`)
+- pnpm 11 (CI uses `pnpm/action-setup` with version 11)
 
 ```bash
 # clone and install
@@ -36,10 +40,6 @@ pnpm install
 
 # run the dev server
 pnpm dev
-
-# run tests and lint
-pnpm test
-pnpm lint
 ```
 
 ## Making changes
@@ -49,9 +49,66 @@ pnpm lint
    git switch -c feat/your-change develop
    ```
 2. Make your changes. Keep them focused — one logical change per PR.
-3. Run the test suite and the linter locally before pushing.
-4. Push the branch and open a pull request **against `develop`**.
+3. Run the required gates locally before pushing (see below).
+4. If the change affects the UI, refresh the committed screenshots before
+   opening or updating the PR.
+5. Update the PR description so it always points at the latest screenshots
+   for the current commit.
+6. Push the branch and open a pull request **against `develop`**.
    - `main` is release-only. PRs against `main` will be closed.
+
+### Branch and merge rules
+
+- **Only one open feature PR at a time.** Continue on the existing feature
+  branch instead of opening a second PR.
+- **Tim merges PRs himself.** Agents never merge to `main` or `develop`,
+  never auto-merge, and never close PRs as merged.
+- Feature branches: `feat/…`, `fix/…`, `docs/…`, `chore/…`.
+
+### Required gates
+
+Run these locally before every commit and PR; all must pass:
+
+```bash
+pnpm check        # svelte-check: 0 errors, 0 warnings
+pnpm test         # vitest unit tests
+pnpm build        # production build (vite + tsc)
+```
+
+E2E and the Python release-flow tests run in CI:
+
+```bash
+CI=1 pnpm test:e2e
+python3 .github/scripts/tests/test_release_flow.py
+```
+
+CI additionally runs `pnpm audit` and Trivy container/filesystem scans. A
+green `build` does not imply a green security scan — the scan is a separate
+job. Do not claim "all gates green" unless every CI job passed.
+
+### Test convention
+
+Every test uses the phase markers, exactly lowercase:
+
+- `// arrange` — fixtures, DB state, mocks, sessions (before the operation)
+- `// act` — the operation under test
+- `// assume` — the expectations, including expected errors
+
+Python tests use `# arrange`, `# act`, `# assume`. Multi-step tests repeat
+meaningful Act → Assume sections. Expected errors are captured during Act
+and checked in Assume.
+
+### Screenshots for UI changes
+
+- Every visible UI change gets a current screenshot committed under
+  `docs/feature-development/<branch-slug>/`.
+- When the UI changes again, regenerate the screenshot and replace the old
+  one in the PR description.
+- Use the latest screenshots only; do not leave stale image links in the PR
+  body.
+- Use **commit-pinned raw GitHub image URLs** in the PR description
+  (`https://github.com/tilloh-org/passalong/raw/<sha>/<path>`) so the linked
+  image stays stable after squashes and merges.
 
 ### Conventional commits
 
@@ -65,26 +122,17 @@ docs: explain the market-day mode in the README
 
 This feeds the automatic versioning and changelog on `main`.
 
-### Tests, linting, formatting
-
-- Tests: `pnpm test`
-- Lint: `pnpm lint`
-- Formatting: `pnpm format`
-
-All three must pass in CI before a merge.
-
 ## Branch model
 
 - `develop` — integration branch. All PRs land here.
 - `main` — release branch. Protected: only tagged releases are created from
-  merges to `main` (see the release workflow).
-- Feature branches: `feat/…`, `fix/…`, `docs/…`, `chore/…`.
+  merges to `main` (see `docs/release-process.md`).
 
 ## Releasing
 
 Merging to `main` triggers a release. Versions follow [semver](https://semver.org).
 The changelog is maintained via Conventional Commits — no manual changelog
-edits needed.
+edits needed. See `docs/release-process.md` for the full sequence.
 
 ## Reporting issues
 

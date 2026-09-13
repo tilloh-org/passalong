@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { hashPassword, needsPasswordRehash, validatePassword, verifyPassword, verifyPasswordSync } from './password';
+import {
+	hashPassword,
+	needsPasswordRehash,
+	validatePassword,
+	verifyPassword,
+	verifyPasswordSync
+} from './password';
 
 describe('password hashing', () => {
 	it('verifies only the original password', async () => {
@@ -40,10 +46,14 @@ describe('password hashing', () => {
 		});
 
 		// assume
-		expect(validationOutcomes[0]).toMatchObject({ message: 'Password must be 12 to 128 characters long.' });
+		expect(validationOutcomes[0]).toMatchObject({
+			message: 'Password must be 12 to 128 characters long.'
+		});
 		expect(validationOutcomes[1]).toBeUndefined();
 		expect(validationOutcomes[2]).toBeUndefined();
-		expect(validationOutcomes[3]).toMatchObject({ message: 'Password must be 12 to 128 characters long.' });
+		expect(validationOutcomes[3]).toMatchObject({
+			message: 'Password must be 12 to 128 characters long.'
+		});
 	});
 
 	it('stores current hashes with explicitly allowed versioned parameters', async () => {

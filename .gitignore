@@ -35,3 +35,5 @@ vite.config.ts.timestamp-*
 /coverage/
 /playwright-report/
 /test-results/
+/e2e/.auth-owner.json
+e2e/.test-avatar.png
