@@ -375,6 +375,7 @@ export interface CollectionRepository {
 	deleteExpense(expenseId: string, scope: SessionScope): void;
 	getMarketDaySettlement(marketDayId: string, scope: SessionScope): MarketDaySettlement | null;
 	listItemsForOwner(collectionId: string, scope: SessionScope): Item[];
+	listItemsForPriceLabels(scope: SessionScope): Item[];
 	searchItemsForOwner(collectionId: string, filters: ItemFilters, scope: SessionScope): Item[];
 	markItemSold(itemId: string, sale: MarkItemSoldInput, scope: SessionScope): Item;
 	unmarkItemSold(itemId: string, scope: SessionScope): Item;
@@ -1855,6 +1856,26 @@ export function createCollectionRepository(
 				isFunctional: Boolean(item.is_functional),
 				images: listPublicItemImages(database, item.id)
 			};
+		},
+
+		/**
+		 * List every unsold item owned by the active user for printable price labels.
+		 *
+		 * @param {SessionScope} scope - Authenticated owner and tenant scope.
+		 * @returns {Item[]} Owner-scoped unsold items ordered by title.
+		 */
+		listItemsForPriceLabels(scope) {
+			return database
+				.prepare(
+					`SELECT ${ITEM_SELECT_COLUMNS}
+					 FROM items
+					 JOIN collections ON collections.id = items.collection_id AND collections.tenant_id = items.tenant_id
+					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+					 WHERE items.owner_id = ? AND items.tenant_id = ? AND items.sold_at IS NULL
+					 ORDER BY items.title COLLATE NOCASE ASC, items.id ASC`
+				)
+				.all(scope.userId, scope.tenantId)
+				.map((row) => mapItemRow(row as ItemRow));
 		},
 
 		listItemsForOwner(collectionId, scope) {

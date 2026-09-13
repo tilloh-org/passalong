@@ -2990,4 +2990,75 @@ describe('collection repository', () => {
 		// assume
 		expect(repository.listMarketDays(avery)).toEqual([]);
 	});
+
+	it('lists only the owner-scoped unsold items for price labels in title order', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const avery = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const firstCollection = repository.createCollection({ name: 'First collection' }, avery);
+		const secondCollection = repository.createCollection({ name: 'Second collection' }, avery);
+		const book = repository.createItem(
+			{
+				collectionId: secondCollection.id,
+				title: 'Book',
+				priceCents: 500,
+				category: 'books',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			avery
+		);
+		const lamp = repository.createItem(
+			{
+				collectionId: firstCollection.id,
+				title: 'Lamp',
+				priceCents: 1200,
+				category: 'home',
+				condition: 'fair',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			avery
+		);
+		const sold = repository.createItem(
+			{
+				collectionId: firstCollection.id,
+				title: 'Sold vase',
+				priceCents: 900,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			avery
+		);
+		repository.markItemSold(
+			sold.id,
+			{ channel: 'flea-market', soldAt: '2026-06-01T10:00:00.000Z', proceedsCents: 900 },
+			avery
+		);
+
+		// act
+		const labels = repository.listItemsForPriceLabels(avery);
+		const foreignLabels = repository.listItemsForPriceLabels({
+			userId: 'foreign-user',
+			tenantId: 'foreign-tenant'
+		});
+
+		// assume
+		expect(labels.map((item) => item.id)).toEqual([book.id, lamp.id]);
+		expect(labels.map((item) => item.title)).toEqual(['Book', 'Lamp']);
+		expect(foreignLabels).toEqual([]);
+	});
 });
