@@ -51,12 +51,14 @@
 								<h2>{label.item.title}</h2>
 								<span class="category">{t(`category.${label.item.category}`)}</span>
 							</div>
-							<div class="label-bottomline">
-								<p class="price">{formatPrice(label.item.priceCents)} €</p>
+							<div class="label-qr">
 								<img
 									src={label.qrCodeDataUrl}
 									alt={t('priceLabels.qrAlt', { name: label.item.title })}
 								/>
+							</div>
+							<div class="label-bottomline">
+								<p class="price">{formatPrice(label.item.priceCents)} €</p>
 							</div>
 						</article>
 					{/each}
@@ -205,6 +207,15 @@
 		align-items: flex-end;
 	}
 
+	.label-qr {
+		align-items: center;
+		display: flex;
+		flex: 1;
+		justify-content: center;
+		min-height: 3.5rem;
+		margin: 0.35rem;
+	}
+
 	.price {
 		color: var(--color-accent);
 		font-size: 1.25rem;
@@ -298,6 +309,7 @@
 			border-radius: 0;
 			box-shadow: none;
 			break-inside: avoid;
+			gap: 0;
 			min-height: 0;
 			padding: 4mm;
 		}
@@ -326,9 +338,18 @@
 			max-width: 100%;
 		}
 
-		.price-label img {
-			height: 11mm;
-			width: 11mm;
+		.label-qr {
+			margin: 2mm 1mm;
+			min-height: 0;
+		}
+
+		.label-qr img {
+			height: auto;
+			max-height: 100%;
+			max-width: 100%;
+			object-fit: contain;
+			padding: 0.5mm;
+			width: min(100%, 34mm);
 		}
 	}
 </style>
