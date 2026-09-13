@@ -6,112 +6,90 @@
 
 > Manage the things you no longer need — and give them a second home.
 
-passalong is a self-hosted, open-source app for **families and private sellers**
-to manage a collection of second-hand items they want to sell or give away.
-Catalog your stuff once (photos, price, condition, category), track where each
-item is listed and whether it has been sold — across flea markets, online
-marketplaces, or a simple hand-over to friends.
+passalong is a self-hosted, open-source app for families and private sellers.
+Keep a single collection of second-hand items, prepare a market day, share a
+reduced public stand page, and record what sold.
 
-`One man's trash, that's another man's come up` - Macklemore, Thrift Shop
+## What you can do
 
-**One collection. Many ways to pass it along.**
+- **Manage a collection** — items with photos, cover images, prices, categories,
+  conditions, reservations, and private notes
+- **Prepare a market day** — create and close market days, track stand fees and
+  expenses, print A4 QR-code price labels, and use the seller scan shortcut
+- **Share a public stand** — offer a login-free, reduced buyer view with search,
+  filters, item details, photos, favourites, and a stand location
+- **Track sales** — record sales by channel, view sale history, settlements, and
+  statistics for proceeds, categories, market days, and expenses
+- **Manage an instance safely** — first-run account creation, tenant- and
+  owner-scoped data, profiles, password recovery, backups, and additive data
+  export/import
+- **Use your language** — German and English UI from day one
 
-## Features
-
-- **Item collection** — photos (upload, cover image), price, category,
-  condition, internal notes
-- **Sale channels** — track per item where it is listed (market day, online
-  marketplace, shop, …) and its sale status
-- **Market day mode** — QR-code price tags, scan-to-sell, daily settlement,
-  stand fees (net calculation), expense tracking
-- **Public stand page** — a shareable, login-free page for buyers, with item
-  filter, wishlist and a map pin so buyers can find the booth
-- **Statistics & history** — earnings, per-category charts, filterable sales
-  history
-- **Multi-user** — profiles, avatars, per-family-member collections (multi-tenant:
-  one instance can serve family & friends)
-- **i18n** — German and English from day one
-
-## Technology
-
-- [SvelteKit](https://kit.svelte.dev) (TypeScript) — one project for UI, server
-  routes and API
-- SQLite — a single file database, no external service
-- Docker & docker-compose — one command to run it
-- Built to stay **lightweight and close to web standards**
-
-## Quick start (Docker)
+## Quick start with Docker
 
 ```bash
 git clone https://github.com/tilloh-org/passalong.git
 cd passalong
+cp .env.example .env
 docker compose up -d --build
-# open http://localhost:4242
 ```
 
-For unattended first installation, set the optional single-line
-`PASSALONG_BOOTSTRAP` value in `.env` before starting the container:
+Open [http://localhost:4242](http://localhost:4242). On an empty database,
+create the first account in the browser; it becomes the instance administrator.
+
+All `.env` values are optional. The defaults are suitable for a local install:
+
+```dotenv
+# Host port; default: 4242
+PASSALONG_PORT=4242
+
+# Set this when the app is served through HTTPS and a reverse proxy.
+# Use the public origin without a trailing slash.
+# PASSALONG_ORIGIN=https://passalong.example.com
+```
+
+### Unattended first setup
+
+Instead of browser registration, an optional one-line bootstrap manifest can
+provision accounts during startup:
 
 ```dotenv
 PASSALONG_BOOTSTRAP={"accounts":[{"tenantName":"Example household","username":"admin","displayName":"Example admin","password":"replace-with-a-unique-password","instanceAdmin":true}]}
 ```
 
-The value is a JSON object with an `accounts` array. Every account creates its
-own tenant in v1.0.0. On an empty database, exactly one account must set
-`instanceAdmin` to `true`. Provisioning runs after migrations and before the
-HTTP server accepts regular requests. It is atomic and create-only: later
-starts neither update nor delete existing tenants, accounts, passwords, or
-roles. An existing username must match the configured tenant, display name,
-instance-admin flag, and password, otherwise startup stops without writes.
+On an empty database, a non-empty manifest must create exactly one instance
+administrator; an empty `accounts` list makes no changes. On an existing
+database, it remains create-only: it can add only non-administrator accounts,
+while configured existing accounts must match their stored tenant, display name,
+role, and password exactly. Later starts never update or delete records.
+**Never commit `.env` or bootstrap credentials.** Keep the manifest private and
+remove it after first setup when it is no longer needed.
 
-Without a bootstrap manifest, or whenever the global account count is zero,
-passalong offers open first registration. The first successfully created
-account receives the instance-admin role. The password is stored as a salted,
-versioned scrypt hash; the browser receives a finite HttpOnly session cookie
-while only its hash is stored in SQLite. Later visits show the login form.
-Without an active session, a known collection URL cannot reveal collection data
-or internal notes.
+## Deploy behind a reverse proxy
 
-### Instance-admin password recovery
+Run passalong behind HTTPS with Caddy, Traefik, nginx, or a tunnel. Set
+`PASSALONG_ORIGIN` to the externally visible URL so SvelteKit can retain its
+same-origin form protection:
 
-The authenticated instance administrator can issue a single-use, one-hour
-password-reset secret in **Instanzverwaltung**. This is a normal, server-side
-authorized application action: the active session and the `instance_admin` role
-are checked for every request. Issuing a secret immediately revokes the target
-account's existing sessions. Only the secret's SHA-256 hash is persisted; copy
-the displayed secret once and transfer it through an appropriate private channel.
+```dotenv
+PASSALONG_ORIGIN=https://passalong.example.com
+```
 
-### Break-glass recovery
+The Docker volume `passalong-data` stores the SQLite database and uploaded
+media below `/data`. Protect and back up that volume as application data.
 
-Use the container helper only when no instance administrator can authenticate
-(for example, the singleton instance administrator is locked out). It provides
-the same one-time, hash-only reset flow and immediately revokes the target
-account's existing sessions:
+## Administration and recovery
+
+The instance administrator can create a single-use, one-hour password-reset
+secret in **Instance administration**. If no instance administrator can sign
+in, use the container helper:
 
 ```bash
 docker compose exec passalong node build/scripts/create-password-reset.js <username>
 ```
 
-Do not redirect the command output to persistent logs or shell history. The
-account holder opens the password-reset section on the login page, submits the
-username, secret, and a new password. A successful reset consumes the secret and
-creates a new session.
-
-Builds the image locally from the Dockerfile. Once the first release is
-published, a prebuilt image is available from GitHub Container Registry
-(`ghcr.io/tilloh-org/passalong:latest`) — then `docker compose up -d` is enough.
-
-Persistent data (SQLite database, uploaded images) lives in the named volume
-`passalong-data` (`/data` inside the container, media under `/data/media`).
-Uploaded item images are validated PNG, JPEG, or WebP files stored
-content-addressed under `PASSALONG_MEDIA_ROOT` (default `/data/media` in
-Docker); only their relative storage keys are persisted in SQLite. The upload
-body limit is raised to `BODY_SIZE_LIMIT: 6M` in Docker (the adapter's 512 KB
-default would reject images above 512 KB before the app can apply its own 5 MB
-limit). Images are
-served exclusively to tenant-authorized, authenticated sessions. When serving
-the app behind a reverse proxy, set `PASSALONG_ORIGIN` to its public origin so
-SvelteKit can keep its cross-site form protection enabled.
+The command prints a secret only once. Do not write it to persistent shell
+history or logs.
 
 ## Development
 
@@ -120,25 +98,21 @@ pnpm install
 pnpm dev
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+Before contributing, run the local checks:
 
-## Screenshots
+```bash
+pnpm lint
+pnpm check
+pnpm test
+pnpm build
+CI=1 pnpm test:e2e
+pnpm audit
+python3 .github/scripts/tests/test_release_flow.py
+```
 
-![Core Collection: Sammlung anlegen und Artikel erfassen](docs/screenshots/core-collection.png)
-
-## Documentation
-
-- [SECURITY.md](SECURITY.md) — reporting vulnerabilities & hardening
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
-
-## Roadmap
-
-- [-] v0.1 — core collection: SQLite collection/item model, price, category,
-  condition and internal notes are implemented; photo gallery and user sessions follow
-- [ ] v0.2 — channel & sale status, public stand view
-- [ ] v0.3 — market day mode (price tags, scan, settlement)
-- [ ] Backups, statistics, advanced i18n
-- See [CHANGELOG.md](CHANGELOG.md)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance,
+[SECURITY.md](SECURITY.md) for hardening and vulnerability reporting, and
+[CHANGELOG.md](CHANGELOG.md) for released changes.
 
 ## License
 
