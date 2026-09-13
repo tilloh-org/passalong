@@ -43,6 +43,10 @@ All `.env` values are optional. The defaults are suitable for a local install:
 # Host port; default: 4242
 PASSALONG_PORT=4242
 
+# Docker container name; default: passalong.
+# Give a second stack on the same Docker host a distinct name.
+# PASSALONG_CONTAINER_NAME=passalong-staging
+
 # Set this when the app is served through HTTPS and a reverse proxy.
 # Use the public origin without a trailing slash.
 # PASSALONG_ORIGIN=https://passalong.example.com
