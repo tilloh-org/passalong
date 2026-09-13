@@ -2088,6 +2088,10 @@ describe('collection repository', () => {
 		// act
 		const settlement = repository.getMarketDaySettlement(marketDay.id, owner);
 		const foreignSettlement = repository.getMarketDaySettlement(marketDay.id, blake);
+		const detailMarketDay = repository.getMarketDay(marketDay.id, owner);
+		const foreignDetailMarketDay = repository.getMarketDay(marketDay.id, blake);
+		const soldItems = repository.listSoldItemsForMarketDay(marketDay.id, owner);
+		const foreignSoldItems = repository.listSoldItemsForMarketDay(marketDay.id, blake);
 
 		// assume
 		expect(settlement).toMatchObject({
@@ -2106,6 +2110,10 @@ describe('collection repository', () => {
 			{ category: 'supplies', totalExpensesCents: 200 }
 		]);
 		expect(foreignSettlement).toBeNull();
+		expect(detailMarketDay).toMatchObject({ id: marketDay.id, name: 'May market' });
+		expect(foreignDetailMarketDay).toBeNull();
+		expect(soldItems.map((item) => item.id)).toEqual([book.id, vase.id]);
+		expect(foreignSoldItems).toEqual([]);
 	});
 	it('lists owner-scoped sales and filters them by channel, category and proceeds range', () => {
 		// arrange

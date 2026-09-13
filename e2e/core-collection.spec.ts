@@ -364,30 +364,19 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('statistics-trend').locator('.trend-column')).toHaveCount(1);
 		await expect(page.getByTestId('statistics-market-days')).toContainText(marketDayName);
 
-		// act — select the linked market day before inspecting its category breakdowns.
-		// This remains deterministic when a retried run already contains another active day.
+		// act — open the linked market day and inspect its dedicated detail statistics.
 		await page.getByTestId('nav-market-days-link').click();
-		const marketDayPicker = page
-			.getByTestId('settlement-list')
-			.locator('..')
-			.getByTestId(/settlement-picker-/)
-			.filter({ hasText: marketDayName });
-		await expect(marketDayPicker).toHaveCount(1);
-		await marketDayPicker.click();
-		const marketDaySettlement = page
-			.getByTestId('settlement-item')
-			.filter({ hasText: marketDayName });
-		await expect(
-			marketDaySettlement.locator('[data-testid^=settlement-proceeds-toggle-][role=group]')
-		).toBeVisible();
-		await expect(
-			marketDaySettlement.locator(
-				'[data-testid^="settlement-proceeds-"]:not([data-testid*="toggle"]).bar-list'
-			)
-		).toBeVisible();
-		await expect(
-			marketDaySettlement.locator('[data-testid^="settlement-sales-"]:not([data-testid*="toggle"])')
-		).toContainText('1x');
+		const marketDayCard = page.getByTestId('market-day-item').filter({ hasText: marketDayName });
+		await expect(marketDayCard).toHaveCount(1);
+		await marketDayCard.click();
+		await expect(page.getByTestId('market-day-detail-header')).toContainText(marketDayName);
+		await expect(page.getByTestId('market-day-proceeds-toggle')).toBeVisible();
+		await expect(page.getByTestId('market-day-proceeds-chart')).toBeVisible();
+		await expect(page.getByTestId('market-day-sales-chart')).toContainText('1x');
+		const marketDaySale = page.getByTestId('market-day-sale-item').filter({ hasText: 'Leselampe' });
+		await expect(marketDaySale).toHaveAttribute('href', /\/items\//);
+		await marketDaySale.click();
+		await expect(page).toHaveURL(/\/items\//);
 		await page.getByTestId('nav-statistics-link').click();
 
 		// act — restrict the statistics period to a range without activity

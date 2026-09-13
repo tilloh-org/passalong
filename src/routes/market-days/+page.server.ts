@@ -129,6 +129,18 @@ function parseMarketDayInput(formData: FormData): CreateMarketDayInput {
 	};
 }
 
+/**
+ * Accept only a local market-day detail path as a post-action return destination.
+ *
+ * @param {FormData} formData - The submitted form data.
+ * @param {string} fallback - Safe route used for absent or invalid destinations.
+ * @returns {string} A validated internal market-day route.
+ */
+function marketDayReturnTo(formData: FormData, fallback: string): string {
+	const returnTo = getFormText(formData, 'returnTo');
+	return /^\/market-days(?:\/[A-Za-z0-9-]+)?$/.test(returnTo) ? returnTo : fallback;
+}
+
 export const actions: Actions = {
 	createMarketDay: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -164,7 +176,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.badRequest, { marketDayError: marketDayInputError });
 		}
-		redirect(httpStatus.seeOther, '/market-days');
+		redirect(httpStatus.seeOther, marketDayReturnTo(formData, '/market-days'));
 	},
 	deleteMarketDay: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -180,7 +192,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.notFound, { marketDayError: 'Markttag nicht gefunden.' });
 		}
-		redirect(httpStatus.seeOther, '/market-days');
+		redirect(httpStatus.seeOther, marketDayReturnTo(formData, '/market-days'));
 	},
 	closeMarketDay: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -196,7 +208,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.notFound, { marketDayError: 'Markttag nicht gefunden.' });
 		}
-		redirect(httpStatus.seeOther, '/market-days');
+		redirect(httpStatus.seeOther, marketDayReturnTo(formData, '/market-days'));
 	},
 	reopenMarketDay: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -212,7 +224,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.notFound, { marketDayError: 'Markttag nicht gefunden.' });
 		}
-		redirect(httpStatus.seeOther, '/market-days');
+		redirect(httpStatus.seeOther, marketDayReturnTo(formData, '/market-days'));
 	},
 	createExpense: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -243,7 +255,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.badRequest, { expenseError: expenseError.invalid });
 		}
-		redirect(httpStatus.seeOther, '/market-days');
+		redirect(httpStatus.seeOther, marketDayReturnTo(formData, '/market-days'));
 	},
 	updateExpense: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -275,7 +287,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.badRequest, { expenseError: expenseError.invalid });
 		}
-		redirect(httpStatus.seeOther, '/market-days');
+		redirect(httpStatus.seeOther, marketDayReturnTo(formData, '/market-days'));
 	},
 	deleteExpense: async ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
@@ -291,6 +303,6 @@ export const actions: Actions = {
 		} catch {
 			return fail(httpStatus.notFound, { expenseError: expenseError.notFound });
 		}
-		redirect(httpStatus.seeOther, '/market-days');
+		redirect(httpStatus.seeOther, marketDayReturnTo(formData, '/market-days'));
 	}
 };

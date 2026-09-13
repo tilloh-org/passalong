@@ -362,6 +362,8 @@ export interface CollectionRepository {
 	setProfileAvatar(scope: SessionScope, avatarStorageKey: string | null): UserProfile;
 	createItem(input: CreateItemInput, scope: SessionScope): Item;
 	listMarketDays(scope: SessionScope): MarketDay[];
+	getMarketDay(marketDayId: string, scope: SessionScope): MarketDay | null;
+	listSoldItemsForMarketDay(marketDayId: string, scope: SessionScope): Item[];
 	createMarketDay(input: CreateMarketDayInput, scope: SessionScope): MarketDay;
 	updateMarketDay(marketDayId: string, input: CreateMarketDayInput, scope: SessionScope): MarketDay;
 	deleteMarketDay(marketDayId: string, scope: SessionScope): void;
@@ -1284,6 +1286,27 @@ export function createCollectionRepository(
 					)
 					.get(marketDayId, scope.tenantId) as MarketDayRow
 			);
+		},
+
+		getMarketDay(marketDayId, scope) {
+			const row = database
+				.prepare(
+					'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+				)
+				.get(marketDayId, scope.userId, scope.tenantId) as MarketDayRow | undefined;
+			return row ? mapMarketDayRow(row) : null;
+		},
+
+		listSoldItemsForMarketDay(marketDayId, scope) {
+			return database
+				.prepare(
+					`SELECT ${ITEM_SELECT_COLUMNS}
+					 FROM items
+					 WHERE items.market_day_id = ? AND items.owner_id = ? AND items.tenant_id = ? AND items.sold_at IS NOT NULL
+					 ORDER BY items.sold_at DESC, items.id DESC`
+				)
+				.all(marketDayId, scope.userId, scope.tenantId)
+				.map((row) => mapItemRow(row as ItemRow));
 		},
 
 		createExpense(input, scope) {
