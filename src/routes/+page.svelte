@@ -653,6 +653,37 @@
 		resize: vertical;
 	}
 
+	.item-form select {
+		background-color: var(--color-input);
+		background-image:
+			var(--select-form-arrow),
+			linear-gradient(135deg, var(--color-surface), var(--color-surface-strong));
+		background-position:
+			right var(--select-arrow-inset) center,
+			center;
+		background-repeat: no-repeat;
+		background-size:
+			var(--select-form-arrow-size),
+			100% 100%;
+		border-color: var(--color-border);
+		box-shadow:
+			inset 0 1px 0 var(--glass),
+			0 1px 2px var(--color-border);
+		font-weight: 600;
+		min-height: 2.85rem;
+		padding-right: calc(var(--select-arrow-inset) + var(--select-form-arrow-size) + 0.7rem);
+	}
+
+	.item-form select:hover:not(:disabled) {
+		background-image:
+			var(--select-form-arrow),
+			linear-gradient(135deg, var(--color-surface), var(--color-accent-soft));
+		border-color: var(--color-ice);
+		box-shadow:
+			inset 0 1px 0 var(--glass),
+			0 4px 12px var(--color-accent-soft);
+	}
+
 	button {
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
