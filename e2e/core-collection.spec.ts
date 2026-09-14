@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import QRCode from 'qrcode';
 import { expect, test } from '@playwright/test';
 
 const coreCollectionFlowTimeoutMs = 60_000;
@@ -122,6 +123,116 @@ test.describe('Core collection', () => {
 		await page.getByRole('link', { name: 'Scannen' }).click();
 		await expect(page).toHaveURL(/\/scan/);
 		await expect(page.getByRole('heading', { name: 'Artikel scannen' })).toBeVisible();
+		await expect(page.getByLabel('QR-Code-Foto auswählen')).toHaveAttribute('accept', 'image/*');
+		await expect(page.getByLabel('QR-Code-Foto auswählen')).toHaveAttribute(
+			'capture',
+			'environment'
+		);
+		await page.context().grantPermissions(['camera'], { origin: new URL(page.url()).origin });
+		await page.getByRole('button', { name: 'Kamera starten' }).click();
+		await expect(
+			page.getByText('Kamera aktiv — halte den QR-Code gut sichtbar ins Bild.')
+		).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Kamera stoppen' })).toBeEnabled();
+		await expect
+			.poll(() =>
+				page
+					.locator('video[aria-label="Kameravorschau zum Scannen von QR-Codes"]')
+					.evaluate((element) => {
+						const video = element as HTMLVideoElement;
+						if (!(video.srcObject instanceof MediaStream)) {
+							return false;
+						}
+						return (
+							!video.paused &&
+							video.srcObject.getTracks().every((track) => track.readyState === 'live')
+						);
+					})
+			)
+			.toBe(true);
+		await page
+			.locator('video[aria-label="Kameravorschau zum Scannen von QR-Codes"]')
+			.evaluate((element) => {
+				(window as typeof window & { normalCameraStream?: MediaStream }).normalCameraStream = (
+					element as HTMLVideoElement
+				).srcObject as MediaStream;
+			});
+		await page.getByRole('button', { name: 'Kamera stoppen' }).click();
+		await expect
+			.poll(() =>
+				page
+					.locator('video[aria-label="Kameravorschau zum Scannen von QR-Codes"]')
+					.evaluate((element) => (element as HTMLVideoElement).srcObject === null)
+			)
+			.toBe(true);
+		await expect
+			.poll(() =>
+				page.evaluate(() => {
+					const browserWindow = window as typeof window & { normalCameraStream?: MediaStream };
+					return browserWindow.normalCameraStream
+						?.getTracks()
+						.every((track) => track.readyState === 'ended');
+				})
+			)
+			.toBe(true);
+		await expect(
+			page.getByText('Starte die Kamera oder wähle ein Foto mit einem QR-Code aus.')
+		).toBeVisible();
+		await page.evaluate(() => {
+			type DelayedCameraState = {
+				originalGetUserMedia: typeof navigator.mediaDevices.getUserMedia;
+				resolve: ((stream: MediaStream) => void) | null;
+				stream: MediaStream | null;
+			};
+			const browserWindow = window as typeof window & { delayedCameraState?: DelayedCameraState };
+			browserWindow.delayedCameraState = {
+				originalGetUserMedia: navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices),
+				resolve: null,
+				stream: null
+			};
+			navigator.mediaDevices.getUserMedia = () =>
+				new Promise((resolve) => {
+					browserWindow.delayedCameraState!.resolve = resolve;
+				});
+		});
+		await page.getByRole('button', { name: 'Kamera starten' }).click();
+		await expect(page.getByText('Die Kamera wird gestartet…')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Kamera stoppen' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Kamera stoppen' }).click();
+		await page.evaluate(async () => {
+			const browserWindow = window as typeof window & {
+				delayedCameraState: {
+					originalGetUserMedia: typeof navigator.mediaDevices.getUserMedia;
+					resolve: (stream: MediaStream) => void;
+					stream: MediaStream | null;
+				};
+			};
+			const delayedCameraState = browserWindow.delayedCameraState;
+			const stream = await delayedCameraState.originalGetUserMedia({ audio: false, video: true });
+			delayedCameraState.stream = stream;
+			delayedCameraState.resolve(stream);
+			navigator.mediaDevices.getUserMedia = delayedCameraState.originalGetUserMedia;
+		});
+		await expect
+			.poll(() =>
+				page.evaluate(() => {
+					const browserWindow = window as typeof window & {
+						delayedCameraState?: { stream: MediaStream | null };
+					};
+					return browserWindow.delayedCameraState?.stream
+						?.getTracks()
+						.every((track) => track.readyState === 'ended');
+				})
+			)
+			.toBe(true);
+		const scanUploadPayload = await QRCode.toBuffer('/q/scan-upload-test');
+		await page.getByLabel('QR-Code-Foto auswählen').setInputFiles({
+			name: 'scan-upload.png',
+			mimeType: 'image/png',
+			buffer: scanUploadPayload
+		});
+		await expect(page).toHaveURL(/\/q\/scan-upload-test/);
+		await page.goto('/');
 		await page.getByRole('link', { name: '+ Neu' }).click();
 		await expect(
 			page
