@@ -567,6 +567,49 @@
 		text-transform: none;
 	}
 
+	label.checkbox input[type='checkbox'] {
+		appearance: none;
+		background-color: var(--color-surface-strong);
+		background-image: none;
+		background-position: center;
+		background-repeat: no-repeat;
+		background-size: 0.8rem;
+		border: 1px solid var(--color-border);
+		border-radius: 0.3rem;
+		box-shadow: none;
+		cursor: pointer;
+		height: 1.05rem;
+		margin: 0;
+		padding: 0;
+		width: 1.05rem;
+	}
+
+	label.checkbox input[type='checkbox']:focus-visible {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
+	}
+
+	label.checkbox:has(input[name='isComplete']:checked) span {
+		color: var(--color-ok);
+	}
+
+	label.checkbox:has(input[name='isFunctional']:checked) span {
+		color: var(--color-info, #3884ff);
+	}
+
+	label.checkbox:has(input[name='isComplete']:checked) input[type='checkbox'] {
+		background-color: var(--color-ok);
+		background-image: var(--checkbox-checkmark);
+		border-color: var(--color-ok);
+	}
+
+	label.checkbox:has(input[name='isFunctional']:checked) input[type='checkbox'] {
+		background-color: var(--color-info, #3884ff);
+		background-image: var(--checkbox-checkmark);
+		border-color: var(--color-info, #3884ff);
+	}
+
 	label span {
 		color: var(--color-text-muted);
 		font-size: 0.72rem;
