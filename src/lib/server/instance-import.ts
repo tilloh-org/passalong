@@ -56,7 +56,12 @@ export interface ImportReportMedia {
 /** Entity counts in the validation report. */
 export type ImportReportCounts = ExchangeCounts;
 
-/** Complete validation report for an instance archive. */
+/**
+ * Complete validation report for an instance archive.
+ *
+ * Deliberately carries **no** logical archive content: the report is rendered in the browser, so it
+ * must never transport stored password hashes or the full user data. Activation re-reads the archive.
+ */
 export interface InstanceImportReport {
 	errors: string[];
 	warnings: string[];
@@ -64,7 +69,6 @@ export interface InstanceImportReport {
 	media: ImportReportMedia;
 	users: ImportReportUser[];
 	publicStandPages: ImportReportStandPage[];
-	data: ExchangeData | null;
 }
 
 /** Inputs for an instance import. */
@@ -98,8 +102,7 @@ export function validateInstanceArchive(archive: Buffer): InstanceImportReport {
 		counts: zeroCounts(),
 		media: { files: 0, bytes: 0, checksumsMatch: false },
 		users: [],
-		publicStandPages: [],
-		data: null
+		publicStandPages: []
 	};
 
 	if (!hasValidEndOfCentralDirectory(archive)) {
@@ -160,7 +163,6 @@ export function validateInstanceArchive(archive: Buffer): InstanceImportReport {
 
 	validateUsers(data.users, entries, report);
 	validateManifestCounts(manifest.counts, report, data.users, manifest.files);
-	report.data = report.errors.length === 0 ? data : null;
 	return report;
 }
 
@@ -179,12 +181,20 @@ export async function importInstanceArchive(
 	options: ImportInstanceOptions
 ): Promise<ImportInstanceOutcome> {
 	const report = validateInstanceArchive(options.archive);
-	if (report.errors.length > 0 || !report.data) {
+	if (report.errors.length > 0) {
+		return { imported: false, report };
+	}
+
+	// The report carries no content, so read the archive again here; validation already proved it is
+	// safe to parse and internally consistent.
+	const validatedData = readArchiveData(options.archive);
+	if (!validatedData) {
+		report.errors.push('The archive content could not be read.');
 		return { imported: false, report };
 	}
 
 	const normalizedAdmin = options.instanceAdminUsername.trim().toLocaleLowerCase();
-	const adminUser = report.data.users.find(
+	const adminUser = validatedData.users.find(
 		(user) => user.username.trim().toLocaleLowerCase() === normalizedAdmin
 	);
 	if (!adminUser) {
@@ -211,7 +221,7 @@ export async function importInstanceArchive(
 			database.exec('DELETE FROM sessions');
 			database.exec('DELETE FROM password_resets');
 
-			for (const user of report.data.users) {
+			for (const user of validatedData.users) {
 				writeUser(
 					database,
 					options,
@@ -238,6 +248,25 @@ export async function importInstanceArchive(
 	}
 
 	return { imported: true, report };
+}
+
+/**
+ * Read the logical data from an archive that already passed validation.
+ *
+ * @param {Buffer} archive - Archive bytes known to be valid.
+ * @returns {ExchangeData | null} Parsed logical data, or null when it cannot be read.
+ */
+function readArchiveData(archive: Buffer): ExchangeData | null {
+	const entry = parseZip(archive).get(DATA_ENTRY_NAME);
+	if (!entry) {
+		return null;
+	}
+	try {
+		const parsed = JSON.parse(readEntry(archive, entry)) as { users?: unknown };
+		return Array.isArray(parsed.users) ? { users: parsed.users as ExchangeUser[] } : null;
+	} catch {
+		return null;
+	}
 }
 
 /**
