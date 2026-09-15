@@ -225,4 +225,26 @@ describe('icon usage across the application', () => {
 			);
 		}
 	});
+
+	it('keeps the registry free of icons the app never renders', () => {
+		// act
+		const usedNames = new Set<string>();
+		for (const source of Object.values(componentSources)) {
+			// `name="x"` and `name={'x'}` forms, plus the branches of `name={a ? 'b' : 'c'}`.
+			for (const match of source.matchAll(/\bname=(?:"([a-z0-9-]+)"|\{([^}]*)\})/g)) {
+				if (match[1]) {
+					usedNames.add(match[1]);
+				}
+				if (match[2]) {
+					for (const branch of match[2].matchAll(/'([a-z0-9-]+)'/g)) {
+						usedNames.add(branch[1]);
+					}
+				}
+			}
+		}
+
+		// assume — an unused entry still ships its geometry in the sprite on every page load
+		const unused = iconNames.filter((name) => !usedNames.has(name));
+		expect(unused).toEqual([]);
+	});
 });

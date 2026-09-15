@@ -6,6 +6,9 @@
  * by `scripts/build-icon-sprite.mjs`. This list is the type-level contract:
  * only names declared here are referenceable from components, and a unit test
  * asserts that every declared name resolves to a real sprite symbol.
+ *
+ * Keep it to icons the app actually renders — an unused entry still ships its
+ * geometry in the inline sprite on every page load.
  */
 export const iconNames = [
 	// navigation and header
@@ -31,34 +34,24 @@ export const iconNames = [
 	'box',
 	'wallet',
 	'check',
-	'circle-check',
 	'x',
-	'circle-x',
 	'trash',
 	'edit',
 	'bookmark',
-	'lock-open',
 	'filter',
 	'search',
 	'heart',
 	'heart-filled',
-	'shopping-bag',
-	'clock',
 	'arrow-left',
-	'arrow-right',
 	'rotate',
-	'refresh',
 	'download',
 	'upload',
-	'copy',
 	'external-link',
 	'link',
 	'printer',
 	'qrcode',
 	'note',
-	'eye',
 	'alert-triangle',
-	'info-circle',
 	'settings'
 ] as const;
 
