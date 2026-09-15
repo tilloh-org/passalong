@@ -212,7 +212,7 @@ const de: Record<string, string> = {
 	'profile.adminAreaHint':
 		'Technische Verwaltung der Instanz: Passwort-Reset-Codes, Backups und Restore.',
 	'profile.goToInstanceAdmin': 'Zur Instanzverwaltung',
-	'profile.chooseBackupFile': '📦 Backup-Datei auswählen',
+	'profile.chooseBackupFile': 'Backup-Datei auswählen',
 	'admin.title': 'Instanzverwaltung',
 	'admin.eyebrow': 'Technische Verwaltung',
 	'admin.passwordResetIntro':
@@ -598,7 +598,7 @@ const en: Record<string, string> = {
 	'profile.adminAreaHint':
 		'Technical administration of the instance: password reset codes, backups and restore.',
 	'profile.goToInstanceAdmin': 'Go to instance administration',
-	'profile.chooseBackupFile': '📦 Choose backup file',
+	'profile.chooseBackupFile': 'Choose backup file',
 	'admin.title': 'Instance administration',
 	'admin.eyebrow': 'Technical administration',
 	'admin.passwordResetIntro':

@@ -1,5 +1,7 @@
 # Vendored icon source
 
+Upstream: **Tabler Icons v3.46.0** (`@tabler/icons`), MIT licensed.
+
 `tabler-sprite.svg` is the Tabler icon sprite copied from the Marktbude app
 (`homelab/rosi/flohmarkt/app/static/vendor/tabler-sprite.svg`) so passalong uses
 the same icon vocabulary. Tabler icons are MIT licensed:
@@ -35,3 +37,8 @@ unmodified outline/filled SVG from the Tabler icon set.
 after changing the registry:
 
     node scripts/build-icon-sprite.mjs
+
+The script emits multi-line path attributes; the committed `src/app.html` is
+Prettier-formatted. Run Prettier afterwards, otherwise `pnpm lint` reports a diff:
+
+    node scripts/build-icon-sprite.mjs && pnpm exec prettier --write src/app.html
