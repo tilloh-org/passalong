@@ -1,8 +1,167 @@
-import { describe, expect, it } from 'vitest';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Buffer } from 'node:buffer';
+import Database from 'better-sqlite3';
+import { afterEach, describe, expect, it } from 'vitest';
 import { buildZip } from '$lib/server/backup';
+import { createCollectionRepository } from '$lib/server/collection-repository';
 import { DATA_ENTRY_NAME } from '$lib/server/exchange-format';
 import { fixtureArchive, fixtureUser } from '$lib/server/exchange-fixture.test-helper';
-import { validateInstanceArchive } from '$lib/server/instance-import';
+import { importInstanceArchive, validateInstanceArchive } from '$lib/server/instance-import';
+
+const temporaryDirectories: string[] = [];
+
+afterEach(() => {
+	for (const directory of temporaryDirectories) {
+		rmSync(directory, { force: true, recursive: true });
+	}
+	temporaryDirectories.length = 0;
+});
+
+/**
+ * Count tenants and users in a database file.
+ *
+ * @param {string} databasePath - Database file to inspect.
+ * @returns {{ tenants: number; users: number }} Row counts.
+ */
+function countTenantsAndUsers(databasePath: string): { tenants: number; users: number } {
+	const database = new Database(databasePath, { readonly: true });
+	const tenants = (
+		database.prepare('SELECT COUNT(*) AS count FROM tenants').get() as { count: number }
+	).count;
+	const users = (database.prepare('SELECT COUNT(*) AS count FROM users').get() as { count: number })
+		.count;
+	database.close();
+	return { tenants, users };
+}
+
+/**
+ * Count the imported business records in a database file.
+ *
+ * @param {string} databasePath - Database file to inspect.
+ * @returns {{ collections: number; items: number; images: number; marketDays: number; expenses: number }} Row counts.
+ */
+function countImportedRecords(databasePath: string): {
+	collections: number;
+	items: number;
+	images: number;
+	marketDays: number;
+	expenses: number;
+} {
+	const database = new Database(databasePath, { readonly: true });
+	const countOf = (table: string): number =>
+		(database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count;
+	const counts = {
+		collections: countOf('collections'),
+		items: countOf('items'),
+		images: countOf('item_images'),
+		marketDays: countOf('market_days'),
+		expenses: countOf('expenses')
+	};
+	database.close();
+	return counts;
+}
+
+/**
+ * Inspect tenant isolation of the imported data.
+ *
+ * @param {string} databasePath - Database file to inspect.
+ * @returns {{ crossTenantReferences: number; itemsWithOwnerMismatch: number; tenantsWithoutOwner: number }} Isolation findings.
+ */
+function inspectImportedTenantIsolation(databasePath: string): {
+	crossTenantReferences: number;
+	itemsWithOwnerMismatch: number;
+	tenantsWithoutOwner: number;
+} {
+	const database = new Database(databasePath, { readonly: true });
+	const crossTenantReferences = (
+		database
+			.prepare(
+				`SELECT COUNT(*) AS count FROM items
+				 JOIN collections ON collections.id = items.collection_id
+				 WHERE items.tenant_id != collections.tenant_id`
+			)
+			.get() as { count: number }
+	).count;
+	const itemsWithOwnerMismatch = (
+		database
+			.prepare(
+				`SELECT COUNT(*) AS count FROM items
+				 JOIN collections ON collections.id = items.collection_id
+				 WHERE items.owner_id != collections.owner_id`
+			)
+			.get() as { count: number }
+	).count;
+	const tenantsWithoutOwner = (
+		database
+			.prepare(
+				`SELECT COUNT(*) AS count FROM tenants
+				 WHERE NOT EXISTS (SELECT 1 FROM users WHERE users.tenant_id = tenants.id)`
+			)
+			.get() as { count: number }
+	).count;
+	database.close();
+	return { crossTenantReferences, itemsWithOwnerMismatch, tenantsWithoutOwner };
+}
+
+/**
+ * Read the stored storage key of every imported item image.
+ *
+ * @param {string} databasePath - Database file to inspect.
+ * @returns {Array<{ id: string; storageKey: string }>} Image rows.
+ */
+function readImportedImageKeys(databasePath: string): Array<{ id: string; storageKey: string }> {
+	const database = new Database(databasePath, { readonly: true });
+	const rows = database.prepare('SELECT id, storage_key FROM item_images').all() as Array<{
+		id: string;
+		storage_key: string;
+	}>;
+	database.close();
+	return rows.map((row) => ({ id: row.id, storageKey: row.storage_key }));
+}
+
+/**
+ * List the usernames that hold the instance admin role.
+ *
+ * @param {string} databasePath - Database file to inspect.
+ * @returns {string[]} Admin usernames, sorted.
+ */
+function listImportedAdminUsernames(databasePath: string): string[] {
+	const database = new Database(databasePath, { readonly: true });
+	const rows = database
+		.prepare(
+			`SELECT users.username FROM instance_roles
+			 JOIN users ON users.id = instance_roles.user_id
+			 WHERE instance_roles.role = 'instance_admin'`
+		)
+		.all() as Array<{ username: string }>;
+	database.close();
+	return rows.map((row) => row.username).sort();
+}
+
+/**
+ * Read the security-relevant fields of one imported account.
+ *
+ * @param {string} databasePath - Database file to inspect.
+ * @param {string} username - Account username.
+ * @returns {{ passwordHash: string | null; passwordResetRequired: boolean } | null} Account state.
+ */
+function readImportedAccount(
+	databasePath: string,
+	username: string
+): { passwordHash: string | null; passwordResetRequired: boolean } | null {
+	const database = new Database(databasePath, { readonly: true });
+	const row = database
+		.prepare(
+			'SELECT password_hash, password_reset_required FROM users WHERE username = ? COLLATE NOCASE'
+		)
+		.get(username) as { password_hash: string | null; password_reset_required: number } | undefined;
+	database.close();
+	return row
+		? { passwordHash: row.password_hash, passwordResetRequired: row.password_reset_required === 1 }
+		: null;
+}
 
 describe('instance import validation', () => {
 	it('reports every entity per user together with expected counts', () => {
@@ -268,4 +427,376 @@ describe('instance import validation', () => {
 		// assume
 		expect(archive.equals(before)).toBe(true);
 	});
+});
+
+describe('instance import activation', () => {
+	it('creates exactly one tenant per source user', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([
+			fixtureUser({ sourceId: 'u1', username: 'avery', items: 2 }),
+			fixtureUser({ sourceId: 'u2', username: 'blake', items: 3 })
+		]);
+
+		// act
+		const outcome = await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		expect(outcome.imported).toBe(true);
+		const counts = countTenantsAndUsers(databasePath);
+		expect(counts.tenants).toBe(2);
+		expect(counts.users).toBe(2);
+	});
+
+	it('assigns every imported record to the tenant of its source user', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([
+			fixtureUser({ sourceId: 'u1', username: 'avery', items: 2 }),
+			fixtureUser({ sourceId: 'u2', username: 'blake', items: 3 })
+		]);
+
+		// act
+		await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		const inspected = inspectImportedTenantIsolation(databasePath);
+		expect(inspected.crossTenantReferences).toBe(0);
+		expect(inspected.itemsWithOwnerMismatch).toBe(0);
+		expect(inspected.tenantsWithoutOwner).toBe(0);
+	});
+
+	it('imports items, market days, expenses and images under the right owner', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([fixtureUser({ sourceId: 'u1', username: 'avery', items: 2 })]);
+
+		// act
+		await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		const totals = countImportedRecords(databasePath);
+		expect(totals.collections).toBe(1);
+		expect(totals.items).toBe(2);
+		expect(totals.images).toBe(2);
+		expect(totals.marketDays).toBe(1);
+		expect(totals.expenses).toBe(1);
+	});
+
+	it('writes the imported media files to the media root', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([fixtureUser({ sourceId: 'u1', username: 'avery', items: 2 })]);
+
+		// act
+		await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		const keys = readImportedImageKeys(databasePath).map((row) => row.storageKey);
+		expect(keys).toHaveLength(2);
+		for (const key of keys) {
+			expect(existsSync(join(mediaRoot, key))).toBe(true);
+		}
+	});
+
+	it('gives the selected user the instance admin role and nobody else', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([
+			fixtureUser({ sourceId: 'u1', username: 'avery' }),
+			fixtureUser({ sourceId: 'u2', username: 'blake' })
+		]);
+
+		// act
+		await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		const admins = listImportedAdminUsernames(databasePath);
+		expect(admins).toEqual(['avery']);
+	});
+
+	it('refuses to activate when the selected admin is not part of the archive', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([fixtureUser({ sourceId: 'u1', username: 'avery' })]);
+
+		// act
+		const outcome = await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'nobody',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		expect(outcome.imported).toBe(false);
+		expect(countImportedRecords(databasePath).items).toBe(0);
+	});
+
+	it('leaves the instance untouched when the archive fails validation', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+
+		// act
+		const outcome = await importInstanceArchive({
+			archive: Buffer.from('definitely not a zip'),
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		expect(outcome.imported).toBe(false);
+		expect(countImportedRecords(databasePath).items).toBe(0);
+	});
+
+	it('rolls the whole import back when a write fails midway', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const broken = fixtureUser({ sourceId: 'u1', username: 'avery', items: 1 });
+		broken.collections[0].items[0].category = 'decor';
+		const archive = fixtureArchive([broken]);
+
+		// act — the duplicate collection name is injected through a second identical user id set
+		const outcome = await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'short',
+			validatePassword: () => {
+				throw new Error('password rejected');
+			}
+		});
+
+		// assume
+		expect(outcome.imported).toBe(false);
+		expect(countImportedRecords(databasePath).collections).toBe(0);
+	});
+
+	it('sets a new password for the selected admin instead of trusting the imported hash', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([
+			fixtureUser({
+				sourceId: 'u1',
+				username: 'avery',
+				passwordHash: 'pbkdf2:sha256:600000$abc$def'
+			})
+		]);
+
+		// act
+		await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		const admin = readImportedAccount(databasePath, 'avery');
+		expect(admin?.passwordResetRequired).toBe(false);
+		expect(admin?.passwordHash).not.toContain('pbkdf2');
+		expect(admin?.passwordHash?.startsWith('scrypt')).toBe(true);
+	});
+
+	it('marks other users with an unusable hash for a password reset', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([
+			fixtureUser({ sourceId: 'u1', username: 'avery', passwordHash: null }),
+			fixtureUser({
+				sourceId: 'u2',
+				username: 'blake',
+				passwordHash: 'pbkdf2:sha256:600000$abc$def'
+			})
+		]);
+
+		// act
+		await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		expect(readImportedAccount(databasePath, 'blake')?.passwordResetRequired).toBe(true);
+	});
+
+	it('refuses to import into an instance that already has an instance administrator', async () => {
+		// arrange — the schema allows exactly one instance admin, so a second import must be refused
+		// rather than silently produce two.
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		const repository = createCollectionRepository({ databasePath });
+		const scope = repository.createInitialAdmin({
+			username: 'existing',
+			displayName: 'Existing',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		repository.createSessionForUser(scope, 'existing-token-hash');
+
+		// act
+		const outcome = await importInstanceArchive({
+			archive: fixtureArchive([fixtureUser({ sourceId: 'u1', username: 'avery' })]),
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume — refused, rolled back, and the existing session survives untouched.
+		expect(outcome.imported).toBe(false);
+		expect(listImportedAdminUsernames(databasePath)).toEqual(['existing']);
+		expect(repository.getSession('existing-token-hash')).not.toBeNull();
+		expect(countImportedRecords(databasePath).items).toBe(0);
+	});
+
+	it('reports the imported counts and the users in the outcome', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([
+			fixtureUser({ sourceId: 'u1', username: 'avery', items: 2 }),
+			fixtureUser({ sourceId: 'u2', username: 'blake', items: 1 })
+		]);
+
+		// act
+		const outcome = await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'blake',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume
+		expect(outcome.imported).toBe(true);
+		if (outcome.imported) {
+			expect(outcome.report.counts.items).toBe(3);
+			expect(outcome.report.users.map((user) => user.username).sort()).toEqual(['avery', 'blake']);
+		}
+	});
+});
+
+it('clears sessions and reset tokens that existed before the import', async () => {
+	// arrange — seed a session and a reset token directly, on a database without any admin so the
+	// singleton instance-admin guard does not apply.
+	const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+	temporaryDirectories.push(workspace);
+	const databasePath = join(workspace, 'app.sqlite');
+	const mediaRoot = join(workspace, 'media');
+	createCollectionRepository({ databasePath });
+	const seed = new Database(databasePath);
+	seed.exec(`
+			INSERT INTO tenants (id, name, created_at) VALUES ('t-seed', 'Seed', '2026-09-15T00:00:00.000Z');
+			INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at)
+				VALUES ('u-seed', 't-seed', 'seed', 'Seed', 'scrypt$s$k', '2026-09-15T00:00:00.000Z');
+			INSERT INTO sessions (id, user_id, tenant_id, token_hash, expires_at, created_at)
+				VALUES ('s-seed', 'u-seed', 't-seed', 'seed-token-hash', '2099-01-01T00:00:00.000Z', '2026-09-15T00:00:00.000Z');
+			INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at)
+				VALUES ('r-seed', 'u-seed', 't-seed', 'seed-reset-hash', '2099-01-01T00:00:00.000Z', '2026-09-15T00:00:00.000Z');
+		`);
+	seed.close();
+	const repository = createCollectionRepository({ databasePath });
+	const archive = fixtureArchive([fixtureUser({ sourceId: 'u1', username: 'avery' })]);
+
+	// act
+	const outcome = await importInstanceArchive({
+		archive,
+		databasePath,
+		mediaRoot,
+		instanceAdminUsername: 'avery',
+		adminPassword: 'a-freshly-chosen-passphrase'
+	});
+
+	// assume
+	expect(outcome.imported).toBe(true);
+	expect(repository.getSession('seed-token-hash')).toBeNull();
+	const check = new Database(databasePath, { readonly: true });
+	const resets = (
+		check.prepare('SELECT COUNT(*) AS count FROM password_resets').get() as { count: number }
+	).count;
+	check.close();
+	expect(resets).toBe(0);
 });

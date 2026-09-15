@@ -38,6 +38,35 @@
 
 ---
 
+## Decisions taken (2026-09-15, Tim)
+
+1. **No maintenance mode in this slice.** The import runs as an admin-only action; concurrent
+   writers are accepted for now. This is a documented deviation from contract l. 452 ("Import und
+   Restore laufen im Wartungsmodus"). Follow-up slice if it proves necessary.
+2. **No generation swap.** The import writes into the live database inside a single transaction with
+   rollback instead of building a separate staging generation. Simpler, no double storage; the
+   staging/atomic-generation language of contract l. 450–462 is therefore not literally met.
+   Consequences to keep explicit: no pre-import full backup is produced by this path, and a failure
+   _inside_ the transaction rolls back cleanly while a crash _after_ commit has no automatic
+   revert.
+3. **Media are written during the transaction and cleaned up on rollback**; the database remains the
+   single point of truth for whether an import counts as activated.
+
+## Blocker found: there is no publication flag
+
+The contract requires per-user import of the "öffentlicher Standseitenstatus" and step 10 of the
+cutover note ("Jede zuvor öffentliche Standseite wird nach erfolgreicher Aktivierung automatisch
+veröffentlicht"). The code has **no** such state: `collections` has only `id, tenant_id, owner_id,
+name, stand_intro, created_at`, and `getPublicStandView` serves any collection whose id is known —
+every collection is public by construction. There is nothing to import or republish.
+
+Consequence for this slice: the `isPublished` field stays in the exchange format (so archives carry
+it and no information is lost), validation reports it, and activation ignores it with a warning while
+the product has no visibility model. Introducing a publication flag is a separate product decision,
+not an import detail.
+
+---
+
 ## Tasks
 
 ### Task 1 — Define and document the exchange format

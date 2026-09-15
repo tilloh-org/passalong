@@ -1,14 +1,18 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import Database from 'better-sqlite3';
 import { hasValidEndOfCentralDirectory, parseZip } from '$lib/server/backup';
 import { assertArchiveWithinLimits } from '$lib/server/archive-safety';
+import { hashPassword, validatePassword } from '$lib/server/password';
 import {
 	CHECKSUM_ALGORITHM,
 	DATA_ENTRY_NAME,
 	MANIFEST_ENTRY_NAME,
 	parseExchangeManifest,
-	type ExchangeCounts,
 	type ExchangeCollection,
+	type ExchangeCounts,
 	type ExchangeData,
 	type ExchangeExpense,
 	type ExchangeItem,
@@ -49,14 +53,7 @@ export interface ImportReportMedia {
 }
 
 /** Entity counts in the validation report. */
-export interface ImportReportCounts {
-	users: number;
-	tenants: number;
-	collections: number;
-	items: number;
-	marketDays: number;
-	expenses: number;
-}
+export type ImportReportCounts = ExchangeCounts;
 
 /** Complete validation report for an instance archive. */
 export interface InstanceImportReport {
@@ -69,11 +66,26 @@ export interface InstanceImportReport {
 	data: ExchangeData | null;
 }
 
+/** Inputs for an instance import. */
+export interface ImportInstanceOptions {
+	archive: Buffer;
+	databasePath: string;
+	mediaRoot: string;
+	instanceAdminUsername: string;
+	adminPassword: string;
+	validatePassword?: (password: string) => void;
+}
+
+/** Result of an instance import. */
+export type ImportInstanceOutcome =
+	| { imported: true; report: InstanceImportReport }
+	| { imported: false; report: InstanceImportReport };
+
 /**
  * Validate an instance exchange archive and build a complete report.
  *
- * Nothing is written and no live data is touched: this is the dry run that precedes staging. Errors
- * block activation; warnings never do.
+ * Nothing is written and no live data is touched: this is the dry run that precedes activation.
+ * Errors block activation; warnings never do.
  *
  * @param {Buffer} archive - Archive bytes.
  * @returns {InstanceImportReport} Validation report.
@@ -149,6 +161,383 @@ export function validateInstanceArchive(archive: Buffer): InstanceImportReport {
 	validateManifestCounts(manifest.counts, report, data.users, manifest.files);
 	report.data = report.errors.length === 0 ? data : null;
 	return report;
+}
+
+/**
+ * Import a complete instance archive into the live database in one transaction.
+ *
+ * The whole activation runs inside a single SQLite transaction: validation must pass first, the
+ * selected admin receives a freshly set password (never the imported foreign hash), every source
+ * user becomes its own tenant, and all references are remapped to new internal identifiers. A
+ * failure before commit rolls back both the database and any media written during the attempt.
+ *
+ * @param {ImportInstanceOptions} options - Archive, target paths and admin selection.
+ * @returns {Promise<ImportInstanceOutcome>} Whether the import was activated, plus the report.
+ */
+export async function importInstanceArchive(
+	options: ImportInstanceOptions
+): Promise<ImportInstanceOutcome> {
+	const report = validateInstanceArchive(options.archive);
+	if (report.errors.length > 0 || !report.data) {
+		return { imported: false, report };
+	}
+
+	const normalizedAdmin = options.instanceAdminUsername.trim().toLocaleLowerCase();
+	const adminUser = report.data.users.find(
+		(user) => user.username.trim().toLocaleLowerCase() === normalizedAdmin
+	);
+	if (!adminUser) {
+		report.errors.push('The selected instance administrator is not part of the archive.');
+		return { imported: false, report };
+	}
+
+	const checkPassword = options.validatePassword ?? validatePassword;
+	try {
+		checkPassword(options.adminPassword);
+	} catch (error) {
+		report.errors.push(error instanceof Error ? error.message : 'The new password was rejected.');
+		return { imported: false, report };
+	}
+
+	const entries = parseZip(options.archive);
+	const writtenMedia: string[] = [];
+	const database = new Database(options.databasePath);
+	try {
+		const adminPasswordHash = await hashPassword(options.adminPassword);
+		const now = new Date().toISOString();
+		database.exec('BEGIN IMMEDIATE');
+		try {
+			database.exec('DELETE FROM sessions');
+			database.exec('DELETE FROM password_resets');
+
+			for (const user of report.data.users) {
+				writeUser(
+					database,
+					options,
+					user,
+					entries,
+					writtenMedia,
+					now,
+					user === adminUser ? adminPasswordHash : null
+				);
+			}
+			database.exec('COMMIT');
+		} catch (error) {
+			database.exec('ROLLBACK');
+			for (const written of writtenMedia) {
+				rmSync(written, { force: true });
+			}
+			report.errors.push(
+				error instanceof Error ? error.message : 'The import could not be activated.'
+			);
+			return { imported: false, report };
+		}
+	} finally {
+		database.close();
+	}
+
+	return { imported: true, report };
+}
+
+/**
+ * Write one imported user as its own tenant together with all of its content.
+ *
+ * @param {Database.Database} database - Target database.
+ * @param {ImportInstanceOptions} options - Import options carrying the media root.
+ * @param {ExchangeUser} user - Source user record.
+ * @param {Map<string, { payloadOffset: number; size: number }>} entries - Archive entries.
+ * @param {string[]} writtenMedia - Collector for media paths written during the attempt.
+ * @param {string} now - Timestamp used for created_at columns.
+ * @param {string | null} adminPasswordHash - Fresh hash for the selected admin, or null.
+ * @returns {void}
+ */
+function writeUser(
+	database: Database.Database,
+	options: ImportInstanceOptions,
+	user: ExchangeUser,
+	entries: Map<string, { payloadOffset: number; size: number }>,
+	writtenMedia: string[],
+	now: string,
+	adminPasswordHash: string | null
+): void {
+	const tenantId = randomUUID();
+	const userId = randomUUID();
+	database
+		.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+		.run(tenantId, user.displayName || user.username, now);
+	database
+		.prepare(
+			`INSERT INTO users (id, tenant_id, username, display_name, password_hash, password_reset_required, avatar_storage_key, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+		)
+		.run(
+			userId,
+			tenantId,
+			user.username.trim(),
+			user.displayName || user.username,
+			adminPasswordHash ?? user.passwordHash,
+			adminPasswordHash ? 0 : 1,
+			user.avatarFile ? storeMedia(options, user.avatarFile, entries, writtenMedia) : null,
+			now
+		);
+	if (adminPasswordHash) {
+		database
+			.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
+			.run(userId, 'instance_admin', now);
+	}
+
+	const scope = { userId, tenantId };
+	for (const collection of user.collections ?? []) {
+		writeCollection(database, options, collection, entries, writtenMedia, scope, now);
+	}
+}
+
+/**
+ * Write one imported collection with its items, images, market days and expenses.
+ *
+ * @param {Database.Database} database - Target database.
+ * @param {ImportInstanceOptions} options - Import options carrying the media root.
+ * @param {ExchangeCollection} collection - Source collection record.
+ * @param {Map<string, { payloadOffset: number; size: number }>} entries - Archive entries.
+ * @param {string[]} writtenMedia - Collector for media paths written during the attempt.
+ * @param {{ userId: string; tenantId: string }} scope - Owner scope of the imported user.
+ * @param {string} now - Timestamp used for created_at columns.
+ * @returns {void}
+ */
+function writeCollection(
+	database: Database.Database,
+	options: ImportInstanceOptions,
+	collection: ExchangeCollection,
+	entries: Map<string, { payloadOffset: number; size: number }>,
+	writtenMedia: string[],
+	scope: { userId: string; tenantId: string },
+	now: string
+): void {
+	const collectionId = randomUUID();
+	database
+		.prepare(
+			`INSERT INTO collections (id, tenant_id, owner_id, name, stand_intro, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?)`
+		)
+		.run(
+			collectionId,
+			scope.tenantId,
+			scope.userId,
+			collection.name,
+			collection.standIntro ?? '',
+			now
+		);
+
+	const marketDayIds = new Map<string, string>();
+	for (const day of collection.marketDays ?? []) {
+		marketDayIds.set(day.sourceId, writeMarketDay(database, day, scope, now));
+	}
+	for (const item of collection.items ?? []) {
+		writeItem(
+			database,
+			options,
+			item,
+			entries,
+			writtenMedia,
+			collectionId,
+			marketDayIds,
+			scope,
+			now
+		);
+	}
+	for (const expense of collection.expenses ?? []) {
+		writeExpense(database, expense, marketDayIds, scope, now);
+	}
+}
+
+/**
+ * Write one imported market day.
+ *
+ * @param {Database.Database} database - Target database.
+ * @param {ExchangeMarketDay} day - Source market day record.
+ * @param {{ userId: string; tenantId: string }} scope - Owner scope.
+ * @param {string} now - Timestamp used for created_at columns.
+ * @returns {string} New internal market day identifier.
+ */
+function writeMarketDay(
+	database: Database.Database,
+	day: ExchangeMarketDay,
+	scope: { userId: string; tenantId: string },
+	now: string
+): string {
+	const id = randomUUID();
+	database
+		.prepare(
+			`INSERT INTO market_days (id, tenant_id, owner_id, name, date, start_time, end_time, location, notes, closed_at, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		)
+		.run(
+			id,
+			scope.tenantId,
+			scope.userId,
+			day.name,
+			day.date ?? null,
+			day.startTime ?? null,
+			day.endTime ?? null,
+			day.location ?? '',
+			day.notes ?? '',
+			day.closedAt ?? null,
+			now
+		);
+	return id;
+}
+
+/**
+ * Write one imported item with its images.
+ *
+ * @param {Database.Database} database - Target database.
+ * @param {ImportInstanceOptions} options - Import options carrying the media root.
+ * @param {ExchangeItem} item - Source item record.
+ * @param {Map<string, { payloadOffset: number; size: number }>} entries - Archive entries.
+ * @param {string[]} writtenMedia - Collector for media paths written during the attempt.
+ * @param {string} collectionId - New internal collection identifier.
+ * @param {Map<string, string>} marketDayIds - Source-to-new market day identifier map.
+ * @param {{ userId: string; tenantId: string }} scope - Owner scope.
+ * @param {string} now - Timestamp used for created_at columns.
+ * @returns {void}
+ */
+function writeItem(
+	database: Database.Database,
+	options: ImportInstanceOptions,
+	item: ExchangeItem,
+	entries: Map<string, { payloadOffset: number; size: number }>,
+	writtenMedia: string[],
+	collectionId: string,
+	marketDayIds: Map<string, string>,
+	scope: { userId: string; tenantId: string },
+	now: string
+): void {
+	const id = randomUUID();
+	const marketDayId = item.marketDaySourceId
+		? (marketDayIds.get(item.marketDaySourceId) ?? null)
+		: null;
+	database
+		.prepare(
+			`INSERT INTO items (
+				id, tenant_id, owner_id, collection_id, title, price_cents, category, condition,
+				internal_notes, external_description, is_complete, is_functional, sale_channel,
+				sold_at, reserved_at, sale_proceeds_cents, market_day_id, created_at
+			 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		)
+		.run(
+			id,
+			scope.tenantId,
+			scope.userId,
+			collectionId,
+			item.title,
+			item.priceCents,
+			item.category,
+			item.condition,
+			item.internalNotes ?? '',
+			item.externalDescription ?? '',
+			item.isComplete ? 1 : 0,
+			item.isFunctional ? 1 : 0,
+			item.saleChannel ?? null,
+			item.soldAt ?? null,
+			item.reservedAt ?? null,
+			item.saleProceedsCents ?? null,
+			marketDayId,
+			now
+		);
+	for (const image of item.images ?? []) {
+		const storageKey = storeMedia(options, image.file, entries, writtenMedia);
+		database
+			.prepare(
+				`INSERT INTO item_images (id, tenant_id, item_id, storage_key, position, is_cover, created_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?)`
+			)
+			.run(
+				randomUUID(),
+				scope.tenantId,
+				id,
+				storageKey,
+				image.position ?? 0,
+				image.isCover ? 1 : 0,
+				now
+			);
+	}
+}
+
+/**
+ * Write one imported expense.
+ *
+ * @param {Database.Database} database - Target database.
+ * @param {ExchangeExpense} expense - Source expense record.
+ * @param {Map<string, string>} marketDayIds - Source-to-new market day identifier map.
+ * @param {{ userId: string; tenantId: string }} scope - Owner scope.
+ * @param {string} now - Timestamp used for created_at columns.
+ * @returns {void}
+ */
+function writeExpense(
+	database: Database.Database,
+	expense: ExchangeExpense,
+	marketDayIds: Map<string, string>,
+	scope: { userId: string; tenantId: string },
+	now: string
+): void {
+	database
+		.prepare(
+			`INSERT INTO expenses (id, tenant_id, owner_id, market_day_id, label, category, amount_cents, expense_date, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		)
+		.run(
+			randomUUID(),
+			scope.tenantId,
+			scope.userId,
+			expense.marketDaySourceId ? (marketDayIds.get(expense.marketDaySourceId) ?? null) : null,
+			expense.label,
+			expense.category,
+			expense.amountCents,
+			expense.expenseDate,
+			now
+		);
+}
+
+/**
+ * Copy one archived media file into the media root under a fresh opaque key.
+ *
+ * @param {ImportInstanceOptions} options - Import options carrying the media root.
+ * @param {string} entryName - Archive entry name of the media file.
+ * @param {Map<string, { payloadOffset: number; size: number }>} entries - Archive entries.
+ * @param {string[]} writtenMedia - Collector for media paths written during the attempt.
+ * @returns {string} New storage key relative to the media root.
+ */
+function storeMedia(
+	options: ImportInstanceOptions,
+	entryName: string,
+	entries: Map<string, { payloadOffset: number; size: number }>,
+	writtenMedia: string[]
+): string {
+	const entry = entries.get(entryName);
+	if (!entry) {
+		throw new Error(`The media file ${entryName} is missing from the archive.`);
+	}
+	const extension = extensionOf(entryName);
+	const storageKey = `${randomUUID()}${extension}`;
+	const target = join(options.mediaRoot, storageKey);
+	mkdirSync(dirname(target), { recursive: true });
+	writeFileSync(
+		target,
+		options.archive.subarray(entry.payloadOffset, entry.payloadOffset + entry.size)
+	);
+	writtenMedia.push(target);
+	return storageKey;
+}
+
+/**
+ * Derive a safe lower-case extension from an archive entry name.
+ *
+ * @param {string} entryName - Archive entry name.
+ * @returns {string} Extension including the dot, or an empty string.
+ */
+function extensionOf(entryName: string): string {
+	const match = /\.[A-Za-z0-9]{1,5}$/.exec(entryName);
+	return match ? match[0].toLowerCase() : '';
 }
 
 /**
@@ -241,7 +630,6 @@ function validateUsers(
 		if (user.avatarFile && !entries.has(user.avatarFile)) {
 			report.errors.push(`The avatar of ${username} is missing from the archive.`);
 		}
-
 		for (const collection of collections) {
 			validateCollection(collection, entries, report, summary, username);
 		}
@@ -254,6 +642,7 @@ function validateUsers(
 		collections: report.users.reduce((total, user) => total + user.collections, 0),
 		items: report.users.reduce((total, user) => total + user.items, 0),
 		marketDays: report.users.reduce((total, user) => total + user.marketDays, 0),
+		sales: report.counts.sales,
 		expenses: report.users.reduce((total, user) => total + user.expenses, 0)
 	};
 }
@@ -296,6 +685,9 @@ function validateCollection(
 
 	if (collection.isPublished === true) {
 		report.publicStandPages.push({ username, collectionName: collection.name });
+		report.warnings.push(
+			`The stand page of ${username} was public in the archive; this product has no publication flag yet.`
+		);
 	}
 	summary.items += items.length;
 	summary.marketDays += marketDays.length;
@@ -410,7 +802,7 @@ function validateExpense(
 /**
  * Compare manifest counts with the records actually present.
  *
- * @param {ExchangeManifestCounts} counts - Counts declared by the manifest.
+ * @param {ExchangeCounts} counts - Counts declared by the manifest.
  * @param {InstanceImportReport} report - Report receiving errors.
  * @param {ExchangeUser[]} users - Users present in the logical data file.
  * @param {Record<string, { sha256: string; bytes: number }>} manifestFiles - Manifest file metadata.
@@ -461,7 +853,7 @@ function readEntry(archive: Buffer, entry: { payloadOffset: number; size: number
 }
 
 function zeroCounts(): ImportReportCounts {
-	return { users: 0, tenants: 0, collections: 0, items: 0, marketDays: 0, expenses: 0 };
+	return { users: 0, tenants: 0, collections: 0, items: 0, marketDays: 0, sales: 0, expenses: 0 };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
