@@ -57,6 +57,53 @@
 		}
 		return `${t(`month.${Number(monthNumber)}`)} ${year}`;
 	}
+
+	let importFile: File | undefined = $state();
+	let importReport = $state<{
+		users: Array<{
+			sourceId: string;
+			username: string;
+			items: number;
+			images: number;
+			passwordResetRequired: boolean;
+		}>;
+		counts: {
+			users: number;
+			collections: number;
+			items: number;
+			marketDays: number;
+			expenses: number;
+		};
+		media: { files: number; checksumsMatch: boolean };
+		warnings: string[];
+		publicStandPages: Array<{ username: string; collectionName: string }>;
+	} | null>(null);
+	let importStagingToken: string | undefined = $state();
+	let selectedAdmin = $state('');
+
+	/**
+	 * Bind the import file input to the prerequisite state.
+	 *
+	 * @param {Event} event - The change event from the file input.
+	 * @returns {void}
+	 */
+	function onImportFileChange(event: Event): void {
+		const input = event.currentTarget as HTMLInputElement;
+		importFile = input.files?.[0];
+	}
+
+	$effect(() => {
+		const report = (form as { importReport?: typeof importReport } | undefined)?.importReport;
+		const token = (form as { importStagingToken?: string } | undefined)?.importStagingToken;
+		if (report) {
+			importReport = report;
+		}
+		if (token) {
+			importStagingToken = token;
+		}
+	});
+
+	const importUploadReady = $derived(Boolean(importFile));
 </script>
 
 <svelte:head>
@@ -100,6 +147,164 @@
 					{/if}
 					<button type="submit">{t('portfolio.createAccount')}</button>
 				</form>
+
+				<section class="instance-import" aria-labelledby="import-title" data-testid="import-panel">
+					<h2 id="import-title"><Icon name="package" />{t('import.title')}</h2>
+					<p class="import-intro">{t('import.intro')}</p>
+
+					{#if !importStagingToken}
+						<form
+							method="POST"
+							action="?/stageInstanceImport"
+							enctype="multipart/form-data"
+							data-testid="import-stage-form"
+						>
+							<input
+								name="importArchive"
+								id="import-archive"
+								type="file"
+								accept=".zip,application/zip"
+								data-testid="import-input"
+								class="visually-hidden-input"
+								required
+								onchange={onImportFileChange}
+							/>
+							<label class="file-button" for="import-archive"
+								><Icon name="upload" size="sm" />{importFile
+									? importFile.name
+									: t('import.chooseArchive')}</label
+							>
+							{#if form && 'importError' in form && form.importError}
+								<p class="form-error" role="alert">{form.importError}</p>
+							{/if}
+							<button
+								type="submit"
+								disabled={!importUploadReady}
+								aria-disabled={!importUploadReady}
+							>
+								<Icon name="upload" size="sm" />{t('import.prepare')}
+							</button>
+						</form>
+					{:else}
+						{#if importReport}
+							<section
+								class="import-report"
+								aria-labelledby="import-report-title"
+								data-testid="import-report"
+							>
+								<h3 id="import-report-title"><Icon name="check" />{t('import.reportTitle')}</h3>
+								<dl class="import-counts">
+									<div>
+										<dt>{t('import.reportUsers')}</dt>
+										<dd>{importReport.counts.users}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportCollections')}</dt>
+										<dd>{importReport.counts.collections}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportItems')}</dt>
+										<dd>{importReport.counts.items}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportMarketDays')}</dt>
+										<dd>{importReport.counts.marketDays}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportExpenses')}</dt>
+										<dd>{importReport.counts.expenses}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportMedia')}</dt>
+										<dd>
+											{importReport.media.files} ·
+											{importReport.media.checksumsMatch
+												? t('import.checksumsOk')
+												: t('import.checksumsFailed')}
+										</dd>
+									</div>
+								</dl>
+
+								<table class="import-users">
+									<caption>{t('import.userTableCaption')}</caption>
+									<thead>
+										<tr>
+											<th scope="col">{t('import.colUsername')}</th>
+											<th scope="col">{t('import.colItems')}</th>
+											<th scope="col">{t('import.colImages')}</th>
+											<th scope="col">{t('import.colPassword')}</th>
+										</tr>
+									</thead>
+									<tbody>
+										{#each importReport.users as user (user.sourceId)}
+											<tr>
+												<td>{user.username}</td>
+												<td>{user.items}</td>
+												<td>{user.images}</td>
+												<td>
+													{user.username === selectedAdmin
+														? t('import.passwordNew')
+														: user.passwordResetRequired
+															? t('import.passwordReset')
+															: t('import.passwordKept')}
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+
+								{#if importReport.publicStandPages.length > 0}
+									<div class="import-warnings">
+										<h4>{t('import.warnings')}</h4>
+										<ul>
+											{#each importReport.publicStandPages as page (page.username)}
+												<li>{t('import.publicStandNote', { username: page.username })}</li>
+											{/each}
+										</ul>
+									</div>
+								{/if}
+
+								<form
+									method="POST"
+									action="?/activateInstanceImport"
+									data-testid="import-activate-form"
+								>
+									<input type="hidden" name="stagingToken" value={importStagingToken} />
+									<fieldset>
+										<legend>{t('import.selectAdmin')}</legend>
+										<p class="import-hint">{t('import.selectAdminHint')}</p>
+										{#each importReport.users as user (user.sourceId)}
+											<label class="admin-choice">
+												<input
+													type="radio"
+													name="adminUsername"
+													value={user.username}
+													bind:group={selectedAdmin}
+													required
+												/>
+												<span>{user.username}</span>
+											</label>
+										{/each}
+									</fieldset>
+									<label>
+										<span>{t('import.newAdminPassword')}</span>
+										<input
+											name="adminPassword"
+											type="password"
+											autocomplete="new-password"
+											minlength={minimumPasswordLength}
+											required
+										/>
+									</label>
+									<p class="import-hint">{t('import.newAdminPasswordHint')}</p>
+									<button type="submit" disabled={!selectedAdmin} aria-disabled={!selectedAdmin}>
+										<Icon name="check" size="sm" />{t('import.activate')}
+									</button>
+								</form>
+							</section>
+						{/if}
+					{/if}
+				</section>
 			{:else}
 				<p class="eyebrow">{t('portfolio.welcomeBackEyebrow')}</p>
 				<h1 id="onboarding-title">{t('portfolio.loginTitle')}</h1>
@@ -542,6 +747,217 @@
 	form {
 		display: grid;
 		gap: 1rem;
+	}
+
+	.instance-import {
+		border-top: 1px solid var(--color-border);
+		display: grid;
+		gap: 0.6rem;
+		margin-top: 1.6rem;
+		padding-top: 1.4rem;
+	}
+
+	.instance-import h2 {
+		align-items: center;
+		display: flex;
+		font-size: 1.05rem;
+		gap: 0.4rem;
+		margin: 0;
+	}
+
+	.import-intro,
+	.import-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	.instance-import form {
+		display: grid;
+		gap: var(--gap-action-row);
+	}
+
+	.instance-import fieldset {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		display: grid;
+		gap: 0.4rem;
+		margin: 0;
+		padding: 0.85rem 0.95rem;
+	}
+
+	.instance-import legend {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 700;
+		padding: 0 0.35rem;
+	}
+
+	.admin-choice {
+		align-items: center;
+		display: flex;
+		font-size: 0.88rem;
+		gap: 0.5rem;
+		padding: 0.3rem 0;
+	}
+
+	/* Follows the project's checkbox convention: no native control, explicit theme tokens. */
+	.admin-choice input[type='radio'] {
+		appearance: none;
+		background-color: var(--color-surface-strong);
+		border: 1px solid var(--color-border);
+		border-radius: 50%;
+		box-shadow: none;
+		cursor: pointer;
+		height: 1.05rem;
+		margin: 0;
+		padding: 0;
+		position: relative;
+		width: 1.05rem;
+	}
+
+	.admin-choice input[type='radio']:focus-visible {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
+	}
+
+	.admin-choice input[type='radio']:checked {
+		border-color: var(--color-accent);
+		border-width: 0.3rem;
+	}
+
+	.admin-choice:has(input[type='radio']:checked) span {
+		color: var(--color-accent-strong);
+		font-weight: 700;
+	}
+
+	.instance-import button[type='submit'] {
+		justify-self: end;
+	}
+
+	.visually-hidden-input {
+		height: 1px;
+		opacity: 0;
+		position: absolute;
+		width: 1px;
+	}
+
+	.file-button {
+		align-items: center;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-flex;
+		font-size: 0.88rem;
+		font-weight: 700;
+		gap: 0.35rem;
+		justify-self: start;
+		max-width: 100%;
+		overflow: hidden;
+		padding: 0.6rem 0.95rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.file-button:hover {
+		background: var(--color-accent-soft);
+	}
+
+	.import-report {
+		display: grid;
+		gap: 0.8rem;
+	}
+
+	.import-report h3 {
+		align-items: center;
+		display: flex;
+		font-size: 0.95rem;
+		gap: 0.4rem;
+		margin: 0;
+	}
+
+	.import-counts {
+		display: grid;
+		gap: 0.5rem 1rem;
+		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		margin: 0;
+	}
+
+	.import-counts div {
+		display: grid;
+		gap: 0.1rem;
+	}
+
+	.import-counts dt {
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.import-counts dd {
+		font-size: 0.95rem;
+		font-variant-numeric: tabular-nums;
+		font-weight: 700;
+		margin: 0;
+		white-space: nowrap;
+	}
+
+	.import-users {
+		border-collapse: collapse;
+		font-size: 0.85rem;
+		width: 100%;
+	}
+
+	.import-users caption {
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+		font-weight: 700;
+		padding-bottom: 0.35rem;
+		text-align: left;
+	}
+
+	.import-users th,
+	.import-users td {
+		border-bottom: 1px solid var(--color-border);
+		padding: 0.35rem 0.4rem;
+		text-align: left;
+	}
+
+	.import-users th {
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.import-users td:not(:first-child),
+	.import-users th:not(:first-child) {
+		text-align: right;
+		white-space: nowrap;
+	}
+
+	.import-warnings {
+		background: var(--color-accent-soft);
+		border-radius: var(--radius-control);
+		font-size: 0.8rem;
+		padding: 0.7rem 0.85rem;
+	}
+
+	.import-warnings h4 {
+		font-size: 0.78rem;
+		margin: 0 0 0.3rem;
+	}
+
+	.import-warnings ul {
+		margin: 0;
+		padding-left: 1.1rem;
 	}
 
 	.form-error {

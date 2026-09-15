@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { hasValidEndOfCentralDirectory, parseZip } from '$lib/server/backup';
 import { assertArchiveWithinLimits } from '$lib/server/archive-safety';
-import { hashPassword, validatePassword } from '$lib/server/password';
+import { classifyImportedPasswordHash, hashPassword, validatePassword } from '$lib/server/password';
 import {
 	CHECKSUM_ALGORITHM,
 	DATA_ENTRY_NAME,
@@ -265,6 +265,11 @@ function writeUser(
 	database
 		.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
 		.run(tenantId, user.displayName || user.username, now);
+	// Only a native hash may be carried over; a foreign scheme is never written to the database, so
+	// the account is flagged for a password reset and the user sets a new one themselves.
+	const carriedOver =
+		adminPasswordHash === null ? classifyImportedPasswordHash(user.passwordHash) : null;
+	const passwordHash = adminPasswordHash ?? (carriedOver?.usable ? carriedOver.value : null);
 	database
 		.prepare(
 			`INSERT INTO users (id, tenant_id, username, display_name, password_hash, password_reset_required, avatar_storage_key, created_at)
@@ -275,8 +280,8 @@ function writeUser(
 			tenantId,
 			user.username.trim(),
 			user.displayName || user.username,
-			adminPasswordHash ?? user.passwordHash,
-			adminPasswordHash ? 0 : 1,
+			passwordHash,
+			passwordHash ? 0 : 1,
 			user.avatarFile ? storeMedia(options, user.avatarFile, entries, writtenMedia) : null,
 			now
 		);
@@ -684,10 +689,9 @@ function validateCollection(
 	}
 
 	if (collection.isPublished === true) {
+		// Reported as data, not as prose: the UI localizes it, because server modules here are
+		// English-only while visitor-facing copy runs through the i18n layer.
 		report.publicStandPages.push({ username, collectionName: collection.name });
-		report.warnings.push(
-			`The stand page of ${username} was public in the archive; this product has no publication flag yet.`
-		);
 	}
 	summary.items += items.length;
 	summary.marketDays += marketDays.length;

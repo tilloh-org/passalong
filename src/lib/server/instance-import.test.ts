@@ -5,6 +5,7 @@ import { Buffer } from 'node:buffer';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildZip } from '$lib/server/backup';
+import { hashPassword } from '$lib/server/password';
 import { createCollectionRepository } from '$lib/server/collection-repository';
 import { DATA_ENTRY_NAME } from '$lib/server/exchange-format';
 import { fixtureArchive, fixtureUser } from '$lib/server/exchange-fixture.test-helper';
@@ -669,7 +670,7 @@ describe('instance import activation', () => {
 		expect(admin?.passwordHash?.startsWith('scrypt')).toBe(true);
 	});
 
-	it('marks other users with an unusable hash for a password reset', async () => {
+	it('never stores a foreign password hash and flags the account for a reset', async () => {
 		// arrange
 		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
 		temporaryDirectories.push(workspace);
@@ -686,6 +687,41 @@ describe('instance import activation', () => {
 		]);
 
 		// act
+		const outcome = await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume — the foreign digest must not reach the database at all.
+		expect(outcome.imported).toBe(true);
+		const blake = readImportedAccount(databasePath, 'blake');
+		expect(blake?.passwordResetRequired).toBe(true);
+		expect(blake?.passwordHash).toBeNull();
+	});
+
+	it('carries over a native hash so that user keeps their existing password', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const nativeHash = await hashPassword('an-existing-passphrase');
+		const archive = fixtureArchive([
+			{
+				...fixtureUser({ sourceId: 'u1', username: 'avery' }),
+				passwordHash: nativeHash
+			},
+			{
+				...fixtureUser({ sourceId: 'u2', username: 'blake' }),
+				passwordHash: nativeHash
+			}
+		]);
+
+		// act
 		await importInstanceArchive({
 			archive,
 			databasePath,
@@ -695,7 +731,9 @@ describe('instance import activation', () => {
 		});
 
 		// assume
-		expect(readImportedAccount(databasePath, 'blake')?.passwordResetRequired).toBe(true);
+		const blake = readImportedAccount(databasePath, 'blake');
+		expect(blake?.passwordResetRequired).toBe(false);
+		expect(blake?.passwordHash).toBe(nativeHash);
 	});
 
 	it('refuses to import into an instance that already has an instance administrator', async () => {

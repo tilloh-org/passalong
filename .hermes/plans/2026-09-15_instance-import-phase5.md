@@ -52,18 +52,23 @@
 3. **Media are written during the transaction and cleaned up on rollback**; the database remains the
    single point of truth for whether an import counts as activated.
 
-## Blocker found: there is no publication flag
+## Not a blocker: neither product has a publication flag
 
-The contract requires per-user import of the "öffentlicher Standseitenstatus" and step 10 of the
-cutover note ("Jede zuvor öffentliche Standseite wird nach erfolgreicher Aktivierung automatisch
-veröffentlicht"). The code has **no** such state: `collections` has only `id, tenant_id, owner_id,
-name, stand_intro, created_at`, and `getPublicStandView` serves any collection whose id is known —
-every collection is public by construction. There is nothing to import or republish.
+The contract asks for the "öffentlicher Standseitenstatus" (l. 1074) and automatic republishing
+(l. 1076). Checked in both codebases:
 
-Consequence for this slice: the `isPublished` field stays in the exchange format (so archives carry
-it and no information is lost), validation reports it, and activation ignores it with a warning while
-the product has no visibility model. Introducing a publication flag is a separate product decision,
-not an import detail.
+- **Source (Marktbude):** `users` carries `stand_id` and `stand_text`, nothing else. `stand_id` is
+  generated for every user, including pre-existing ones, and `/stand/<stand_id>` serves any stand
+  whose id is known. There is no visibility switch in the UI or the schema — a stand is public
+  exactly when its id is known.
+- **Target (passalong):** `collections` has no publication column either, and `getPublicStandView`
+  serves any collection whose id is known.
+
+Both products therefore share the same model, so there is **nothing to import and nothing to
+switch**: an imported collection is public by construction, which satisfies l. 1076 trivially. The
+`isPublished` field stays in the exchange format so archives carry the information and no detail is
+lost, but activation only reports it. A real visibility model (including what happens to already
+printed QR codes pointing at a hidden stand) would be a new product feature, not an import detail.
 
 ---
 
