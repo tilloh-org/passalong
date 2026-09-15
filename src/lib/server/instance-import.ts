@@ -645,7 +645,17 @@ function validateUsers(
 		if (user.avatarFile && !entries.has(user.avatarFile)) {
 			report.errors.push(`The avatar of ${username} is missing from the archive.`);
 		}
+		const collectionSourceIds = new Set<string>();
 		for (const collection of collections) {
+			if (isRecord(collection) && isNonBlank(collection.sourceId)) {
+				if (collectionSourceIds.has(collection.sourceId)) {
+					report.errors.push(
+						`The user ${username} uses the duplicate collection source id ${collection.sourceId}.`
+					);
+				} else {
+					collectionSourceIds.add(collection.sourceId);
+				}
+			}
 			validateCollection(collection, entries, report, summary, username);
 		}
 		report.users.push(summary);
@@ -686,15 +696,47 @@ function validateCollection(
 	const items = Array.isArray(collection.items) ? collection.items : [];
 	const marketDays = Array.isArray(collection.marketDays) ? collection.marketDays : [];
 	const expenses = Array.isArray(collection.expenses) ? collection.expenses : [];
-	const marketDayIds = new Set(marketDays.map((day) => day?.sourceId).filter(Boolean));
+	const marketDayIds = new Set<string>();
 
 	for (const day of marketDays) {
 		validateMarketDay(day, report, username);
+		if (!isRecord(day) || !isNonBlank(day.sourceId)) {
+			continue;
+		}
+		// A repeated key would silently remap every referencing item to whichever day was written
+		// last, so it blocks the takeover instead of losing the relation.
+		if (marketDayIds.has(day.sourceId)) {
+			report.errors.push(
+				`The collection ${collection.name} uses the duplicate market day source id ${day.sourceId}.`
+			);
+			continue;
+		}
+		marketDayIds.add(day.sourceId);
 	}
+	const itemSourceIds = new Set<string>();
 	for (const item of items) {
+		if (isRecord(item) && isNonBlank(item.sourceId)) {
+			if (itemSourceIds.has(item.sourceId)) {
+				report.errors.push(
+					`The collection ${collection.name} uses the duplicate item source id ${item.sourceId}.`
+				);
+			} else {
+				itemSourceIds.add(item.sourceId);
+			}
+		}
 		validateItem(item, entries, report, marketDayIds, username);
 	}
+	const expenseSourceIds = new Set<string>();
 	for (const expense of expenses) {
+		if (isRecord(expense) && isNonBlank(expense.sourceId)) {
+			if (expenseSourceIds.has(expense.sourceId)) {
+				report.errors.push(
+					`The collection ${collection.name} uses the duplicate expense source id ${expense.sourceId}.`
+				);
+			} else {
+				expenseSourceIds.add(expense.sourceId);
+			}
+		}
 		validateExpense(expense, report, marketDayIds, username);
 	}
 
