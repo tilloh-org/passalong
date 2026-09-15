@@ -13,6 +13,8 @@
 	--glass: rgba(255, 255, 255, 0.72);
 
 	--color-bg: #f4f7f9;
+	/* Final stop of the decorative body gradient; `html` paints it below the first viewport. */
+	--color-bg-end: #eef2f4;
 	--color-text: #16303f;
 	--color-text-muted: #6b8796;
 	--color-text-faint: #8ba3b0;
@@ -38,6 +40,15 @@
 	--radius-card: 16px;
 	--radius-control: 12px;
 	--radius-small: 10px;
+	--select-arrow-inset: 1rem;
+	--select-arrow-size: 0.75rem;
+	--select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%231d4e63' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
+	--select-form-arrow-size: 1.45rem;
+	--select-form-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%230e2a3a'/%3E%3Cpath d='m7.5 9.5 4.5 4.5 4.5-4.5' fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
+	--checkbox-checkmark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4 10-10' fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3'/%3E%3C/svg%3E");
+	--select-control-end-padding: calc(
+		var(--select-arrow-inset) + var(--select-arrow-size) + 0.75rem
+	);
 
 	--gap-action-row: 0.6rem;
 	--gap-action-block: 1.1rem;
@@ -53,7 +64,9 @@
 }
 
 [data-theme='dark'] {
+	color-scheme: dark;
 	--color-bg: #0f1a22;
+	--color-bg-end: #16242e;
 	--color-text: #e8f0f4;
 	--color-text-muted: #9db4c0;
 	--color-text-faint: #7492a1;
@@ -74,6 +87,8 @@
 	--focus-ring: rgba(127, 168, 189, 0.4);
 	--scrim: rgba(0, 0, 0, 0.55);
 	--glass: rgba(15, 26, 34, 0.72);
+	--select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%237fa8bd' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
+	--select-form-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%237fa8bd'/%3E%3Cpath d='m7.5 9.5 4.5 4.5 4.5-4.5' fill='none' stroke='%230f1a22' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
 
 	--shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
 	--shadow-tile: 0 4px 14px rgba(0, 0, 0, 0.3);
@@ -91,6 +106,12 @@
 
 html {
 	-webkit-text-size-adjust: 100%;
+	/*
+	 * The decorative body background is viewport-fixed, so it only paints the first
+	 * viewport. Everything below that would fall through to the canvas default (white)
+	 * on tall pages. Painting the gradient's final colour here keeps the seam invisible.
+	 */
+	background-color: var(--color-bg-end);
 }
 
 body {
@@ -99,7 +120,8 @@ body {
 	background:
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.28), transparent 60%),
 		radial-gradient(900px 500px at -10% 20%, rgba(232, 226, 213, 0.55), transparent 55%),
-		linear-gradient(180deg, var(--color-bg) 0%, #eef2f4 100%);
+		linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-end) 100%);
+	background-attachment: fixed;
 	color: var(--color-text);
 	font-family:
 		system-ui,
@@ -118,7 +140,8 @@ body {
 	background:
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.12), transparent 60%),
 		radial-gradient(900px 500px at -10% 20%, rgba(224, 164, 88, 0.08), transparent 55%),
-		linear-gradient(180deg, #0f1a22 0%, #16242e 100%);
+		linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-end) 100%);
+	background-attachment: fixed;
 }
 
 /* dezente Wellen-Linie oben */
@@ -150,6 +173,47 @@ body::before {
 
 a {
 	color: var(--color-accent);
+}
+
+/* ---------- Icons (vendored Tabler sprite) ---------- */
+
+.icon {
+	display: inline-block;
+	flex: 0 0 auto;
+	height: 1.15em;
+	vertical-align: -0.18em;
+	width: 1.15em;
+	fill: none;
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 2;
+}
+
+.icon-sm {
+	height: 1em;
+	width: 1em;
+}
+
+.icon-lg {
+	height: 1.5em;
+	width: 1.5em;
+}
+
+.icon-muted {
+	color: var(--color-text-muted);
+}
+
+.icon-ok {
+	color: var(--color-ok);
+}
+
+.icon-danger {
+	color: var(--color-danger);
+}
+
+.icon-warn {
+	color: var(--color-warn);
 }
 
 h1,

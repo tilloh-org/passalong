@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import Icon from '$lib/components/icon.svelte';
 	import {
 		getLocale,
 		initLocale,
@@ -18,6 +19,8 @@
 	let headerElement: HTMLElement | undefined = $state();
 	let navElement: HTMLElement | undefined = $state();
 	let burgerButton: HTMLButtonElement | undefined = $state();
+	/** Natural width of the header row while the navigation renders inline. */
+	let inlineHeaderWidth = 0;
 
 	initLocale();
 
@@ -25,6 +28,9 @@
 		if (!headerElement || !navElement) {
 			return;
 		}
+		// Measure the row's natural width only while the navigation is inline: the
+		// drawer renders the same items at a different width, so re-measuring there
+		// would flip the decision back and forth and leave the row overflowing.
 		const measure = () => {
 			if (!navElement || !headerElement) {
 				return;
@@ -33,17 +39,10 @@
 				navOverflow = true;
 				return;
 			}
-			// Hysteresis: switch to the drawer as soon as the header row overflows. Switch back to
-			// inline only when the whole row (brand + actions + nav) genuinely fits again — measured
-			// on the drawer-mode header, where brand and actions still occupy their inline widths.
-			const brand = headerElement.querySelector('.brand-wrap');
-			const actions = headerElement.querySelector('.header-actions');
-			const reservedWidth = ((brand?.scrollWidth ?? 0) + (actions?.scrollWidth ?? 0)) * 2 + 96;
-			if (navOverflow) {
-				navOverflow = headerElement.clientWidth - reservedWidth < navElement.scrollWidth;
-			} else {
-				navOverflow = headerElement.scrollWidth > headerElement.clientWidth + 1;
+			if (!navOverflow) {
+				inlineHeaderWidth = headerElement.scrollWidth;
 			}
+			navOverflow = inlineHeaderWidth > 0 && headerElement.clientWidth < inlineHeaderWidth;
 		};
 		measure();
 		const observer = new ResizeObserver(measure);
@@ -129,12 +128,15 @@
 	{#if data.header?.isAuthenticated}
 		<nav class:open={menuOpen} bind:this={navElement}>
 			<a class="nav-cta" href="/" onclick={() => setMenuOpen(false)}>
+				<Icon name="plus" />
 				{t('nav.newItem')}
 			</a>
 			<a href="/scan" onclick={() => setMenuOpen(false)}>
+				<Icon name="scan" />
 				{t('nav.scan')}
 			</a>
 			<a href="/market-days" onclick={() => setMenuOpen(false)} data-testid="nav-market-days-link">
+				<Icon name="calendar" />
 				{t('nav.marketDays')}
 			</a>
 			<a
@@ -142,12 +144,15 @@
 				onclick={() => setMenuOpen(false)}
 				data-testid="nav-price-labels-link"
 			>
+				<Icon name="tag" />
 				{t('nav.priceLabels')}
 			</a>
 			<a href="/sales" onclick={() => setMenuOpen(false)} data-testid="nav-sale-history-link">
+				<Icon name="history" />
 				{t('nav.saleHistory')}
 			</a>
 			<a href="/statistics" onclick={() => setMenuOpen(false)} data-testid="nav-statistics-link">
+				<Icon name="chart-bar" />
 				{t('nav.statistics')}
 			</a>
 			{#if data.header?.standPath}
@@ -156,6 +161,7 @@
 					onclick={() => setMenuOpen(false)}
 					data-testid="nav-stand-link"
 				>
+					<Icon name="building-store" />
 					{t('nav.myStand')}
 				</a>
 			{/if}
@@ -179,9 +185,7 @@
 				type="button"
 				onclick={toggleTheme}
 			>
-				<svg class="icon" aria-hidden="true" focusable="false">
-					<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
-				</svg>
+				<Icon name={theme === 'dark' ? 'sun' : 'moon'} />
 			</button>
 			<button
 				class="icon-btn language-toggle"
@@ -191,6 +195,7 @@
 				data-testid="language-toggle"
 				onclick={() => cycleLocale()}
 			>
+				<Icon name="world" />
 				<span class="language-label">{getLocale() === 'de' ? 'DE' : 'EN'}</span>
 			</button>
 			<a
@@ -239,7 +244,7 @@
 		border-bottom: 1px solid var(--color-border);
 		container-type: inline-size;
 		display: flex;
-		margin: 0 -1.5rem 2rem;
+		margin: 0 0 2rem;
 		padding: 0.65rem 1.5rem;
 	}
 	.brand-wrap {
@@ -266,13 +271,18 @@
 		box-shadow: none;
 		color: var(--color-accent);
 		cursor: pointer;
-		display: flex;
+		display: inline-flex;
 		font-size: 1.1rem;
+		gap: 0.3rem;
 		height: 40px;
 		justify-content: center;
 		padding: 0;
 		transition: all 0.25s ease;
 		width: 40px;
+	}
+	.language-toggle {
+		width: auto;
+		padding: 0 0.7rem;
 	}
 	.language-label {
 		font-size: 0.72rem;
@@ -422,14 +432,22 @@
 		cursor: pointer;
 		display: inline-flex;
 		font: inherit;
-		font-size: 0.9rem;
+		/* Compact enough that the icon-led navigation still fits inline at a
+		   1280px desktop viewport instead of collapsing into the drawer. */
+		font-size: 0.82rem;
 		font-weight: 600;
+		gap: 0.3rem;
 		height: 40px;
 		justify-content: center;
-		padding: 0 14px;
+		padding: 0 8px;
 		text-decoration: none;
 		transition: all 0.25s ease;
 		white-space: nowrap;
+	}
+	/* Slightly smaller than the global default so seven icon-led pills stay on one row. */
+	nav a :global(.icon) {
+		height: 1em;
+		width: 1em;
 	}
 	nav a:hover {
 		background: var(--color-accent-soft);

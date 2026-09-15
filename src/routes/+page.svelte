@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import Icon from '$lib/components/icon.svelte';
 	import { formatPrice } from '$lib/utils/format';
 	import { minimumPasswordLength } from '$lib/password-policy';
 	import { t } from '$lib/i18n/index.svelte';
@@ -56,6 +57,64 @@
 		}
 		return `${t(`month.${Number(monthNumber)}`)} ${year}`;
 	}
+
+	let importFile: File | undefined = $state();
+	let importSizeError = $state('');
+	// Mirrors the server-side cap in +page.server.ts; keep the two in step.
+	const maximumImportUploadBytes = 256 * 1024 * 1024;
+	let importReport = $state<{
+		users: Array<{
+			sourceId: string;
+			username: string;
+			items: number;
+			images: number;
+			passwordResetRequired: boolean;
+		}>;
+		counts: {
+			users: number;
+			collections: number;
+			items: number;
+			marketDays: number;
+			expenses: number;
+		};
+		media: { files: number; checksumsMatch: boolean };
+		warnings: string[];
+		publicStandPages: Array<{ username: string; collectionName: string }>;
+	} | null>(null);
+	let importStagingToken: string | undefined = $state();
+	let selectedAdmin = $state('');
+
+	/**
+	 * Bind the import file input to the prerequisite state.
+	 *
+	 * @param {Event} event - The change event from the file input.
+	 * @returns {void}
+	 */
+	function onImportFileChange(event: Event): void {
+		const input = event.currentTarget as HTMLInputElement;
+		importFile = input.files?.[0];
+		// The server rejects an oversized archive anyway; checking here saves the operator a long
+		// upload that would only end in a broken-request page.
+		importSizeError =
+			importFile && importFile.size > maximumImportUploadBytes
+				? t('import.tooLarge', {
+						megabytes: String(Math.round(maximumImportUploadBytes / (1024 * 1024)))
+					})
+				: '';
+	}
+
+	$effect(() => {
+		const report = (form as { importReport?: typeof importReport } | undefined)?.importReport;
+		const token = (form as { importStagingToken?: string } | undefined)?.importStagingToken;
+		if (report) {
+			importReport = report;
+		}
+		if (token) {
+			importStagingToken = token;
+		}
+	});
+
+	const importUploadReady = $derived(Boolean(importFile) && importSizeError === '');
 </script>
 
 <svelte:head>
@@ -99,6 +158,169 @@
 					{/if}
 					<button type="submit">{t('portfolio.createAccount')}</button>
 				</form>
+
+				<section class="instance-import" aria-labelledby="import-title" data-testid="import-panel">
+					<h2 id="import-title"><Icon name="package" />{t('import.title')}</h2>
+					<p class="import-intro">{t('import.intro')}</p>
+
+					{#if !importStagingToken}
+						<form
+							method="POST"
+							action="?/stageInstanceImport"
+							enctype="multipart/form-data"
+							data-testid="import-stage-form"
+						>
+							<input
+								name="importArchive"
+								id="import-archive"
+								type="file"
+								accept=".zip,application/zip"
+								data-testid="import-input"
+								class="visually-hidden-input"
+								required
+								onchange={onImportFileChange}
+							/>
+							<label class="file-button" for="import-archive"
+								><Icon name="upload" size="sm" />{importFile
+									? importFile.name
+									: t('import.chooseArchive')}</label
+							>
+							{#if importSizeError}
+								<p class="form-error" role="alert">{importSizeError}</p>
+							{/if}
+							{#if form && 'importError' in form && form.importError}
+								<p class="form-error" role="alert">{form.importError}</p>
+							{/if}
+							<button
+								type="submit"
+								disabled={!importUploadReady}
+								aria-disabled={!importUploadReady}
+							>
+								<Icon name="upload" size="sm" />{t('import.prepare')}
+							</button>
+						</form>
+					{:else}
+						{#if importReport}
+							<section
+								class="import-report"
+								aria-labelledby="import-report-title"
+								data-testid="import-report"
+							>
+								<h3 id="import-report-title"><Icon name="check" />{t('import.reportTitle')}</h3>
+								<dl class="import-counts">
+									<div>
+										<dt>{t('import.reportUsers')}</dt>
+										<dd>{importReport.counts.users}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportCollections')}</dt>
+										<dd>{importReport.counts.collections}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportItems')}</dt>
+										<dd>{importReport.counts.items}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportMarketDays')}</dt>
+										<dd>{importReport.counts.marketDays}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportExpenses')}</dt>
+										<dd>{importReport.counts.expenses}</dd>
+									</div>
+									<div>
+										<dt>{t('import.reportMedia')}</dt>
+										<dd>
+											{importReport.media.files} ·
+											{importReport.media.checksumsMatch
+												? t('import.checksumsOk')
+												: t('import.checksumsFailed')}
+										</dd>
+									</div>
+								</dl>
+
+								<div class="import-table-scroll">
+									<table class="import-users">
+										<caption>{t('import.userTableCaption')}</caption>
+										<thead>
+											<tr>
+												<th scope="col">{t('import.colUsername')}</th>
+												<th scope="col">{t('import.colItems')}</th>
+												<th scope="col">{t('import.colImages')}</th>
+												<th scope="col">{t('import.colPassword')}</th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each importReport.users as user (user.sourceId)}
+												<tr>
+													<td data-label={t('import.colUsername')}>{user.username}</td>
+													<td data-label={t('import.colItems')}>{user.items}</td>
+													<td data-label={t('import.colImages')}>{user.images}</td>
+													<td data-label={t('import.colPassword')}>
+														{user.username === selectedAdmin
+															? t('import.passwordNew')
+															: user.passwordResetRequired
+																? t('import.passwordReset')
+																: t('import.passwordKept')}
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+
+								{#if importReport.publicStandPages.length > 0}
+									<div class="import-warnings">
+										<h4>{t('import.warnings')}</h4>
+										<ul>
+											{#each importReport.publicStandPages as page (page.username)}
+												<li>{t('import.publicStandNote', { username: page.username })}</li>
+											{/each}
+										</ul>
+									</div>
+								{/if}
+
+								<form
+									method="POST"
+									action="?/activateInstanceImport"
+									data-testid="import-activate-form"
+								>
+									<input type="hidden" name="stagingToken" value={importStagingToken} />
+									<fieldset>
+										<legend>{t('import.selectAdmin')}</legend>
+										<p class="import-hint">{t('import.selectAdminHint')}</p>
+										{#each importReport.users as user (user.sourceId)}
+											<label class="admin-choice">
+												<input
+													type="radio"
+													name="adminUsername"
+													value={user.username}
+													bind:group={selectedAdmin}
+													required
+												/>
+												<span>{user.username}</span>
+											</label>
+										{/each}
+									</fieldset>
+									<label>
+										<span>{t('import.newAdminPassword')}</span>
+										<input
+											name="adminPassword"
+											type="password"
+											autocomplete="new-password"
+											minlength={minimumPasswordLength}
+											required
+										/>
+									</label>
+									<p class="import-hint">{t('import.newAdminPasswordHint')}</p>
+									<button type="submit" disabled={!selectedAdmin} aria-disabled={!selectedAdmin}>
+										<Icon name="check" size="sm" />{t('import.activate')}
+									</button>
+								</form>
+							</section>
+						{/if}
+					{/if}
+				</section>
 			{:else}
 				<p class="eyebrow">{t('portfolio.welcomeBackEyebrow')}</p>
 				<h1 id="onboarding-title">{t('portfolio.loginTitle')}</h1>
@@ -276,13 +498,17 @@
 						{#if form?.addItemError}
 							<p class="form-error" role="alert">{form.addItemError}</p>
 						{/if}
-						<button type="submit">{t('portfolio.addItem')}</button>
+						<button type="submit">
+							<Icon name="plus" />
+							{t('portfolio.addItem')}
+						</button>
 						{#if data.createdItemId}
 							<a
 								class="manage-images-link"
 								href={`/items/${encodeURIComponent(data.createdItemId)}`}
 								data-testid="manage-images-link"
 							>
+								<Icon name="photo" />
 								{t('portfolio.manageImages')}
 							</a>
 						{/if}
@@ -299,6 +525,7 @@
 					>
 						<p class="eyebrow">{t('portfolio.saleStatisticsEyebrow')}</p>
 						<h2 id="sale-statistics-title">
+							<Icon name="euro" tone="ok" />
 							{t('portfolio.soldSummary', {
 								count: data.saleStatistics.soldItemCount,
 								proceeds: formatPrice(data.saleStatistics.totalProceedsCents)
@@ -384,15 +611,20 @@
 									<div class="tile-bottom">
 										{#if item.soldAt}
 											<span class="badge sold" data-testid="item-sold-badge"
-												>{t('portfolio.sold')}{item.saleProceedsCents !== null
+												><Icon name="check" size="sm" />{t(
+													'portfolio.sold'
+												)}{item.saleProceedsCents !== null
 													? ` · ${formatPrice(item.saleProceedsCents)} €`
 													: ''}</span
 											>
 										{:else}
-											<span class="badge open">{t('portfolio.open')}</span>
+											<span class="badge open"
+												><Icon name="package" size="sm" />{t('portfolio.open')}</span
+											>
 											<form method="POST" action="?/quickSellItem">
 												<input name="itemId" type="hidden" value={item.id} />
 												<button class="pay" type="submit" data-testid="quick-sell-item">
+													<Icon name="euro" size="sm" />
 													{t('portfolio.quickSell')}
 												</button>
 											</form>
@@ -533,6 +765,287 @@
 		gap: 1rem;
 	}
 
+	.instance-import {
+		border-top: 1px solid var(--color-border);
+		display: grid;
+		gap: 0.6rem;
+		margin-top: 1.6rem;
+		padding-top: 1.4rem;
+	}
+
+	.instance-import h2 {
+		align-items: center;
+		display: flex;
+		font-size: 1.05rem;
+		gap: 0.4rem;
+		margin: 0;
+	}
+
+	.import-intro,
+	.import-hint {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		line-height: 1.5;
+		margin: 0;
+	}
+
+	.instance-import form {
+		display: grid;
+		gap: var(--gap-action-row);
+	}
+
+	.instance-import {
+		min-width: 0;
+	}
+
+	.instance-import fieldset {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		display: grid;
+		gap: 0.4rem;
+		margin: 0;
+		padding: 0.85rem 0.95rem;
+	}
+
+	.instance-import legend {
+		color: var(--color-text-muted);
+		font-size: 0.82rem;
+		font-weight: 700;
+		padding: 0 0.35rem;
+	}
+
+	.admin-choice {
+		align-items: center;
+		display: flex;
+		font-size: 0.88rem;
+		gap: 0.5rem;
+		padding: 0.3rem 0;
+	}
+
+	/* Follows the project's checkbox convention: no native control, explicit theme tokens. */
+	.admin-choice input[type='radio'] {
+		appearance: none;
+		background-color: var(--color-surface-strong);
+		border: 1px solid var(--color-border);
+		border-radius: 50%;
+		box-shadow: none;
+		cursor: pointer;
+		height: 1.05rem;
+		margin: 0;
+		padding: 0;
+		position: relative;
+		width: 1.05rem;
+	}
+
+	.admin-choice input[type='radio']:focus-visible {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
+	}
+
+	.admin-choice input[type='radio']:checked {
+		border-color: var(--color-accent);
+		border-width: 0.3rem;
+	}
+
+	.admin-choice:has(input[type='radio']:checked) span {
+		color: var(--color-accent-strong);
+		font-weight: 700;
+	}
+
+	.instance-import button[type='submit'] {
+		justify-self: end;
+	}
+
+	.visually-hidden-input {
+		height: 1px;
+		opacity: 0;
+		position: absolute;
+		width: 1px;
+	}
+
+	.file-button {
+		align-items: center;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-flex;
+		font-size: 0.88rem;
+		font-weight: 700;
+		gap: 0.35rem;
+		justify-self: start;
+		max-width: 100%;
+		overflow: hidden;
+		padding: 0.6rem 0.95rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.file-button:hover {
+		background: var(--color-accent-soft);
+	}
+
+	.import-report {
+		display: grid;
+		gap: 0.8rem;
+	}
+
+	.import-report h3 {
+		align-items: center;
+		display: flex;
+		font-size: 0.95rem;
+		gap: 0.4rem;
+		margin: 0;
+	}
+
+	.import-counts {
+		display: grid;
+		gap: 0.5rem 1rem;
+		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		margin: 0;
+	}
+
+	.import-counts div {
+		display: grid;
+		gap: 0.1rem;
+	}
+
+	.import-counts dt {
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.import-counts dd {
+		font-size: 0.95rem;
+		font-variant-numeric: tabular-nums;
+		font-weight: 700;
+		margin: 0;
+	}
+
+	@media (min-width: 30rem) {
+		.import-counts dd,
+		.import-users td:not(:first-child),
+		.import-users th:not(:first-child) {
+			white-space: nowrap;
+		}
+	}
+
+	.import-users {
+		border-collapse: collapse;
+		font-size: 0.85rem;
+		width: 100%;
+	}
+
+	.import-users caption {
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+		font-weight: 700;
+		padding-bottom: 0.35rem;
+		text-align: left;
+	}
+
+	.import-users th,
+	.import-users td {
+		border-bottom: 1px solid var(--color-border);
+		padding: 0.35rem 0.4rem;
+		text-align: left;
+	}
+
+	.import-users th {
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.import-users td:not(:first-child),
+	.import-users th:not(:first-child) {
+		text-align: right;
+	}
+
+	.import-table-scroll {
+		overflow-x: auto;
+	}
+
+	/* Narrow screens: every row becomes a labelled block so no column is cut off. */
+	@media (max-width: 30rem) {
+		.import-table-scroll {
+			overflow-x: visible;
+		}
+
+		.import-users thead {
+			border: 0;
+			clip-path: inset(50%);
+			height: 1px;
+			overflow: hidden;
+			position: absolute;
+			white-space: nowrap;
+			width: 1px;
+		}
+
+		.import-users,
+		.import-users tbody,
+		.import-users tr,
+		.import-users td {
+			display: block;
+			width: 100%;
+		}
+
+		.import-users tr {
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-control);
+			margin-bottom: 0.5rem;
+			padding: 0.6rem 0.7rem;
+		}
+
+		.import-users td {
+			border-bottom: 0;
+			display: flex;
+			justify-content: space-between;
+			padding: 0.15rem 0;
+			text-align: right;
+		}
+
+		.import-users td::before {
+			color: var(--color-text-muted);
+			content: attr(data-label);
+			font-size: 0.72rem;
+			font-weight: 700;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+
+		.import-users td:first-child {
+			border-bottom: 1px solid var(--color-border);
+			font-weight: 700;
+			margin-bottom: 0.35rem;
+			padding-bottom: 0.35rem;
+		}
+	}
+
+	.import-warnings {
+		background: var(--color-accent-soft);
+		border-radius: var(--radius-control);
+		font-size: 0.8rem;
+		padding: 0.7rem 0.85rem;
+	}
+
+	.import-warnings h4 {
+		font-size: 0.78rem;
+		margin: 0 0 0.3rem;
+	}
+
+	.import-warnings ul {
+		margin: 0;
+		padding-left: 1.1rem;
+	}
+
 	.form-error {
 		background: var(--color-danger-soft);
 		border: 1px solid var(--color-danger);
@@ -567,6 +1080,49 @@
 		text-transform: none;
 	}
 
+	label.checkbox input[type='checkbox'] {
+		appearance: none;
+		background-color: var(--color-surface-strong);
+		background-image: none;
+		background-position: center;
+		background-repeat: no-repeat;
+		background-size: 0.8rem;
+		border: 1px solid var(--color-border);
+		border-radius: 0.3rem;
+		box-shadow: none;
+		cursor: pointer;
+		height: 1.05rem;
+		margin: 0;
+		padding: 0;
+		width: 1.05rem;
+	}
+
+	label.checkbox input[type='checkbox']:focus-visible {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
+	}
+
+	label.checkbox:has(input[name='isComplete']:checked) span {
+		color: var(--color-ok);
+	}
+
+	label.checkbox:has(input[name='isFunctional']:checked) span {
+		color: var(--color-info, #3884ff);
+	}
+
+	label.checkbox:has(input[name='isComplete']:checked) input[type='checkbox'] {
+		background-color: var(--color-ok);
+		background-image: var(--checkbox-checkmark);
+		border-color: var(--color-ok);
+	}
+
+	label.checkbox:has(input[name='isFunctional']:checked) input[type='checkbox'] {
+		background-color: var(--color-info, #3884ff);
+		background-image: var(--checkbox-checkmark);
+		border-color: var(--color-info, #3884ff);
+	}
+
 	label span {
 		color: var(--color-text-muted);
 		font-size: 0.72rem;
@@ -589,6 +1145,15 @@
 			box-shadow 0.25s ease;
 	}
 
+	select {
+		appearance: none;
+		background-image: var(--select-arrow);
+		background-position: right var(--select-arrow-inset) center;
+		background-repeat: no-repeat;
+		background-size: var(--select-arrow-size);
+		padding-right: var(--select-control-end-padding);
+	}
+
 	input:focus,
 	select:focus,
 	textarea:focus {
@@ -601,16 +1166,60 @@
 		resize: vertical;
 	}
 
+	.item-form select {
+		background-color: var(--color-input);
+		background-image:
+			var(--select-form-arrow),
+			linear-gradient(135deg, var(--color-surface), var(--color-surface-strong));
+		background-position:
+			right var(--select-arrow-inset) center,
+			center;
+		background-repeat: no-repeat;
+		background-size:
+			var(--select-form-arrow-size),
+			100% 100%;
+		border-color: var(--color-border);
+		box-shadow:
+			inset 0 1px 0 var(--glass),
+			0 1px 2px var(--color-border);
+		font-weight: 600;
+		min-height: 2.85rem;
+		padding-right: calc(var(--select-arrow-inset) + var(--select-form-arrow-size) + 0.7rem);
+	}
+
+	.item-form select:hover:not(:disabled) {
+		background-image:
+			var(--select-form-arrow),
+			linear-gradient(135deg, var(--color-surface), var(--color-accent-soft));
+		border-color: var(--color-ice);
+		box-shadow:
+			inset 0 1px 0 var(--glass),
+			0 4px 12px var(--color-accent-soft);
+	}
+
+	/* Keep the focus ring visible: the select rules above set box-shadow at the
+	   same specificity but later in the sheet, so the shared :focus rule alone
+	   would be overridden. */
+	.item-form select:focus,
+	.item-form select:focus-visible {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
+	}
+
 	button {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-btn);
 		color: white;
 		cursor: pointer;
+		display: inline-flex;
 		font: inherit;
 		font-size: 0.95rem;
 		font-weight: 700;
+		gap: 0.4rem;
 		justify-self: start;
 		padding: 0.7rem 1.25rem;
 		transition:
@@ -788,9 +1397,12 @@
 	}
 
 	.badge {
+		align-items: center;
 		border-radius: 999px;
+		display: inline-flex;
 		font-size: 0.68rem;
 		font-weight: 800;
+		gap: 0.25rem;
 		letter-spacing: 0.03em;
 		padding: 4px 10px;
 	}
@@ -807,13 +1419,16 @@
 	}
 
 	.pay {
+		align-items: center;
 		background: var(--color-ok-soft);
 		border: 1px solid var(--color-ok-border);
 		border-radius: var(--radius-small);
 		box-shadow: none;
 		color: var(--color-ok);
+		display: inline-flex;
 		font-size: 0.78rem;
 		font-weight: 700;
+		gap: 0.25rem;
 		padding: 8px 12px;
 		transition: all 0.25s ease;
 	}
@@ -835,7 +1450,10 @@
 	}
 
 	.sale-statistics h2 {
+		align-items: center;
+		display: flex;
 		font-size: 1.1rem;
+		gap: 0.4rem;
 		margin: 0.25rem 0 1rem;
 	}
 

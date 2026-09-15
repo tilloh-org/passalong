@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import Icon from '$lib/components/icon.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	let { data, form } = $props();
 
@@ -118,16 +119,18 @@
 						onchange={onAvatarFileChange}
 					/>
 					<label class="file-button" for="avatar-file"
-						>{avatarFile ? `🖼 ${avatarFile.name}` : t('profile.chooseImage')}</label
+						><Icon name="photo" size="sm" />{avatarFile
+							? avatarFile.name
+							: t('profile.chooseImage')}</label
 					>
 					<button type="submit" disabled={!avatarReady} aria-disabled={!avatarReady}
-						>{t('profile.saveAvatar')}</button
+						><Icon name="upload" size="sm" />{t('profile.saveAvatar')}</button
 					>
 				</form>
 				{#if data.profile.avatarStorageKey}
 					<form method="POST" action="?/removeAvatar" class="avatar-remove-form">
 						<button type="submit" class="danger" data-testid="remove-avatar"
-							>{t('profile.removeAvatar')}</button
+							><Icon name="trash" size="sm" />{t('profile.removeAvatar')}</button
 						>
 					</form>
 				{/if}
@@ -143,7 +146,7 @@
 					class="panel"
 					data-testid="profile-details-form"
 				>
-					<h2>{t('profile.detailsTitle')}</h2>
+					<h2><Icon name="user-circle" />{t('profile.detailsTitle')}</h2>
 					<label>
 						<span>{t('profile.username')}</span>
 						<input value={data.profile.username} disabled />
@@ -160,7 +163,9 @@
 					{#if form?.updateProfileError}
 						<p class="form-error" role="alert">{form.updateProfileError}</p>
 					{/if}
-					<button type="submit" data-testid="save-profile">{t('profile.saveChanges')}</button>
+					<button type="submit" data-testid="save-profile"
+						><Icon name="check" size="sm" />{t('profile.saveChanges')}</button
+					>
 				</form>
 
 				{#if data.activeCollection}
@@ -169,7 +174,7 @@
 						aria-labelledby="stand-title"
 						data-testid="stand-panel"
 					>
-						<h2 id="stand-title">{t('profile.standTitle')}</h2>
+						<h2 id="stand-title"><Icon name="building-store" />{t('profile.standTitle')}</h2>
 						<p class="stand-hint">
 							{t('profile.standHint')}
 						</p>
@@ -193,7 +198,8 @@
 								type="submit"
 								data-testid="save-stand-intro"
 								disabled={!standIntroChanged}
-								aria-disabled={!standIntroChanged}>{t('profile.saveStandIntro')}</button
+								aria-disabled={!standIntroChanged}
+								><Icon name="check" size="sm" />{t('profile.saveStandIntro')}</button
 							>
 						</form>
 
@@ -206,6 +212,7 @@
 								onclick={() => copyStandLink()}
 								data-testid="copy-stand-link"
 							>
+								<Icon name="link" size="sm" />
 								{t('profile.copyStandLink')}
 							</button>
 							<a
@@ -215,6 +222,7 @@
 								rel="noopener"
 								data-testid="open-stand-link"
 							>
+								<Icon name="external-link" size="sm" />
 								{t('profile.openStand')}
 							</a>
 						</div>
@@ -222,7 +230,7 @@
 				{/if}
 
 				<form method="POST" action="?/changePassword" class="panel" data-testid="password-form">
-					<h2>{t('profile.changePasswordTitle')}</h2>
+					<h2><Icon name="key" />{t('profile.changePasswordTitle')}</h2>
 					<label>
 						<span>{t('profile.currentPassword')}</span>
 						<input
@@ -249,7 +257,9 @@
 					{#if form?.changePasswordError}
 						<p class="form-error" role="alert">{form.changePasswordError}</p>
 					{/if}
-					<button type="submit" data-testid="save-password">{t('profile.savePassword')}</button>
+					<button type="submit" data-testid="save-password"
+						><Icon name="check" size="sm" />{t('profile.savePassword')}</button
+					>
 				</form>
 
 				<section
@@ -257,7 +267,7 @@
 					aria-labelledby="import-title"
 					data-testid="import-panel"
 				>
-					<h2 id="import-title">{t('profile.importTitle')}</h2>
+					<h2 id="import-title"><Icon name="upload" />{t('profile.importTitle')}</h2>
 					<p class="import-hint">
 						{t('profile.importHint')}
 					</p>
@@ -290,13 +300,16 @@
 							onchange={onImportFileChange}
 						/>
 						<label class="file-button" for="account-archive-file"
-							>{importFile ? `📦 ${importFile.name}` : t('profile.chooseArchive')}</label
+							><Icon name="package" size="sm" />{importFile
+								? importFile.name
+								: t('profile.chooseArchive')}</label
 						>
 						<button
 							type="submit"
 							data-testid="import-submit"
 							disabled={!importReady}
-							aria-disabled={!importReady}>{t('profile.runImport')}</button
+							aria-disabled={!importReady}
+							><Icon name="upload" size="sm" />{t('profile.runImport')}</button
 						>
 					</form>
 				</section>
@@ -306,11 +319,11 @@
 					aria-labelledby="logout-title"
 					data-testid="logout-panel"
 				>
-					<h2 id="logout-title">{t('profile.sessionTitle')}</h2>
+					<h2 id="logout-title"><Icon name="logout" />{t('profile.sessionTitle')}</h2>
 					<p class="logout-hint">{t('profile.sessionHint')}</p>
 					<form method="POST" action="?/logout" class="logout-form">
 						<button type="submit" class="danger logout-btn" data-testid="profile-logout"
-							>{t('profile.logout')}</button
+							><Icon name="logout" size="sm" />{t('profile.logout')}</button
 						>
 					</form>
 				</section>
@@ -320,7 +333,7 @@
 					aria-labelledby="delete-account-title"
 					data-testid="delete-account-panel"
 				>
-					<h2 id="delete-account-title">{t('profile.deleteAccountTitle')}</h2>
+					<h2 id="delete-account-title"><Icon name="trash" />{t('profile.deleteAccountTitle')}</h2>
 					<p class="delete-account-hint">
 						{t('profile.deleteAccountHint')}
 					</p>
@@ -330,6 +343,7 @@
 						data-testid="delete-account-trigger"
 						onclick={() => openDeleteAccountDialog()}
 					>
+						<Icon name="trash" size="sm" />
 						{t('profile.deleteAccountTitle')}
 					</button>
 				</section>
@@ -341,9 +355,11 @@
 					data-testid="delete-account-dialog"
 				>
 					<div class="dialog-head">
-						<h3 id="delete-account-dialog-title">{t('profile.deleteAccountConfirmTitle')}</h3>
+						<h3 id="delete-account-dialog-title">
+							<Icon name="alert-triangle" tone="danger" />{t('profile.deleteAccountConfirmTitle')}
+						</h3>
 						<button type="button" class="secondary" onclick={() => deleteAccountDialog?.close()}
-							>{t('profile.close')}</button
+							><Icon name="x" size="sm" />{t('profile.close')}</button
 						>
 					</div>
 					<p class="dialog-hint">
@@ -354,7 +370,7 @@
 						role="note"
 						aria-label={t('profile.deleteAccountWarningLabel')}
 					>
-						<span aria-hidden="true">⚠️</span>
+						<Icon name="alert-triangle" tone="danger" />
 						<span>{t('profile.deleteAccountWarning')}</span>
 					</div>
 					<div class="delete-account-export">
@@ -363,7 +379,8 @@
 							class="secondary delete-account-export-link"
 							href="/profile/export"
 							download
-							data-testid="export-account-archive">{t('profile.downloadZipExport')}</a
+							data-testid="export-account-archive"
+							><Icon name="download" size="sm" />{t('profile.downloadZipExport')}</a
 						>
 					</div>
 					<form
@@ -394,7 +411,8 @@
 							class="danger"
 							data-testid="delete-account-submit"
 							disabled={!deleteAccountReady}
-							aria-disabled={!deleteAccountReady}>{t('profile.deleteAccountFinal')}</button
+							aria-disabled={!deleteAccountReady}
+							><Icon name="trash" size="sm" />{t('profile.deleteAccountFinal')}</button
 						>
 					</form>
 				</dialog>
@@ -408,9 +426,10 @@
 				aria-labelledby="admin-area-title"
 				data-testid="admin-area-panel"
 			>
-				<h2 id="admin-area-title">{t('profile.adminAreaTitle')}</h2>
+				<h2 id="admin-area-title"><Icon name="settings" />{t('profile.adminAreaTitle')}</h2>
 				<p class="admin-area-hint">{t('profile.adminAreaHint')}</p>
 				<a class="admin-area-link" href="/admin" data-testid="instance-admin-link">
+					<Icon name="settings" size="sm" />
 					{t('profile.goToInstanceAdmin')}
 				</a>
 			</section>
@@ -532,14 +551,16 @@
 	}
 
 	.file-button {
+		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-control);
 		color: var(--color-accent);
 		cursor: pointer;
-		display: inline-block;
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		justify-self: start;
 		padding: 0.7rem 1.1rem;
 		transition: background 0.2s ease;
@@ -565,7 +586,10 @@
 	}
 
 	.panel h2 {
+		align-items: center;
+		display: flex;
 		font-size: 1.05rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 
@@ -619,15 +643,18 @@
 	}
 
 	button {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-btn);
 		color: white;
 		cursor: pointer;
+		display: inline-flex;
 		font: inherit;
 		font-size: 0.95rem;
 		font-weight: 700;
+		gap: 0.4rem;
 		justify-self: end;
 		padding: 0.7rem 1.25rem;
 		transition:
@@ -694,7 +721,10 @@
 	}
 
 	.dialog-head h3 {
+		align-items: center;
+		display: flex;
 		font-size: 1.05rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 
@@ -795,6 +825,7 @@
 		display: inline-flex;
 		font-size: 0.85rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		justify-content: center;
 		padding: 0.5rem 0.9rem;
 		text-decoration: none;
@@ -855,8 +886,10 @@
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-btn);
 		color: white;
+		display: inline-flex;
 		font-size: 0.85rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.5rem 0.9rem;
 		text-decoration: none;
 	}
@@ -904,8 +937,10 @@
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-btn);
 		color: white;
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.4rem;
 		justify-self: end;
 		padding: 0.6rem 1.1rem;
 		text-decoration: none;
