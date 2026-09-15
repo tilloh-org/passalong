@@ -225,33 +225,35 @@
 									</div>
 								</dl>
 
-								<table class="import-users">
-									<caption>{t('import.userTableCaption')}</caption>
-									<thead>
-										<tr>
-											<th scope="col">{t('import.colUsername')}</th>
-											<th scope="col">{t('import.colItems')}</th>
-											<th scope="col">{t('import.colImages')}</th>
-											<th scope="col">{t('import.colPassword')}</th>
-										</tr>
-									</thead>
-									<tbody>
-										{#each importReport.users as user (user.sourceId)}
+								<div class="import-table-scroll">
+									<table class="import-users">
+										<caption>{t('import.userTableCaption')}</caption>
+										<thead>
 											<tr>
-												<td>{user.username}</td>
-												<td>{user.items}</td>
-												<td>{user.images}</td>
-												<td>
-													{user.username === selectedAdmin
-														? t('import.passwordNew')
-														: user.passwordResetRequired
-															? t('import.passwordReset')
-															: t('import.passwordKept')}
-												</td>
+												<th scope="col">{t('import.colUsername')}</th>
+												<th scope="col">{t('import.colItems')}</th>
+												<th scope="col">{t('import.colImages')}</th>
+												<th scope="col">{t('import.colPassword')}</th>
 											</tr>
-										{/each}
-									</tbody>
-								</table>
+										</thead>
+										<tbody>
+											{#each importReport.users as user (user.sourceId)}
+												<tr>
+													<td data-label={t('import.colUsername')}>{user.username}</td>
+													<td data-label={t('import.colItems')}>{user.items}</td>
+													<td data-label={t('import.colImages')}>{user.images}</td>
+													<td data-label={t('import.colPassword')}>
+														{user.username === selectedAdmin
+															? t('import.passwordNew')
+															: user.passwordResetRequired
+																? t('import.passwordReset')
+																: t('import.passwordKept')}
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
 
 								{#if importReport.publicStandPages.length > 0}
 									<div class="import-warnings">
@@ -778,6 +780,10 @@
 		gap: var(--gap-action-row);
 	}
 
+	.instance-import {
+		min-width: 0;
+	}
+
 	.instance-import fieldset {
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-control);
@@ -905,7 +911,14 @@
 		font-variant-numeric: tabular-nums;
 		font-weight: 700;
 		margin: 0;
-		white-space: nowrap;
+	}
+
+	@media (min-width: 30rem) {
+		.import-counts dd,
+		.import-users td:not(:first-child),
+		.import-users th:not(:first-child) {
+			white-space: nowrap;
+		}
 	}
 
 	.import-users {
@@ -940,7 +953,66 @@
 	.import-users td:not(:first-child),
 	.import-users th:not(:first-child) {
 		text-align: right;
-		white-space: nowrap;
+	}
+
+	.import-table-scroll {
+		overflow-x: auto;
+	}
+
+	/* Narrow screens: every row becomes a labelled block so no column is cut off. */
+	@media (max-width: 30rem) {
+		.import-table-scroll {
+			overflow-x: visible;
+		}
+
+		.import-users thead {
+			border: 0;
+			clip-path: inset(50%);
+			height: 1px;
+			overflow: hidden;
+			position: absolute;
+			white-space: nowrap;
+			width: 1px;
+		}
+
+		.import-users,
+		.import-users tbody,
+		.import-users tr,
+		.import-users td {
+			display: block;
+			width: 100%;
+		}
+
+		.import-users tr {
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-control);
+			margin-bottom: 0.5rem;
+			padding: 0.6rem 0.7rem;
+		}
+
+		.import-users td {
+			border-bottom: 0;
+			display: flex;
+			justify-content: space-between;
+			padding: 0.15rem 0;
+			text-align: right;
+		}
+
+		.import-users td::before {
+			color: var(--color-text-muted);
+			content: attr(data-label);
+			font-size: 0.72rem;
+			font-weight: 700;
+			letter-spacing: 0.04em;
+			text-transform: uppercase;
+		}
+
+		.import-users td:first-child {
+			border-bottom: 1px solid var(--color-border);
+			font-weight: 700;
+			margin-bottom: 0.35rem;
+			padding-bottom: 0.35rem;
+		}
 	}
 
 	.import-warnings {

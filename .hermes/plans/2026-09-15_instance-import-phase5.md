@@ -188,9 +188,18 @@ printed QR codes pointing at a hidden stand) would be a new product feature, not
 
 **Step 5: commit** — `feat: activate the imported generation atomically`
 
-### Task 7 — Admin import dialog and actions
+### Task 7 — First-run import dialog and actions
 
-**Objective:** Wire the pipeline to `/admin` behind instance-admin auth, requiring exactly one admin pick.
+The dialog lives on the first-run surface, **not** behind `/admin`: the takeover runs on an instance
+that has no accounts, so there is no admin to sign in as (`/admin` redirects non-admins). This is the
+"offene Übernahme einer leeren Instanz" the contract names in l. 938–948, guarded by the documented
+operator warning.
+
+**Implemented:** `stageInstanceImport` (same-origin, refuses when accounts exist, validates, stages
+the archive on disk under a single-use token) and `activateInstanceImport` (consumes the token,
+requires exactly one admin pick plus a valid new password, then imports). UI lists every user with
+item/image/password status, shows the counts and checksum result, and keeps primary actions
+bottom-right per `docs/DESIGN.md`.
 
 **Files:**
 
