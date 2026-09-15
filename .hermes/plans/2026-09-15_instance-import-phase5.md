@@ -220,6 +220,28 @@ bottom-right per `docs/DESIGN.md`.
 
 ### Task 8 — E2E, screenshots, docs and review
 
+**Done:**
+
+- `e2e/instance-import.spec.ts` — one smoke test on a dedicated Playwright project and instance
+  (a takeover is only allowed while no account exists, so it cannot share the seeded instance):
+  bad container refused → tampered payload refused → valid archive validates → activate with a chosen
+  admin and new password → the new admin signs in to exactly their own single item (`Portfolio (1)`
+  proves tenant isolation by count).
+- `playwright.config.ts` — second project + second `webServer`; both servers are seeded separately.
+- Screenshots in `docs/feature-development/instance-import/` (dialog empty, report, report with a
+  selection; light, dark, mobile).
+- `docs/EXCHANGE-FORMAT.md` — the public format contract (the contract requires the exchange format
+  to be publicly documented).
+- `README.md` — operator section including the explicit warning that an instance without accounts is
+  uninitialised and must be initialised immediately (contract l. 946).
+
+**Found and fixed during verification:** the report table overflowed a 390 px viewport by 70 px
+(the `white-space: nowrap` status column). Narrow screens now render each user row as a labelled
+block, verified at 0 px overflow with every value fully readable.
+
+**Remaining:** the independent review result, then push with the screenshots embedded in the PR
+description.
+
 **Files:**
 
 - Create: `e2e/instance-import.spec.ts`
