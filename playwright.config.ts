@@ -12,6 +12,11 @@ export default defineConfig({
 	retries: process.env.CI ? 2 : 0,
 	workers: 1,
 	reporter: [['list']],
+	// Retry diagnostics were lost when baseURL moved into the projects; keep them here so a flaky CI
+	// run still produces a trace.
+	use: {
+		trace: 'on-first-retry'
+	},
 	projects: [
 		{
 			name: 'chromium',
@@ -36,14 +41,14 @@ export default defineConfig({
 	webServer: [
 		{
 			command:
-				'rm -rf /tmp/passalong-e2e.sqlite* /tmp/passalong-e2e-media && npm run build && ORIGIN=http://localhost:4173 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-media BODY_SIZE_LIMIT=6M PORT=4173 node build/index.js',
+				'rm -rf /tmp/passalong-e2e.sqlite* /tmp/passalong-e2e-media && npm run build && ORIGIN=http://localhost:4173 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-media BODY_SIZE_LIMIT=256M PORT=4173 node build/index.js',
 			url: 'http://localhost:4173',
 			reuseExistingServer: !process.env.CI,
 			timeout: 120_000
 		},
 		{
 			command:
-				'rm -rf /tmp/passalong-e2e-takeover.sqlite* /tmp/passalong-e2e-takeover-media && ORIGIN=http://localhost:4174 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-takeover.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-takeover-media BODY_SIZE_LIMIT=6M PORT=4174 node build/index.js',
+				'rm -rf /tmp/passalong-e2e-takeover.sqlite* /tmp/passalong-e2e-takeover-media && ORIGIN=http://localhost:4174 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-takeover.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-takeover-media BODY_SIZE_LIMIT=256M PORT=4174 node build/index.js',
 			url: 'http://localhost:4174',
 			reuseExistingServer: !process.env.CI,
 			timeout: 120_000

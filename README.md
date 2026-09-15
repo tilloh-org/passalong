@@ -103,6 +103,12 @@ screen, before any account exists**: the dialog appears next to the first-run
 registration form, and you pick one of the imported users as the instance
 administrator, who receives a password you set there.
 
+The compressed stack ships with `BODY_SIZE_LIMIT: 256M` so an archive that
+contains images fits. If you set that variable yourself, keep it at or above the
+largest archive you intend to import — a smaller value fails the upload with a
+bare "413 Payload Too Large" before the application can show a message. Archives
+up to 256 MB are accepted; the dialog refuses a larger file before uploading it.
+
 **Operator warning — act immediately.** While an instance has no accounts, it is
 uninitialised: whoever reaches it first can either register the first account or
 run a takeover. Start a new instance only on a network you trust, and complete

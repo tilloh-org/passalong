@@ -22,6 +22,7 @@ export interface FixtureUserOptions {
 	avatarFile?: string | null;
 	items?: number;
 	published?: boolean;
+	soldItems?: number;
 }
 
 /**
@@ -43,8 +44,8 @@ export function fixtureUser(options: FixtureUserOptions): ExchangeUser {
 		isFunctional: true,
 		reservedAt: null,
 		saleChannel: null,
-		soldAt: null,
-		saleProceedsCents: null,
+		soldAt: index < (options.soldItems ?? 0) ? '2026-09-05T12:00:00.000Z' : null,
+		saleProceedsCents: index < (options.soldItems ?? 0) ? 500 + index : null,
 		marketDaySourceId: null,
 		images: [
 			{
@@ -99,12 +100,23 @@ export function fixtureUser(options: FixtureUserOptions): ExchangeUser {
  * Build a complete, checksum-consistent exchange archive.
  *
  * @param {ExchangeUser[]} users - Users to include.
- * @param {{ mediaFiles?: string[]; mediaBytes?: Buffer }} [options] - Media entries to add.
+ * @param {object} [options] - Media entries and deliberate manifest manipulations for negative tests.
  * @returns {Buffer} Archive bytes.
  */
 export function fixtureArchive(
 	users: ExchangeUser[],
-	options: { mediaFiles?: string[]; mediaBytes?: Buffer } = {}
+	options: {
+		mediaFiles?: string[];
+		mediaBytes?: Buffer;
+		omitMediaFromManifest?: string[];
+		mediaFileCount?: number;
+		mediaBytesTotal?: number;
+		expenseCount?: number;
+		marketDayCount?: number;
+		itemCount?: number;
+		userCount?: number;
+		salesCount?: number;
+	} = {}
 ): Buffer {
 	const data: ExchangeData = { users };
 	const dataPayload = Buffer.from(JSON.stringify(data, null, '\t'), 'utf8');
@@ -129,6 +141,9 @@ export function fixtureArchive(
 		if (name === MANIFEST_ENTRY_NAME) {
 			continue;
 		}
+		if (options.omitMediaFromManifest?.includes(name)) {
+			continue;
+		}
 		manifestFiles[name] = {
 			sha256: createHash(CHECKSUM_ALGORITHM).update(payload).digest('hex'),
 			bytes: payload.length
@@ -138,6 +153,11 @@ export function fixtureArchive(
 		(accumulator, user) => {
 			accumulator.items += user.collections.reduce(
 				(inner, collection) => inner + collection.items.length,
+				0
+			);
+			accumulator.sales += user.collections.reduce(
+				(inner, collection) =>
+					inner + collection.items.filter((item) => item.soldAt !== null).length,
 				0
 			);
 			accumulator.collections += user.collections.length;
@@ -151,7 +171,7 @@ export function fixtureArchive(
 			);
 			return accumulator;
 		},
-		{ items: 0, collections: 0, marketDays: 0, expenses: 0 }
+		{ items: 0, collections: 0, marketDays: 0, expenses: 0, sales: 0 }
 	);
 	const manifest = {
 		format: EXCHANGE_FORMAT_NAME,
@@ -160,15 +180,18 @@ export function fixtureArchive(
 		createdAt: '2026-09-15T10:00:00.000Z',
 		producerId: 'fixture-producer',
 		counts: {
-			users: users.length,
+			users: options.userCount ?? users.length,
 			tenants: users.length,
 			collections: totals.collections,
-			items: totals.items,
-			marketDays: totals.marketDays,
-			sales: 0,
-			expenses: totals.expenses
+			items: options.itemCount ?? totals.items,
+			marketDays: options.marketDayCount ?? totals.marketDays,
+			sales: options.salesCount ?? totals.sales,
+			expenses: options.expenseCount ?? totals.expenses
 		},
-		media: { files: mediaFiles.length, bytes: mediaPayload.length * mediaFiles.length },
+		media: {
+			files: options.mediaFileCount ?? mediaFiles.length,
+			bytes: options.mediaBytesTotal ?? mediaPayload.length * mediaFiles.length
+		},
 		checksumAlgorithm: CHECKSUM_ALGORITHM,
 		files: manifestFiles
 	};

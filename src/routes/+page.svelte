@@ -59,6 +59,9 @@
 	}
 
 	let importFile: File | undefined = $state();
+	let importSizeError = $state('');
+	// Mirrors the server-side cap in +page.server.ts; keep the two in step.
+	const maximumImportUploadBytes = 256 * 1024 * 1024;
 	let importReport = $state<{
 		users: Array<{
 			sourceId: string;
@@ -90,6 +93,14 @@
 	function onImportFileChange(event: Event): void {
 		const input = event.currentTarget as HTMLInputElement;
 		importFile = input.files?.[0];
+		// The server rejects an oversized archive anyway; checking here saves the operator a long
+		// upload that would only end in a broken-request page.
+		importSizeError =
+			importFile && importFile.size > maximumImportUploadBytes
+				? t('import.tooLarge', {
+						megabytes: String(Math.round(maximumImportUploadBytes / (1024 * 1024)))
+					})
+				: '';
 	}
 
 	$effect(() => {
@@ -103,7 +114,7 @@
 		}
 	});
 
-	const importUploadReady = $derived(Boolean(importFile));
+	const importUploadReady = $derived(Boolean(importFile) && importSizeError === '');
 </script>
 
 <svelte:head>
@@ -174,6 +185,9 @@
 									? importFile.name
 									: t('import.chooseArchive')}</label
 							>
+							{#if importSizeError}
+								<p class="form-error" role="alert">{importSizeError}</p>
+							{/if}
 							{#if form && 'importError' in form && form.importError}
 								<p class="form-error" role="alert">{form.importError}</p>
 							{/if}

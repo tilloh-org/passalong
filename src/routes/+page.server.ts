@@ -41,10 +41,27 @@ const httpStatus = {
 	forbidden: 403,
 	notFound: 404,
 	conflict: 409,
-	tooManyRequests: 429
+	payloadTooLarge: 413,
+	tooManyRequests: 429,
+	serviceUnavailable: 503
 } as const;
 const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
+const bytesPerMegabyte = 1024 * 1024;
+// Bounded so the pre-account takeover surface cannot be used to buffer unbounded input. Real
+// archives carry images, so this is far larger than the generic request limit; the deployment body
+// limit has to be raised alongside it (documented in README.md).
+const MAXIMUM_IMPORT_UPLOAD_BYTES = 256 * bytesPerMegabyte;
+
+/**
+ * Render a byte count as whole megabytes.
+ *
+ * @param {number} bytes - Byte count.
+ * @returns {number} Whole megabytes.
+ */
+function formatMegabytes(bytes: number): number {
+	return Math.round(bytes / bytesPerMegabyte);
+}
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
 
 interface ItemWithImages extends Item {
@@ -178,10 +195,23 @@ export const actions: Actions = {
 			});
 		}
 
+		// Reject an oversized upload from its declared length, before the body is buffered into
+		// memory: this surface has no session, so it must not accept unbounded input.
+		const declaredLength = Number(request.headers.get('content-length') ?? '0');
+		if (declaredLength > MAXIMUM_IMPORT_UPLOAD_BYTES) {
+			return fail(httpStatus.payloadTooLarge, {
+				importError: `Das Archiv ist zu groß. Erlaubt sind bis zu ${formatMegabytes(MAXIMUM_IMPORT_UPLOAD_BYTES)} MB.`
+			});
+		}
 		const formData = await request.formData();
 		const upload = formData.get('importArchive');
 		if (!(upload instanceof File) || upload.size === 0) {
 			return fail(httpStatus.badRequest, { importError: 'Bitte wähle eine Archivdatei aus.' });
+		}
+		if (upload.size > MAXIMUM_IMPORT_UPLOAD_BYTES) {
+			return fail(httpStatus.payloadTooLarge, {
+				importError: `Das Archiv ist zu groß. Erlaubt sind bis zu ${formatMegabytes(MAXIMUM_IMPORT_UPLOAD_BYTES)} MB.`
+			});
 		}
 		const archive = Buffer.from(await upload.arrayBuffer());
 		const report = validateInstanceArchive(archive);
@@ -195,6 +225,12 @@ export const actions: Actions = {
 		// The archive is held on disk and referenced by a single-use token, so the activation step
 		// never re-uploads it and a staged archive can never be activated twice.
 		const stagingToken = stageArchive(archive, join(dirname(getDatabasePath()), 'import-staging'));
+		if (!stagingToken) {
+			return fail(httpStatus.serviceUnavailable, {
+				importError:
+					'Der Import kann gerade nicht vorbereitet werden. Bitte versuche es gleich noch einmal.'
+			});
+		}
 		return { importReport: report, importStagingToken: stagingToken };
 	},
 

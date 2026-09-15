@@ -37,6 +37,7 @@ export interface ImportReportUser {
 	items: number;
 	marketDays: number;
 	expenses: number;
+	sales: number;
 	images: number;
 }
 
@@ -109,7 +110,19 @@ export function validateInstanceArchive(archive: Buffer): InstanceImportReport {
 		report.errors.push('The archive is not a valid backup container.');
 		return report;
 	}
-	const entries = parseZip(archive);
+	let entries: Map<string, { name: string; payloadOffset: number; size: number }>;
+	try {
+		entries = parseZip(archive);
+	} catch (error) {
+		// A malformed or unsupported container must read as an invalid archive, never as a crash.
+		// The parser only throws safe, structural messages.
+		report.errors.push(
+			error instanceof Error && error.message.includes('compression method')
+				? 'The archive contains entries this format does not allow: every entry has to be stored uncompressed.'
+				: 'The archive is not a valid backup container.'
+		);
+		return report;
+	}
 	const safety = assertArchiveWithinLimits(
 		[...entries.values()].map((entry) => ({
 			name: entry.name,
@@ -162,7 +175,14 @@ export function validateInstanceArchive(archive: Buffer): InstanceImportReport {
 		.reduce((total, [, meta]) => total + meta.bytes, 0);
 
 	validateUsers(data.users, entries, report);
-	validateManifestCounts(manifest.counts, report, data.users, manifest.files);
+	validateManifestCounts(
+		manifest.counts,
+		report,
+		data.users,
+		manifest.files,
+		manifest.media,
+		collectReferencedMedia(data.users)
+	);
 	return report;
 }
 
@@ -238,8 +258,15 @@ export async function importInstanceArchive(
 			for (const written of writtenMedia) {
 				rmSync(written, { force: true });
 			}
+			// A storage failure must never reach the visitor as raw database text, so the message is
+			// translated here and the internal detail is logged instead of rendered.
+			if (error instanceof Error) {
+				console.error('Instance import rolled back:', error.message);
+			}
 			report.errors.push(
-				error instanceof Error ? error.message : 'The import could not be activated.'
+				error instanceof Error && isSafeImportMessage(error.message)
+					? error.message
+					: 'Der Import konnte nicht abgeschlossen werden. Die Instanz wurde nicht verändert.'
 			);
 			return { imported: false, report };
 		}
@@ -256,6 +283,21 @@ export async function importInstanceArchive(
  * @param {Buffer} archive - Archive bytes known to be valid.
  * @returns {ExchangeData | null} Parsed logical data, or null when it cannot be read.
  */
+/**
+ * Decide whether an internal message may be shown to the visitor.
+ *
+ * Messages written by the import itself are safe; anything that looks like database or filesystem
+ * wording is not, because it exposes storage internals and reads as gibberish.
+ *
+ * @param {string} message - Internal error message.
+ * @returns {boolean} Whether the message may be rendered.
+ */
+function isSafeImportMessage(message: string): boolean {
+	return !/constraint|SQLITE_|sqlite|UNIQUE|CHECK |FOREIGN KEY|no such table|no such column|disk I|ENOSPC|EBUSY|EROFS/i.test(
+		message
+	);
+}
+
 function readArchiveData(archive: Buffer): ExchangeData | null {
 	const entry = parseZip(archive).get(DATA_ENTRY_NAME);
 	if (!entry) {
@@ -663,11 +705,14 @@ function validateUsers(
 			sourceId: user.sourceId,
 			username,
 			displayName: typeof user.displayName === 'string' ? user.displayName : username,
-			passwordResetRequired: user.passwordHash === null || user.passwordHash === undefined,
+			// The report drives the operator's decision, so it has to state what activation will
+			// really do: only a natively verifiable hash is carried over, anything else is reset.
+			passwordResetRequired: !classifyImportedPasswordHash(user.passwordHash).usable,
 			collections: collections.length,
 			items: 0,
 			marketDays: 0,
 			expenses: 0,
+			sales: 0,
 			images: 0
 		};
 
@@ -696,7 +741,8 @@ function validateUsers(
 		collections: report.users.reduce((total, user) => total + user.collections, 0),
 		items: report.users.reduce((total, user) => total + user.items, 0),
 		marketDays: report.users.reduce((total, user) => total + user.marketDays, 0),
-		sales: report.counts.sales,
+		// A sale is an item that carries a sold timestamp; the old self-assignment always read 0.
+		sales: report.users.reduce((total, user) => total + user.sales, 0),
 		expenses: report.users.reduce((total, user) => total + user.expenses, 0)
 	};
 }
@@ -777,6 +823,9 @@ function validateCollection(
 	summary.items += items.length;
 	summary.marketDays += marketDays.length;
 	summary.expenses += expenses.length;
+	summary.sales += items.filter(
+		(item) => isRecord(item) && typeof item.soldAt === 'string' && item.soldAt !== ''
+	).length;
 	summary.images += items.reduce(
 		(total, item) => total + (Array.isArray(item?.images) ? item.images.length : 0),
 		0
@@ -798,6 +847,20 @@ function validateMarketDay(
 ): void {
 	if (!isRecord(day) || !isNonBlank(day.sourceId) || !isNonBlank(day.name)) {
 		report.errors.push(`A market day of ${username} is incomplete.`);
+		return;
+	}
+	// These values are stored verbatim, so free text or an impossible value would reach the database.
+	if (!isCalendarDate(day.date)) {
+		report.errors.push(`The market day ${day.name} of ${username} has an invalid date.`);
+	}
+	if (day.startTime !== null && !isClockTime(day.startTime)) {
+		report.errors.push(`The market day ${day.name} of ${username} has an invalid start time.`);
+	}
+	if (day.endTime !== null && !isClockTime(day.endTime)) {
+		report.errors.push(`The market day ${day.name} of ${username} has an invalid end time.`);
+	}
+	if (day.closedAt !== null && !isIsoInstant(day.closedAt)) {
+		report.errors.push(`The market day ${day.name} of ${username} has an invalid closing time.`);
 	}
 }
 
@@ -825,6 +888,17 @@ function validateItem(
 	if (!isNonNegativeInteger(item.priceCents)) {
 		report.errors.push(`The item ${item.title} has an invalid price.`);
 	}
+	if (item.saleProceedsCents !== null && !isNonNegativeInteger(item.saleProceedsCents)) {
+		report.errors.push(`The item ${item.title} has an invalid sale proceeds amount.`);
+	}
+	for (const [label, value] of [
+		['reservation time', item.reservedAt],
+		['sale time', item.soldAt]
+	] as const) {
+		if (value !== null && !isIsoInstant(value)) {
+			report.errors.push(`The item ${item.title} has an invalid ${label}.`);
+		}
+	}
 	if (!(itemCategories as readonly string[]).includes(item.category)) {
 		report.errors.push(`The item ${item.title} has an unsupported category.`);
 	}
@@ -843,6 +917,7 @@ function validateItem(
 	if (item.saleChannel !== null && item.saleProceedsCents === null) {
 		report.warnings.push(`The sold item ${item.title} has no recorded proceeds.`);
 	}
+	const imagePositions = new Set<number>();
 	for (const image of Array.isArray(item.images) ? item.images : []) {
 		if (!isRecord(image) || !isNonBlank(image.file)) {
 			report.errors.push(`The item ${item.title} references an invalid image.`);
@@ -850,6 +925,15 @@ function validateItem(
 		}
 		if (!entries.has(image.file)) {
 			report.errors.push(`The media file ${image.file} is missing from the archive.`);
+		}
+		// Positions key the image order, so a negative or repeated value would fail as a raw
+		// database constraint instead of a readable reason.
+		if (!isNonNegativeInteger(image.position)) {
+			report.errors.push(`The item ${item.title} has an image without a valid position.`);
+		} else if (imagePositions.has(image.position)) {
+			report.errors.push(`The item ${item.title} has two images with the same position.`);
+		} else {
+			imagePositions.add(image.position);
 		}
 	}
 }
@@ -879,6 +963,9 @@ function validateExpense(
 	if (!isNonNegativeInteger(expense.amountCents)) {
 		report.errors.push(`The expense ${expense.label} has an invalid amount.`);
 	}
+	if (!isCalendarDate(expense.expenseDate)) {
+		report.errors.push(`The expense ${expense.label} has an invalid date.`);
+	}
 	if (expense.marketDaySourceId !== null && !marketDayIds.has(expense.marketDaySourceId)) {
 		report.errors.push(`The expense ${expense.label} references an unknown market day.`);
 	}
@@ -897,7 +984,9 @@ function validateManifestCounts(
 	counts: ExchangeCounts,
 	report: InstanceImportReport,
 	users: ExchangeUser[],
-	manifestFiles: Record<string, { sha256: string; bytes: number }>
+	manifestFiles: Record<string, { sha256: string; bytes: number }>,
+	manifestMedia: { files: number; bytes: number },
+	referencedMedia: Set<string>
 ): void {
 	const expected = report.counts;
 	if (counts.users !== expected.users) {
@@ -918,10 +1007,29 @@ function validateManifestCounts(
 	if (counts.expenses !== expected.expenses) {
 		report.errors.push('The manifest expense count does not match the archive contents.');
 	}
-	const declaredMedia = Object.keys(manifestFiles).filter((name) =>
-		name.startsWith('media/')
-	).length;
-	if (users.length === 0 && declaredMedia > 0) {
+	if (counts.sales !== expected.sales) {
+		report.errors.push('The manifest sale count does not match the archive contents.');
+	}
+	const manifestMediaNames = Object.keys(manifestFiles).filter((name) => name.startsWith('media/'));
+	for (const name of referencedMedia) {
+		if (!Object.hasOwn(manifestFiles, name)) {
+			report.media.checksumsMatch = false;
+			report.errors.push(
+				`The manifest does not cover the referenced media file ${name}, so its integrity cannot be verified.`
+			);
+		}
+	}
+	if (manifestMedia.files !== manifestMediaNames.length) {
+		report.errors.push('The manifest media file count does not match the archive contents.');
+	}
+	const declaredMediaBytes = manifestMediaNames.reduce(
+		(total, name) => total + (manifestFiles[name]?.bytes ?? 0),
+		0
+	);
+	if (manifestMedia.bytes !== declaredMediaBytes) {
+		report.errors.push('The manifest media byte total does not match the archive contents.');
+	}
+	if (users.length === 0 && manifestMediaNames.length > 0) {
 		report.errors.push('The archive contains media without any user.');
 	}
 }
@@ -935,6 +1043,34 @@ function validateManifestCounts(
  */
 function readEntry(archive: Buffer, entry: { payloadOffset: number; size: number }): string {
 	return archive.subarray(entry.payloadOffset, entry.payloadOffset + entry.size).toString('utf8');
+}
+
+/**
+ * Collect every media file name the logical data refers to.
+ *
+ * Each of these has to appear in the manifest, otherwise it would be copied into the media root
+ * without any checksum having been verified.
+ *
+ * @param {ExchangeUser[]} users - Users present in the logical data file.
+ * @returns {Set<string>} Referenced media entry names.
+ */
+function collectReferencedMedia(users: ExchangeUser[]): Set<string> {
+	const referenced = new Set<string>();
+	for (const user of users) {
+		if (typeof user.avatarFile === 'string' && user.avatarFile !== '') {
+			referenced.add(user.avatarFile);
+		}
+		for (const collection of user.collections ?? []) {
+			for (const item of collection.items ?? []) {
+				for (const image of item.images ?? []) {
+					if (typeof image.file === 'string' && image.file !== '') {
+						referenced.add(image.file);
+					}
+				}
+			}
+		}
+	}
+	return referenced;
 }
 
 function zeroCounts(): ImportReportCounts {
@@ -951,4 +1087,47 @@ function isNonBlank(value: unknown): value is string {
 
 function isNonNegativeInteger(value: unknown): value is number {
 	return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
+
+const calendarDatePattern = /^\d{4}-\d{2}-\d{2}$/;
+const clockTimePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+const isoInstantPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * Check a calendar date in `YYYY-MM-DD` form.
+ *
+ * @param {unknown} value - Candidate date.
+ * @returns {boolean} Whether the value is a real calendar date.
+ */
+function isCalendarDate(value: unknown): boolean {
+	if (typeof value !== 'string' || !calendarDatePattern.test(value)) {
+		return false;
+	}
+	// Round-trip through Date so an impossible day such as 2026-02-31 is rejected.
+	const parsed = new Date(`${value}T00:00:00.000Z`);
+	return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
+}
+
+/**
+ * Check a clock time in `HH:MM` form.
+ *
+ * @param {unknown} value - Candidate time.
+ * @returns {boolean} Whether the value is a valid clock time.
+ */
+function isClockTime(value: unknown): boolean {
+	return typeof value === 'string' && clockTimePattern.test(value);
+}
+
+/**
+ * Check an ISO-8601 instant that the product can store.
+ *
+ * @param {unknown} value - Candidate instant.
+ * @returns {boolean} Whether the value is a valid ISO instant.
+ */
+function isIsoInstant(value: unknown): boolean {
+	return (
+		typeof value === 'string' &&
+		isoInstantPattern.test(value) &&
+		!Number.isNaN(new Date(value).getTime())
+	);
 }
