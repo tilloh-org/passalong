@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
+	import Icon from '$lib/components/icon.svelte';
 	import ItemInfoBlock from '$lib/components/item-info-block.svelte';
 
 	let { data, form } = $props();
@@ -64,7 +65,7 @@
 			{/if}
 
 			<section class="panel" aria-labelledby="photos-title">
-				<h2 id="photos-title">{t('item.photosTitle')}</h2>
+				<h2 id="photos-title"><Icon name="photo" />{t('item.photosTitle')}</h2>
 				{#if data.images.length}
 					<div class="cover-preview">
 						{#if coverImageKey}
@@ -96,7 +97,7 @@
 				data-testid="images-dialog"
 			>
 				<div class="dialog-head">
-					<h3>{t('item.managePhotos')}</h3>
+					<h3><Icon name="photo" />{t('item.managePhotos')}</h3>
 					<button type="button" class="secondary" onclick={() => imagesDialog?.close()}
 						>{t('profile.close')}</button
 					>
@@ -120,9 +121,13 @@
 						required
 					/>
 					<label class="file-button" for="item-image-file">
+						<Icon name="upload" size="sm" />
 						{t('item.choosePhoto')}
 					</label>
-					<button type="submit">{t('item.savePhoto')}</button>
+					<button type="submit">
+						<Icon name="upload" size="sm" />
+						{t('item.savePhoto')}
+					</button>
 				</form>
 				{#if form?.uploadImageError}
 					<p class="form-error" role="alert">{form.uploadImageError}</p>
@@ -148,7 +153,7 @@
 											<input name="itemId" type="hidden" value={data.item.id} />
 											<input name="imageId" type="hidden" value={image.id} />
 											<button type="submit" class="secondary" data-testid="set-item-cover"
-												>{t('item.setAsCover')}</button
+												><Icon name="photo" size="sm" />{t('item.setAsCover')}</button
 											>
 										</form>
 									{/if}
@@ -156,7 +161,7 @@
 										<input name="itemId" type="hidden" value={data.item.id} />
 										<input name="imageId" type="hidden" value={image.id} />
 										<button type="submit" class="danger" data-testid="remove-item-image"
-											>{t('item.remove')}</button
+											><Icon name="trash" size="sm" />{t('item.remove')}</button
 										>
 									</form>
 								</div>
@@ -167,9 +172,10 @@
 			</dialog>
 
 			<section class="panel" aria-labelledby="sale-title">
-				<h2 id="sale-title">{t('item.saleTitle')}</h2>
+				<h2 id="sale-title"><Icon name="euro" />{t('item.saleTitle')}</h2>
 				{#if data.item.soldAt}
 					<p class="sold-summary">
+						<Icon name="check" tone="ok" size="sm" />
 						{t('item.soldSummary', {
 							date: new Date(data.item.soldAt).toLocaleDateString(getLocale()),
 							channel: saleChannelLabel(data.item.saleChannel ?? 'other')
@@ -181,7 +187,7 @@
 					<form method="POST" action="?/unmarkItemSold">
 						<input name="itemId" type="hidden" value={data.item.id} />
 						<button type="submit" class="danger" data-testid="unmark-item-sold"
-							>{t('item.undoSale')}</button
+							><Icon name="rotate" size="sm" />{t('item.undoSale')}</button
 						>
 					</form>
 				{:else}
@@ -221,7 +227,10 @@
 						{#if form?.saleStatusError}
 							<p class="form-error" role="alert">{form.saleStatusError}</p>
 						{/if}
-						<button type="submit" data-testid="mark-item-sold">{t('item.markSold')}</button>
+						<button type="submit" data-testid="mark-item-sold">
+							<Icon name="check" size="sm" />
+							{t('item.markSold')}
+						</button>
 					</form>
 				{/if}
 			</section>
@@ -232,7 +241,7 @@
 		<form method="POST" action="?/deleteItem" class="action-form">
 			<input name="itemId" type="hidden" value={data.item.id} />
 			<button type="submit" class="action-btn danger-btn" data-testid="delete-item"
-				>{t('item.deleteItem')}</button
+				><Icon name="trash" size="sm" />{t('item.deleteItem')}</button
 			>
 		</form>
 		<button
@@ -241,6 +250,7 @@
 			onclick={() => imagesDialog?.showModal()}
 			data-testid="images-dialog-trigger"
 		>
+			<Icon name="photo" size="sm" />
 			{t('item.imagesButton', { count: data.images.length })}
 		</button>
 		<button
@@ -249,11 +259,13 @@
 			onclick={() => editDialog?.showModal()}
 			data-testid="edit-dialog-trigger"
 		>
+			<Icon name="edit" size="sm" />
 			{t('item.edit')}
 		</button>
 		<form method="POST" action="?/setItemReservation" class="action-form">
 			<input name="itemId" type="hidden" value={data.item.id} />
 			<button type="submit" class="action-btn amber-btn" data-testid="toggle-item-reservation">
+				<Icon name="bookmark" size="sm" />
 				{data.item.reservedAt ? t('item.removeReservation') : t('item.reserve')}
 			</button>
 		</form>
@@ -266,7 +278,7 @@
 		data-testid="edit-dialog"
 	>
 		<div class="dialog-head">
-			<h3>{t('item.editDialogTitle')}</h3>
+			<h3><Icon name="edit" />{t('item.editDialogTitle')}</h3>
 			<button type="button" class="secondary" onclick={() => editDialog?.close()}
 				>{t('profile.close')}</button
 			>
@@ -330,12 +342,18 @@
 			{#if form?.updateItemError}
 				<p class="form-error" role="alert">{form.updateItemError}</p>
 			{/if}
-			<button type="submit">{t('profile.saveChanges')}</button>
+			<button type="submit">
+				<Icon name="check" size="sm" />
+				{t('profile.saveChanges')}
+			</button>
 		</form>
 	</dialog>
 
 	<section class="qr-panel" aria-labelledby="qr-title" data-testid="item-qr-panel">
-		<h2 id="qr-title">{t('item.qrTitle')} <span class="qr-hint">{t('item.qrHint')}</span></h2>
+		<h2 id="qr-title">
+			<Icon name="qrcode" />{t('item.qrTitle')}
+			<span class="qr-hint">{t('item.qrHint')}</span>
+		</h2>
 		<div class="qr-body">
 			<img class="qr-image" src={qrCodeDataUrl} alt={t('item.qrAlt')} data-testid="item-qr-image" />
 			<a
@@ -344,6 +362,7 @@
 				download="qr-{data.item.id}.png"
 				data-testid="item-qr-download"
 			>
+				<Icon name="download" size="sm" />
 				{t('item.downloadQr')}
 			</a>
 		</div>
@@ -434,10 +453,13 @@
 	}
 
 	.action-btn {
+		align-items: center;
 		border-radius: var(--radius-control);
 		cursor: pointer;
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.55rem 1rem;
 		transition:
 			filter 0.2s ease,
@@ -561,14 +583,16 @@
 	}
 
 	.file-button {
+		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-control);
 		color: var(--color-accent);
 		cursor: pointer;
-		display: inline-block;
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		justify-self: start;
 		padding: 0.7rem 1.1rem;
 		transition:
@@ -590,12 +614,16 @@
 	}
 
 	.qr-panel h2 {
+		align-items: center;
+		display: flex;
 		font-size: 1.05rem;
+		gap: 0.4rem;
 		margin: 0 0 1rem;
 	}
 
 	.qr-hint {
 		color: var(--color-text-muted);
+		display: inline;
 		font-size: 0.85rem;
 		font-weight: 400;
 	}
@@ -614,10 +642,13 @@
 	}
 
 	.qr-download {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border-radius: 999px;
 		box-shadow: var(--shadow-btn);
 		color: white;
+		display: inline-flex;
+		gap: 0.4rem;
 		font-size: 0.9rem;
 		font-weight: 700;
 		padding: 0.6rem 1.2rem;
@@ -635,7 +666,10 @@
 	}
 
 	.panel h2 {
+		align-items: center;
+		display: flex;
 		font-size: 1.05rem;
+		gap: 0.4rem;
 		margin: 0 0 0.75rem;
 	}
 
@@ -664,7 +698,10 @@
 	}
 
 	.dialog-head h3 {
+		align-items: center;
+		display: flex;
 		font-size: 1.05rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 
@@ -725,15 +762,18 @@
 	}
 
 	button {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-btn);
 		color: white;
 		cursor: pointer;
+		display: inline-flex;
 		font: inherit;
 		font-size: 0.95rem;
 		font-weight: 700;
+		gap: 0.4rem;
 		justify-self: start;
 		padding: 0.7rem 1.25rem;
 		transition:
@@ -833,8 +873,11 @@
 	}
 
 	.sold-summary {
+		align-items: center;
 		color: var(--color-text-muted);
+		display: flex;
 		font-size: 0.9rem;
+		gap: 0.35rem;
 		margin: 0 0 0.75rem;
 	}
 

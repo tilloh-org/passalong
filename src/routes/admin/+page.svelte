@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '$lib/components/icon.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 
 	let { form } = $props();
@@ -30,11 +31,11 @@
 
 	<section class="admin-card" aria-labelledby="admin-title">
 		<p class="eyebrow">{t('admin.eyebrow')}</p>
-		<h1 id="admin-title">{t('admin.title')}</h1>
+		<h1 id="admin-title"><Icon name="settings" />{t('admin.title')}</h1>
 		<p class="intro">{t('admin.passwordResetIntro')}</p>
 
 		<div class="password-help instance-administration">
-			<h2>{t('admin.passwordResetTitle')}</h2>
+			<h2><Icon name="key" />{t('admin.passwordResetTitle')}</h2>
 			<form method="POST" action="?/createPasswordReset">
 				<label>
 					<span>{t('admin.usernameOfAccount')}</span>
@@ -43,11 +44,13 @@
 				{#if form && 'passwordResetIssueError' in form && form.passwordResetIssueError}
 					<p class="form-error" role="alert">{form.passwordResetIssueError}</p>
 				{/if}
-				<button type="submit">{t('admin.createResetCode')}</button>
+				<button type="submit"><Icon name="key" size="sm" />{t('admin.createResetCode')}</button>
 			</form>
 			{#if form && 'passwordResetSecret' in form && form.passwordResetSecret}
 				<section class="issued-reset-secret" aria-labelledby="issued-reset-secret-title">
-					<h3 id="issued-reset-secret-title">{t('admin.oneTimeResetCode')}</h3>
+					<h3 id="issued-reset-secret-title">
+						<Icon name="alert-triangle" tone="warn" />{t('admin.oneTimeResetCode')}
+					</h3>
 					<code class="reset-secret" data-testid="issued-password-reset-secret"
 						>{form.passwordResetSecret}</code
 					>
@@ -57,17 +60,18 @@
 		</div>
 
 		<div class="password-help backup-administration" data-testid="backup-panel">
-			<h2>{t('admin.backupRestoreTitle')}</h2>
+			<h2><Icon name="package" />{t('admin.backupRestoreTitle')}</h2>
 			<div class="backup-grid">
 				<div class="backup-block">
-					<h3>{t('admin.fullBackupTitle')}</h3>
+					<h3><Icon name="download" />{t('admin.fullBackupTitle')}</h3>
 					<p class="backup-hint">{t('admin.fullBackupHint')}</p>
 					<a class="backup-download" href="/profile/backup" download data-testid="download-backup">
+						<Icon name="download" size="sm" />
 						{t('admin.downloadBackup')}
 					</a>
 				</div>
 				<div class="backup-block">
-					<h3>{t('admin.restoreTitle')}</h3>
+					<h3><Icon name="upload" />{t('admin.restoreTitle')}</h3>
 					<p class="backup-hint">
 						{t('admin.restoreHint')}
 					</p>
@@ -88,7 +92,9 @@
 							onchange={onRestoreFileChange}
 						/>
 						<label class="file-button" for="backup-file"
-							>{restoreFile ? `📦 ${restoreFile.name}` : t('admin.chooseBackupFile')}</label
+							><Icon name="package" size="sm" />{restoreFile
+								? restoreFile.name
+								: t('admin.chooseBackupFile')}</label
 						>
 						{#if form?.backupError}
 							<p class="form-error" role="alert">{form.backupError}</p>
@@ -98,7 +104,8 @@
 							class="danger"
 							data-testid="restore-submit"
 							disabled={!restoreReady}
-							aria-disabled={!restoreReady}>{t('admin.runRestore')}</button
+							aria-disabled={!restoreReady}
+							><Icon name="upload" size="sm" />{t('admin.runRestore')}</button
 						>
 					</form>
 				</div>
@@ -128,8 +135,11 @@
 	}
 
 	h1 {
+		align-items: center;
 		color: var(--color-accent-strong);
+		display: flex;
 		font-size: 1.5rem;
+		gap: 0.45rem;
 		margin: 0.2rem 0 0.5rem;
 	}
 
@@ -151,7 +161,10 @@
 	}
 
 	.password-help h2 {
+		align-items: center;
+		display: flex;
 		font-size: 1.05rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 
@@ -193,12 +206,15 @@
 	}
 
 	button[type='submit'] {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-cta);
 		color: #fff;
+		display: inline-flex;
 		font-weight: 700;
+		gap: 0.35rem;
 		justify-self: end;
 		padding: 0.6rem 1.1rem;
 	}
@@ -213,7 +229,10 @@
 	}
 
 	.issued-reset-secret h3 {
+		align-items: center;
+		display: flex;
 		font-size: 0.95rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 
@@ -251,7 +270,10 @@
 	}
 
 	.backup-block h3 {
+		align-items: center;
+		display: flex;
 		font-size: 0.95rem;
+		gap: 0.4rem;
 		margin: 0 0 0.4rem;
 	}
 
@@ -263,13 +285,15 @@
 	}
 
 	.backup-download {
+		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-control);
 		color: var(--color-accent);
-		display: inline-block;
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		justify-self: end;
 		padding: 0.7rem 1.1rem;
 		text-decoration: none;
@@ -301,14 +325,16 @@
 	}
 
 	.file-button {
+		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-control);
 		color: var(--color-accent);
 		cursor: pointer;
-		display: inline-block;
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		justify-self: start;
 		padding: 0.7rem 1.1rem;
 		transition: background 0.2s ease;
@@ -319,13 +345,16 @@
 	}
 
 	button.danger {
+		align-items: center;
 		background: transparent;
 		border: 1px solid var(--color-danger);
 		border-radius: var(--radius-control);
 		box-shadow: none;
 		color: var(--color-danger);
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.6rem 1.1rem;
 	}
 

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { t } from '$lib/i18n/index.svelte';
+	import Icon from '$lib/components/icon.svelte';
 	import { getFavorites, pruneFavorites, toggleFavorite } from '$lib/stand-favorites.svelte';
 	import ItemFilterForm from '$lib/components/item-filter-form.svelte';
 
@@ -126,9 +127,7 @@
 						{/if}
 						{#if item.images.length > 1}
 							<span class="photo-count" data-testid="stand-item-photo-count">
-								<svg class="icon" aria-hidden="true" focusable="false">
-									<use href="#icon-photo" />
-								</svg>
+								<Icon name="photo" size="sm" />
 								{item.images.length}
 							</span>
 						{/if}
@@ -141,9 +140,7 @@
 							type="button"
 							onclick={() => onToggleFavorite(item.id)}
 						>
-							<svg class="icon" aria-hidden="true" focusable="false">
-								<use href={isFavorite(item.id) ? '#icon-heart-filled' : '#icon-heart-outline'} />
-							</svg>
+							<Icon name={isFavorite(item.id) ? 'heart-filled' : 'heart'} />
 						</button>
 					</div>
 					<a
@@ -239,9 +236,7 @@
 			aria-label={t('stand.favoritesOpen')}
 			data-testid="favorites-bar-trigger"
 		>
-			<svg class="icon" aria-hidden="true" focusable="false">
-				<use href={favoriteIds.length ? '#icon-heart-filled' : '#icon-heart-outline'} />
-			</svg>
+			<Icon name={favoriteIds.length ? 'heart-filled' : 'heart'} size="lg" />
 			{t('stand.favoritesTitle')}
 			{#if favoriteIds.length}
 				<span class="favorites-badge" data-testid="favorites-badge">{favoriteIds.length}</span>
@@ -396,11 +391,6 @@
 		z-index: 2;
 	}
 
-	.photo-count .icon {
-		height: 0.85rem;
-		width: 0.85rem;
-	}
-
 	.favorite-toggle {
 		align-items: center;
 		background: var(--glass);
@@ -418,11 +408,6 @@
 		transition: all 0.25s ease;
 		width: 2.2rem;
 		z-index: 2;
-	}
-
-	.favorite-toggle .icon {
-		height: 1.15rem;
-		width: 1.15rem;
 	}
 
 	.favorite-toggle:hover {
@@ -585,11 +570,6 @@
 	.favorites-bar button:focus-visible {
 		outline: 2px solid var(--focus-ring);
 		outline-offset: 2px;
-	}
-
-	.favorites-bar .icon {
-		height: 1.15rem;
-		width: 1.15rem;
 	}
 
 	.favorites-badge {

@@ -165,6 +165,47 @@ a {
 	color: var(--color-accent);
 }
 
+/* ---------- Icons (vendored Tabler sprite) ---------- */
+
+.icon {
+	display: inline-block;
+	flex: 0 0 auto;
+	height: 1.15em;
+	vertical-align: -0.18em;
+	width: 1.15em;
+	fill: none;
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 2;
+}
+
+.icon-sm {
+	height: 1em;
+	width: 1em;
+}
+
+.icon-lg {
+	height: 1.5em;
+	width: 1.5em;
+}
+
+.icon-muted {
+	color: var(--color-text-muted);
+}
+
+.icon-ok {
+	color: var(--color-ok);
+}
+
+.icon-danger {
+	color: var(--color-danger);
+}
+
+.icon-warn {
+	color: var(--color-warn);
+}
+
 h1,
 h2,
 h3 {

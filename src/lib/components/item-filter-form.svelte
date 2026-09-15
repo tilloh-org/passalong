@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '$lib/components/icon.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	import type {
 		ItemCategory,
@@ -75,7 +76,7 @@
 		<input type="hidden" {name} {value} />
 	{/each}
 	<label class="filter-search">
-		<span>{t('portfolio.search')}</span>
+		<span class="filter-label"><Icon name="search" size="sm" />{t('portfolio.search')}</span>
 		<input
 			name="q"
 			type="search"
@@ -85,7 +86,7 @@
 		/>
 	</label>
 	<label>
-		<span>{t('portfolio.category')}</span>
+		<span class="filter-label"><Icon name="tag" size="sm" />{t('portfolio.category')}</span>
 		<select name="category" data-testid={testId('-category-select')}>
 			<option value="">{t('portfolio.all')}</option>
 			{#each categoryOptions as category (category)}
@@ -96,7 +97,7 @@
 		</select>
 	</label>
 	<label>
-		<span>{t('portfolio.condition')}</span>
+		<span class="filter-label"><Icon name="settings" size="sm" />{t('portfolio.condition')}</span>
 		<select name="condition" data-testid={testId('-condition-select')}>
 			<option value="">{t('portfolio.all')}</option>
 			{#each conditionOptions as condition (condition)}
@@ -107,7 +108,7 @@
 		</select>
 	</label>
 	<label>
-		<span>{t('portfolio.status')}</span>
+		<span class="filter-label"><Icon name="box" size="sm" />{t('portfolio.status')}</span>
 		<select name="status" data-testid={testId('-status-select')}>
 			<option value="">{t('portfolio.all')}</option>
 			{#each statusOptions as status (status)}
@@ -119,11 +120,11 @@
 	</label>
 	<div class="filter-actions">
 		<button type="submit" class="filter-apply" data-testid={testId('-apply')}
-			>{t('portfolio.applyFilters')}</button
+			><Icon name="filter" size="sm" />{t('portfolio.applyFilters')}</button
 		>
 		{#if hasActive}
 			<a class="filter-reset" href={resetHref} data-testid={testId('-reset')}
-				>{t('portfolio.resetFilters')}</a
+				><Icon name="rotate" size="sm" />{t('portfolio.resetFilters')}</a
 			>
 		{/if}
 	</div>
@@ -149,6 +150,12 @@
 		font-weight: 700;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
+	}
+
+	.filter-label {
+		align-items: center;
+		display: inline-flex;
+		gap: 0.3rem;
 	}
 
 	.item-filters input,
@@ -187,13 +194,16 @@
 	}
 
 	.filter-apply {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-cta);
 		color: #fff;
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.6rem 1.1rem;
 	}
 
@@ -203,11 +213,14 @@
 	}
 
 	.filter-reset {
+		align-items: center;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-control);
 		color: var(--color-accent);
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.6rem 1rem;
 		text-decoration: none;
 	}

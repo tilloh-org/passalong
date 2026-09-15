@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import Icon from '$lib/components/icon.svelte';
 	import { formatPrice } from '$lib/utils/format';
 	import { minimumPasswordLength } from '$lib/password-policy';
 	import { t } from '$lib/i18n/index.svelte';
@@ -276,13 +277,17 @@
 						{#if form?.addItemError}
 							<p class="form-error" role="alert">{form.addItemError}</p>
 						{/if}
-						<button type="submit">{t('portfolio.addItem')}</button>
+						<button type="submit">
+							<Icon name="plus" />
+							{t('portfolio.addItem')}
+						</button>
 						{#if data.createdItemId}
 							<a
 								class="manage-images-link"
 								href={`/items/${encodeURIComponent(data.createdItemId)}`}
 								data-testid="manage-images-link"
 							>
+								<Icon name="photo" />
 								{t('portfolio.manageImages')}
 							</a>
 						{/if}
@@ -299,6 +304,7 @@
 					>
 						<p class="eyebrow">{t('portfolio.saleStatisticsEyebrow')}</p>
 						<h2 id="sale-statistics-title">
+							<Icon name="euro" tone="ok" />
 							{t('portfolio.soldSummary', {
 								count: data.saleStatistics.soldItemCount,
 								proceeds: formatPrice(data.saleStatistics.totalProceedsCents)
@@ -384,15 +390,20 @@
 									<div class="tile-bottom">
 										{#if item.soldAt}
 											<span class="badge sold" data-testid="item-sold-badge"
-												>{t('portfolio.sold')}{item.saleProceedsCents !== null
+												><Icon name="check" size="sm" />{t(
+													'portfolio.sold'
+												)}{item.saleProceedsCents !== null
 													? ` · ${formatPrice(item.saleProceedsCents)} €`
 													: ''}</span
 											>
 										{:else}
-											<span class="badge open">{t('portfolio.open')}</span>
+											<span class="badge open"
+												><Icon name="package" size="sm" />{t('portfolio.open')}</span
+											>
 											<form method="POST" action="?/quickSellItem">
 												<input name="itemId" type="hidden" value={item.id} />
 												<button class="pay" type="submit" data-testid="quick-sell-item">
+													<Icon name="euro" size="sm" />
 													{t('portfolio.quickSell')}
 												</button>
 											</form>
@@ -685,15 +696,18 @@
 	}
 
 	button {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-btn);
 		color: white;
 		cursor: pointer;
+		display: inline-flex;
 		font: inherit;
 		font-size: 0.95rem;
 		font-weight: 700;
+		gap: 0.4rem;
 		justify-self: start;
 		padding: 0.7rem 1.25rem;
 		transition:
@@ -871,9 +885,12 @@
 	}
 
 	.badge {
+		align-items: center;
 		border-radius: 999px;
+		display: inline-flex;
 		font-size: 0.68rem;
 		font-weight: 800;
+		gap: 0.25rem;
 		letter-spacing: 0.03em;
 		padding: 4px 10px;
 	}
@@ -890,13 +907,16 @@
 	}
 
 	.pay {
+		align-items: center;
 		background: var(--color-ok-soft);
 		border: 1px solid var(--color-ok-border);
 		border-radius: var(--radius-small);
 		box-shadow: none;
 		color: var(--color-ok);
+		display: inline-flex;
 		font-size: 0.78rem;
 		font-weight: 700;
+		gap: 0.25rem;
 		padding: 8px 12px;
 		transition: all 0.25s ease;
 	}
@@ -918,7 +938,10 @@
 	}
 
 	.sale-statistics h2 {
+		align-items: center;
+		display: flex;
 		font-size: 1.1rem;
+		gap: 0.4rem;
 		margin: 0.25rem 0 1rem;
 	}
 

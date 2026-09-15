@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import jsQR from 'jsqr';
 	import { onMount } from 'svelte';
+	import Icon from '$lib/components/icon.svelte';
 	import { resolveArticleDetailPath } from '$lib/utils/scan';
 	import { t } from '$lib/i18n/index.svelte';
 
@@ -288,7 +289,7 @@
 	<section class="hero card">
 		<div class="hero-copy">
 			<p class="eyebrow">{t('scan.eyebrow')}</p>
-			<h1>{t('scan.title')}</h1>
+			<h1><Icon name="qrcode" />{t('scan.title')}</h1>
 			<p>{t('scan.heroIntro')}</p>
 		</div>
 		<div class="hero-actions">
@@ -298,6 +299,7 @@
 				onclick={() => void startScanner()}
 				disabled={cameraActive || cameraStarting}
 			>
+				<Icon name="camera" size="sm" />
 				{t('scan.startCamera')}
 			</button>
 			<button
@@ -306,6 +308,7 @@
 				onclick={() => void stopScanner(true)}
 				disabled={!cameraActive && !cameraStarting}
 			>
+				<Icon name="x" size="sm" />
 				{t('scan.stopCamera')}
 			</button>
 		</div>
@@ -313,7 +316,7 @@
 
 	<section class="scanner-grid">
 		<article class="card camera-card" aria-labelledby="camera-title">
-			<h2 id="camera-title">{t('scan.cameraTitle')}</h2>
+			<h2 id="camera-title"><Icon name="camera" />{t('scan.cameraTitle')}</h2>
 			<div class:active={cameraActive} class="camera-shell">
 				<video
 					bind:this={videoElement}
@@ -335,9 +338,10 @@
 		</article>
 
 		<aside class="card file-card" aria-labelledby="file-title">
-			<h2 id="file-title">{t('scan.fileTitle')}</h2>
+			<h2 id="file-title"><Icon name="upload" />{t('scan.fileTitle')}</h2>
 			<p>{t('scan.fileIntro')}</p>
 			<label class="file-picker" for="scan-image-file">
+				<Icon name="photo" size="sm" />
 				<span>{t('scan.fileInputLabel')}</span>
 				<input
 					id="scan-image-file"
@@ -394,6 +398,14 @@
 		margin: 0;
 	}
 
+	h1,
+	.camera-card h2,
+	.file-card h2 {
+		align-items: center;
+		display: flex;
+		gap: 0.45rem;
+	}
+
 	h1 {
 		font-size: clamp(1.8rem, 2.5vw, 2.5rem);
 		letter-spacing: -0.03em;
@@ -421,6 +433,7 @@
 		display: inline-flex;
 		font: inherit;
 		font-weight: 700;
+		gap: 0.4rem;
 		height: 42px;
 		justify-content: center;
 		padding: 0 1rem;

@@ -233,7 +233,7 @@ test.describe('Core collection', () => {
 		});
 		await expect(page).toHaveURL(/\/q\/scan-upload-test/);
 		await page.goto('/');
-		await page.getByRole('link', { name: '+ Neu' }).click();
+		await page.getByRole('link', { name: 'Neu' }).click();
 		await expect(
 			page
 				.getByRole('heading', { name: 'Deine Sammlungen' })
@@ -339,8 +339,9 @@ test.describe('Core collection', () => {
 				.first()
 		).toBeVisible();
 		await expect(page.getByTestId('item-flag-pills')).toContainText('Haushalt');
-		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Vollständig');
-		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Funktionsfähig');
+		// The leading check is a decorative sprite icon, so only the text is asserted.
+		await expect(page.getByTestId('item-flag-pills')).toContainText('Vollständig');
+		await expect(page.getByTestId('item-flag-pills')).toContainText('Funktionsfähig');
 		await expect(page.getByTestId('item-external-description')).toContainText('Warme Leselampe');
 		await expect(page.getByTestId('item-internal-notes')).toContainText('Glühbirne');
 		await expect(page.getByTestId('item-qr-panel')).toBeVisible();
@@ -372,11 +373,11 @@ test.describe('Core collection', () => {
 		await expect(priceLabel).toContainText('12,00 €');
 		await expect(priceLabel.getByRole('img')).toHaveAttribute('src', /^data:image\/png;base64,/);
 		await expect(page.getByTestId('price-labels-print')).toBeVisible();
-		await page.getByRole('link', { name: '+ Neu' }).click();
+		await page.getByRole('link', { name: 'Neu' }).click();
 		await itemCard.click();
 
 		// act — upload two photos once; retries reuse the leftover images (the dialog
-		// trigger label carries the stored image count, e.g. "🖼 Bilder (2)")
+		// trigger label carries the stored image count, e.g. "Bilder (2)")
 		const storedImageCount = await page.getByTestId('images-dialog-trigger').evaluate((el) => {
 			const match = /\((\d+)\)/.exec(el.textContent ?? '');
 			return match ? Number(match[1]) : 0;
@@ -527,7 +528,7 @@ test.describe('Core collection', () => {
 
 		// act — go back to the portfolio via the header and check the sale statistics
 		// (the item is still sold from the history flow, so no quick-sell happens here)
-		await page.getByRole('link', { name: '+ Neu' }).click();
+		await page.getByRole('link', { name: 'Neu' }).click();
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// assume

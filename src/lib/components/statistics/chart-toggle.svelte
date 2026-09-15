@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
+	import Icon from '$lib/components/icon.svelte';
 
 	/** The two supported chart renderings for one card. */
 	type ChartType = 'bars' | 'pie';
@@ -26,9 +27,7 @@
 		data-testid={`${testId}-bars`}
 		onclick={() => onchange('bars')}
 	>
-		<svg class="icon" aria-hidden="true" focusable="false">
-			<use href="#icon-chart-bars" />
-		</svg>
+		<Icon name="chart-bar" size="sm" />
 		<span>{t('chartToggle.bars')}</span>
 	</button>
 	<button
@@ -39,9 +38,7 @@
 		data-testid={`${testId}-pie`}
 		onclick={() => onchange('pie')}
 	>
-		<svg class="icon" aria-hidden="true" focusable="false">
-			<use href="#icon-chart-pie" />
-		</svg>
+		<Icon name="chart-pie" size="sm" />
 		<span>{t('chartToggle.pie')}</span>
 	</button>
 </div>
@@ -82,10 +79,5 @@
 	.chart-toggle-option:focus-visible {
 		outline: 2px solid var(--focus-ring);
 		outline-offset: 2px;
-	}
-
-	.icon {
-		height: 0.85rem;
-		width: 0.85rem;
 	}
 </style>
