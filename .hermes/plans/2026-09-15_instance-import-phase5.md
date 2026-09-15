@@ -242,6 +242,20 @@ block, verified at 0 px overflow with every value fully readable.
 **Remaining:** the independent review result, then push with the screenshots embedded in the PR
 description.
 
+**Done — review follow-up (commit `356a396`).** The independent review found twelve real defects
+across seven areas; all are fixed with regression tests (244 unit tests, 6 E2E, all gates green):
+
+| Finding                                                                                         | Fix                                                                                                                                |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Staging accepted unbounded anonymous uploads; staged files survived unless activation completed | size cap, pending-upload cap (verified live: files stop at 4), sweep of expired own files, `content-length` check before buffering |
+| Zip-bomb ratio always exactly 1.0 (same field passed twice)                                     | parser rejects any non-stored compression method; the real call path is now tested                                                 |
+| Media referenced but absent from the manifest copied in unverified                              | manifest coverage required for every referenced media file                                                                         |
+| `manifest.media.files/bytes` and `sales` never compared (`sales` assigned from itself)          | counts compared; sales genuinely derived from sold items                                                                           |
+| Report said "wird übernommen" for a foreign hash that is never stored                           | report reuses the storage rule                                                                                                     |
+| Free-text dates/times, negative amounts and image positions reached the DB as raw SQLite errors | shape + calendar/ISO validation, translated storage errors                                                                         |
+| `BODY_SIZE_LIMIT: 6M` made a real archive fail with a bare 413                                  | raised to 256M, documented, plus a client-side guard                                                                               |
+| `trace: 'on-first-retry'` silently dropped when baseURL moved per project                       | restored at config root                                                                                                            |
+
 **Files:**
 
 - Create: `e2e/instance-import.spec.ts`
