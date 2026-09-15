@@ -64,6 +64,84 @@ export interface ExchangeManifest {
 export type ExchangeManifestResult =
 	{ ok: true; manifest: ExchangeManifest } | { ok: false; reason: string };
 
+/** Image reference inside the logical data file. */
+export interface ExchangeImage {
+	file: string;
+	isCover: boolean;
+	position: number;
+}
+
+/** Item record inside the logical data file. */
+export interface ExchangeItem {
+	sourceId: string;
+	title: string;
+	priceCents: number;
+	category: string;
+	condition: string;
+	internalNotes: string;
+	externalDescription: string;
+	isComplete: boolean;
+	isFunctional: boolean;
+	reservedAt: string | null;
+	saleChannel: string | null;
+	soldAt: string | null;
+	saleProceedsCents: number | null;
+	marketDaySourceId: string | null;
+	images: ExchangeImage[];
+}
+
+/** Market day record inside the logical data file. */
+export interface ExchangeMarketDay {
+	sourceId: string;
+	name: string;
+	date: string | null;
+	startTime: string | null;
+	endTime: string | null;
+	location: string;
+	notes: string;
+	closedAt: string | null;
+}
+
+/** Expense record inside the logical data file. */
+export interface ExchangeExpense {
+	sourceId: string;
+	label: string;
+	category: string;
+	amountCents: number;
+	expenseDate: string;
+	marketDaySourceId: string | null;
+}
+
+/** Collection record inside the logical data file. */
+export interface ExchangeCollection {
+	sourceId: string;
+	name: string;
+	standIntro: string;
+	isPublished: boolean;
+	items: ExchangeItem[];
+	marketDays: ExchangeMarketDay[];
+	expenses: ExchangeExpense[];
+}
+
+/** User record inside the logical data file; carries its own tenant content. */
+export interface ExchangeUser {
+	sourceId: string;
+	username: string;
+	displayName: string;
+	passwordHash: string | null;
+	passwordResetRequired: boolean;
+	avatarFile: string | null;
+	collections: ExchangeCollection[];
+}
+
+/** Logical data file of an exchange archive. */
+export interface ExchangeData {
+	users: ExchangeUser[];
+}
+
+/** Parse result for the logical data file. */
+export type ExchangeDataResult = { ok: true; data: ExchangeData } | { ok: false; reason: string };
+
 /** Count fields that must be present; older archives may omit the rest with a zero default. */
 const requiredCountFields = ['users', 'tenants', 'collections', 'items'] as const;
 
