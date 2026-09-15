@@ -695,6 +695,16 @@
 			0 4px 12px var(--color-accent-soft);
 	}
 
+	/* Keep the focus ring visible: the select rules above set box-shadow at the
+	   same specificity but later in the sheet, so the shared :focus rule alone
+	   would be overridden. */
+	.item-form select:focus,
+	.item-form select:focus-visible {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
+	}
+
 	button {
 		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
