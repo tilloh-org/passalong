@@ -23,6 +23,7 @@ import {
 	expenseCategories,
 	itemCategories,
 	itemConditions,
+	normalizeUsernameResult,
 	saleChannels
 } from '$lib/server/collection-repository';
 
@@ -262,6 +263,12 @@ function writeUser(
 ): void {
 	const tenantId = randomUUID();
 	const userId = randomUUID();
+	// Validation already proved the name is accepted by this instance; normalize it so the stored
+	// value is exactly what the login path looks up.
+	const usernameResult = normalizeUsernameResult(user.username);
+	const importedUsername = usernameResult.ok
+		? usernameResult.username
+		: user.username.trim().toLowerCase();
 	database
 		.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
 		.run(tenantId, user.displayName || user.username, now);
@@ -278,7 +285,7 @@ function writeUser(
 		.run(
 			userId,
 			tenantId,
-			user.username.trim(),
+			importedUsername,
 			user.displayName || user.username,
 			passwordHash,
 			passwordHash ? 0 : 1,
@@ -607,17 +614,20 @@ function validateUsers(
 		}
 		sourceIds.add(user.sourceId);
 
-		const username = typeof user.username === 'string' ? user.username : '';
-		if (username.trim() === '') {
-			report.errors.push(`The user ${user.sourceId} has a blank username.`);
+		const rawUsername = typeof user.username === 'string' ? user.username : '';
+		// The instance only accepts names its own login can use, so apply that policy here: a name
+		// this instance would refuse must block the takeover instead of importing a dead account.
+		const usernameResult = normalizeUsernameResult(rawUsername);
+		if (!usernameResult.ok) {
+			report.errors.push(`The user ${user.sourceId} cannot be imported: ${usernameResult.reason}`);
 			continue;
 		}
-		const normalized = username.trim().toLocaleLowerCase();
-		if (normalizedUsernames.has(normalized)) {
-			report.errors.push(`The username ${username} appears more than once.`);
+		const username = usernameResult.username;
+		if (normalizedUsernames.has(username)) {
+			report.errors.push(`The username ${rawUsername} appears more than once.`);
 			continue;
 		}
-		normalizedUsernames.add(normalized);
+		normalizedUsernames.add(username);
 
 		const collections = Array.isArray(user.collections) ? user.collections : [];
 		const summary: ImportReportUser = {
