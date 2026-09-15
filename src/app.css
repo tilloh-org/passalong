@@ -13,6 +13,8 @@
 	--glass: rgba(255, 255, 255, 0.72);
 
 	--color-bg: #f4f7f9;
+	/* Final stop of the decorative body gradient; `html` paints it below the first viewport. */
+	--color-bg-end: #eef2f4;
 	--color-text: #16303f;
 	--color-text-muted: #6b8796;
 	--color-text-faint: #8ba3b0;
@@ -62,7 +64,9 @@
 }
 
 [data-theme='dark'] {
+	color-scheme: dark;
 	--color-bg: #0f1a22;
+	--color-bg-end: #16242e;
 	--color-text: #e8f0f4;
 	--color-text-muted: #9db4c0;
 	--color-text-faint: #7492a1;
@@ -102,6 +106,12 @@
 
 html {
 	-webkit-text-size-adjust: 100%;
+	/*
+	 * The decorative body background is viewport-fixed, so it only paints the first
+	 * viewport. Everything below that would fall through to the canvas default (white)
+	 * on tall pages. Painting the gradient's final colour here keeps the seam invisible.
+	 */
+	background-color: var(--color-bg-end);
 }
 
 body {
@@ -110,7 +120,7 @@ body {
 	background:
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.28), transparent 60%),
 		radial-gradient(900px 500px at -10% 20%, rgba(232, 226, 213, 0.55), transparent 55%),
-		linear-gradient(180deg, var(--color-bg) 0%, #eef2f4 100%);
+		linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-end) 100%);
 	background-attachment: fixed;
 	color: var(--color-text);
 	font-family:
@@ -130,7 +140,7 @@ body {
 	background:
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.12), transparent 60%),
 		radial-gradient(900px 500px at -10% 20%, rgba(224, 164, 88, 0.08), transparent 55%),
-		linear-gradient(180deg, #0f1a22 0%, #16242e 100%);
+		linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-end) 100%);
 	background-attachment: fixed;
 }
 

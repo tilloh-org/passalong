@@ -33,6 +33,17 @@ describe('global layout shell', () => {
 		);
 	});
 
+	it('paints the theme base colour behind the fixed background', () => {
+		// act
+		const source = readFileSync(appStylesPath, 'utf8');
+
+		// assume — a fixed body background only covers the viewport, so `html` must paint the
+		// gradient's final colour; otherwise everything below the first viewport stays white.
+		expect(source).toMatch(/html\s*\{[\s\S]*?background-color:\s*var\(--color-bg-end\);/);
+		expect(source).toMatch(/--color-bg-end:\s*#eef2f4;/);
+		expect(source).toMatch(/\[data-theme='dark'\][\s\S]*?--color-bg-end:\s*#16242e;/);
+	});
+
 	it('reserves a shared inset for native select arrows', () => {
 		// arrange
 		const selectSources = selectStylePaths.map((path) => readFileSync(path, 'utf8'));
