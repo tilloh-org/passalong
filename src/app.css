@@ -25,6 +25,10 @@
 	--color-surface: #ffffff;
 	--color-surface-strong: #eef2f4;
 	--color-input: #ffffff;
+	/* Global footer: fixed dark chrome in both themes, so it never turns into a bright band. */
+	--color-footer-bg: #0b161d;
+	--color-footer-edge: rgba(11, 22, 29, 0.6);
+	--color-footer-text: rgba(232, 240, 244, 0.72);
 	--color-danger: #b71c1c;
 	--color-danger-soft: rgba(183, 28, 28, 0.1);
 	--color-ok: #2e7d32;
@@ -77,6 +81,9 @@
 	--color-surface: #16242e;
 	--color-surface-strong: #1a2a33;
 	--color-input: #1a2a33;
+	--color-footer-bg: #080f14;
+	--color-footer-edge: rgba(232, 240, 244, 0.14);
+	--color-footer-text: rgba(232, 240, 244, 0.68);
 	--color-danger: #ef5350;
 	--color-danger-soft: rgba(239, 83, 80, 0.14);
 	--color-ok: #66bb6a;

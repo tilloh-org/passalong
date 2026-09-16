@@ -1,7 +1,11 @@
 services:
   passalong:
     image: ghcr.io/tilloh-org/passalong:latest
-    build: .
+    build:
+      context: .
+      args:
+        # Commit hash for the footer label; set it in .env when building from a checkout.
+        COMMIT_HASH: ${COMMIT_HASH:-}
     container_name: ${PASSALONG_CONTAINER_NAME:-passalong}
     restart: unless-stopped
     ports:

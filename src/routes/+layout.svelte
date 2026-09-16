@@ -232,7 +232,29 @@
 	{@render children()}
 </main>
 
+<footer class="site-footer" data-testid="site-footer">
+	<span class="site-footer-version">{data.versionLabel}</span>
+</footer>
+
 <style>
+	.site-footer {
+		/* Full-bleed dark strip at the bottom of the page, on every route. A hairline top edge keeps
+		   it readable as a separate band when the page background is itself dark. */
+		background: var(--color-footer-bg);
+		border-top: 1px solid var(--color-footer-edge);
+		color: var(--color-footer-text);
+		display: flex;
+		justify-content: flex-start;
+		padding: 0.35rem clamp(0.75rem, 2vw, 1.75rem);
+		width: 100%;
+	}
+
+	.site-footer-version {
+		font-size: 0.72rem;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.02em;
+	}
+
 	.masthead {
 		position: sticky;
 		top: 0;
