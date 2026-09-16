@@ -232,9 +232,11 @@
 	{@render children()}
 </main>
 
-<footer class="site-footer" data-testid="site-footer">
-	<span class="site-footer-version">{data.versionLabel}</span>
-</footer>
+{#if data.header?.isAuthenticated && data.versionLabel}
+	<footer class="site-footer" data-testid="site-footer">
+		<span class="site-footer-version">{data.versionLabel}</span>
+	</footer>
+{/if}
 
 <style>
 	.site-footer {

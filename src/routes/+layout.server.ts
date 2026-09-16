@@ -27,7 +27,9 @@ export const load: LayoutServerLoad = async ({ cookies, url }) => {
 		collections[firstCollectionIndex] ??
 		null;
 	return {
-		versionLabel: await getVersionLabel(),
+		// Operator chrome: the version label is only resolved for an authenticated session, so an
+		// anonymous visitor never receives a build identifier.
+		versionLabel: scope ? await getVersionLabel() : '',
 		header: {
 			isAuthenticated: Boolean(scope),
 			isInstanceAdmin: scope ? getCollectionRepository().isInstanceAdmin(scope) : false,
