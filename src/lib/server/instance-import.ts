@@ -258,15 +258,14 @@ export async function importInstanceArchive(
 			for (const written of writtenMedia) {
 				rmSync(written, { force: true });
 			}
-			// A storage failure must never reach the visitor as raw database text, so the message is
-			// translated here and the internal detail is logged instead of rendered.
+			// Everything thrown inside the transaction comes from SQLite, better-sqlite3 or the
+			// filesystem. Those messages carry driver text, errno codes and absolute server paths,
+			// so they are never rendered: the detail is logged and the visitor gets a fixed reason.
 			if (error instanceof Error) {
 				console.error('Instance import rolled back:', error.message);
 			}
 			report.errors.push(
-				error instanceof Error && isSafeImportMessage(error.message)
-					? error.message
-					: 'Der Import konnte nicht abgeschlossen werden. Die Instanz wurde nicht verändert.'
+				'Der Import konnte nicht abgeschlossen werden. Die Instanz wurde nicht verändert.'
 			);
 			return { imported: false, report };
 		}
@@ -283,21 +282,6 @@ export async function importInstanceArchive(
  * @param {Buffer} archive - Archive bytes known to be valid.
  * @returns {ExchangeData | null} Parsed logical data, or null when it cannot be read.
  */
-/**
- * Decide whether an internal message may be shown to the visitor.
- *
- * Messages written by the import itself are safe; anything that looks like database or filesystem
- * wording is not, because it exposes storage internals and reads as gibberish.
- *
- * @param {string} message - Internal error message.
- * @returns {boolean} Whether the message may be rendered.
- */
-function isSafeImportMessage(message: string): boolean {
-	return !/constraint|SQLITE_|sqlite|UNIQUE|CHECK |FOREIGN KEY|no such table|no such column|disk I|ENOSPC|EBUSY|EROFS/i.test(
-		message
-	);
-}
-
 function readArchiveData(archive: Buffer): ExchangeData | null {
 	const entry = parseZip(archive).get(DATA_ENTRY_NAME);
 	if (!entry) {
@@ -340,13 +324,18 @@ function writeUser(
 	const importedUsername = usernameResult.ok
 		? usernameResult.username
 		: user.username.trim().toLowerCase();
+	// Validation already proved this resolves; the fallback keeps the write total.
+	const importedDisplayName =
+		resolveDisplayName(user.displayName, importedUsername) ?? importedUsername;
 	database
 		.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
-		.run(tenantId, user.displayName || user.username, now);
+		.run(tenantId, importedDisplayName, now);
 	// Only a native hash may be carried over; a foreign scheme is never written to the database, so
 	// the account is flagged for a password reset and the user sets a new one themselves.
 	const carriedOver =
-		adminPasswordHash === null ? classifyImportedPasswordHash(user.passwordHash) : null;
+		adminPasswordHash === null && user.passwordResetRequired !== true
+			? classifyImportedPasswordHash(user.passwordHash)
+			: null;
 	const passwordHash = adminPasswordHash ?? (carriedOver?.usable ? carriedOver.value : null);
 	database
 		.prepare(
@@ -357,7 +346,7 @@ function writeUser(
 			userId,
 			tenantId,
 			importedUsername,
-			user.displayName || user.username,
+			importedDisplayName,
 			passwordHash,
 			passwordHash ? 0 : 1,
 			user.avatarFile ? storeMedia(options, user.avatarFile, entries, writtenMedia) : null,
@@ -603,11 +592,23 @@ function storeMedia(
 	const extension = extensionOf(entryName);
 	const storageKey = `${randomUUID()}${extension}`;
 	const target = join(options.mediaRoot, storageKey);
-	mkdirSync(dirname(target), { recursive: true });
-	writeFileSync(
-		target,
-		options.archive.subarray(entry.payloadOffset, entry.payloadOffset + entry.size)
-	);
+	try {
+		mkdirSync(dirname(target), { recursive: true });
+		writeFileSync(
+			target,
+			options.archive.subarray(entry.payloadOffset, entry.payloadOffset + entry.size)
+		);
+	} catch (error) {
+		// Filesystem errors carry errno codes and the absolute media root. Log the detail for the
+		// operator and surface a fixed reason; the transaction rolls the whole import back.
+		if (error instanceof Error) {
+			console.error('Instance import media write failed:', error.message);
+		}
+		throw new Error('The archive media could not be written. The instance was not changed.', {
+			cause: error
+		});
+	}
+	// Recorded only after a complete write, so a partial file is never reported as cleanup work.
 	writtenMedia.push(target);
 	return storageKey;
 }
@@ -700,14 +701,24 @@ function validateUsers(
 		}
 		normalizedUsernames.add(username);
 
-		const collections = Array.isArray(user.collections) ? user.collections : [];
+		const collections = asArray<ExchangeCollection>(user.collections);
+		// The report is the operator's only preview, so a field activation cannot store must be
+		// reported here rather than discovered by a database constraint during activation.
+		const displayName = resolveDisplayName(user.displayName, username);
+		if (displayName === null) {
+			report.errors.push(`The user ${username} has an invalid display name.`);
+			continue;
+		}
 		const summary: ImportReportUser = {
 			sourceId: user.sourceId,
 			username,
-			displayName: typeof user.displayName === 'string' ? user.displayName : username,
+			displayName,
 			// The report drives the operator's decision, so it has to state what activation will
 			// really do: only a natively verifiable hash is carried over, anything else is reset.
-			passwordResetRequired: !classifyImportedPasswordHash(user.passwordHash).usable,
+			// A producer that also demands a reset is honoured, so declared intent is not discarded.
+			passwordResetRequired:
+				user.passwordResetRequired === true ||
+				!classifyImportedPasswordHash(user.passwordHash).usable,
 			collections: collections.length,
 			items: 0,
 			marketDays: 0,
@@ -768,9 +779,17 @@ function validateCollection(
 		report.errors.push(`A collection of ${username} has no name.`);
 		return;
 	}
-	const items = Array.isArray(collection.items) ? collection.items : [];
-	const marketDays = Array.isArray(collection.marketDays) ? collection.marketDays : [];
-	const expenses = Array.isArray(collection.expenses) ? collection.expenses : [];
+	// The stand intro is stored as text; a numeric value would be silently coerced on write.
+	if (
+		collection.standIntro !== null &&
+		collection.standIntro !== undefined &&
+		typeof collection.standIntro !== 'string'
+	) {
+		report.errors.push(`The collection ${collection.name} of ${username} has an invalid intro.`);
+	}
+	const items = asArray<ExchangeItem>(collection.items);
+	const marketDays = asArray<ExchangeMarketDay>(collection.marketDays);
+	const expenses = asArray<ExchangeExpense>(collection.expenses);
 	const marketDayIds = new Set<string>();
 
 	for (const day of marketDays) {
@@ -1054,16 +1073,26 @@ function readEntry(archive: Buffer, entry: { payloadOffset: number; size: number
  * @param {ExchangeUser[]} users - Users present in the logical data file.
  * @returns {Set<string>} Referenced media entry names.
  */
-function collectReferencedMedia(users: ExchangeUser[]): Set<string> {
+function collectReferencedMedia(users: unknown): Set<string> {
 	const referenced = new Set<string>();
-	for (const user of users) {
-		if (typeof user.avatarFile === 'string' && user.avatarFile !== '') {
+	// The logical data is untrusted JSON: a wrong shape must yield an empty set, never a crash.
+	for (const user of asArray(users)) {
+		if (!isRecord(user)) {
+			continue;
+		}
+		if (isNonBlank(user.avatarFile)) {
 			referenced.add(user.avatarFile);
 		}
-		for (const collection of user.collections ?? []) {
-			for (const item of collection.items ?? []) {
-				for (const image of item.images ?? []) {
-					if (typeof image.file === 'string' && image.file !== '') {
+		for (const collection of asArray(user.collections)) {
+			if (!isRecord(collection)) {
+				continue;
+			}
+			for (const item of asArray(collection.items)) {
+				if (!isRecord(item)) {
+					continue;
+				}
+				for (const image of asArray(item.images)) {
+					if (isRecord(image) && isNonBlank(image.file)) {
 						referenced.add(image.file);
 					}
 				}
@@ -1071,6 +1100,39 @@ function collectReferencedMedia(users: ExchangeUser[]): Set<string> {
 		}
 	}
 	return referenced;
+}
+
+/**
+ * Coerce an untrusted value to an array.
+ *
+ * The element type is preserved so callers keep their declared record type; each element still has
+ * to be narrowed with `isRecord` before its fields are read.
+ *
+ * @param {unknown} value - Candidate array.
+ * @returns {T[]} The array itself, or an empty array for any other shape.
+ */
+function asArray<T>(value: unknown): T[] {
+	return Array.isArray(value) ? (value as T[]) : [];
+}
+
+/**
+ * Resolve the display name that will be stored.
+ *
+ * The database requires a non-blank string, so a numeric or blank value has to be refused during
+ * validation instead of being coerced on write or rejected by a constraint at activation.
+ *
+ * @param {unknown} value - Declared display name.
+ * @param {string} fallback - Username used when none was declared.
+ * @returns {string | null} The storable name, or null when the declared value is unusable.
+ */
+function resolveDisplayName(value: unknown, fallback: string): string | null {
+	if (value === null || value === undefined) {
+		return fallback;
+	}
+	if (typeof value !== 'string' || value.trim() === '') {
+		return null;
+	}
+	return value;
 }
 
 function zeroCounts(): ImportReportCounts {
@@ -1086,7 +1148,9 @@ function isNonBlank(value: unknown): value is string {
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
-	return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+	// Number.isSafeInteger keeps a value inside the range SQLite stores as an INTEGER: a larger
+	// float would land as REAL, bypassing the CHECK constraint and the UI's own limit.
+	return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 const calendarDatePattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -1125,9 +1189,14 @@ function isClockTime(value: unknown): boolean {
  * @returns {boolean} Whether the value is a valid ISO instant.
  */
 function isIsoInstant(value: unknown): boolean {
-	return (
-		typeof value === 'string' &&
-		isoInstantPattern.test(value) &&
-		!Number.isNaN(new Date(value).getTime())
-	);
+	if (typeof value !== 'string' || !isoInstantPattern.test(value)) {
+		return false;
+	}
+	const parsed = new Date(value);
+	if (Number.isNaN(parsed.getTime())) {
+		return false;
+	}
+	// Round-trip the calendar day, so an impossible date such as 2026-02-30 is refused here exactly
+	// as isCalendarDate refuses it for market days.
+	return parsed.toISOString().slice(0, 10) === value.slice(0, 10);
 }

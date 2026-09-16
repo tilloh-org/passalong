@@ -232,7 +232,44 @@
 	{@render children()}
 </main>
 
+{#if data.header?.isAuthenticated && data.versionLabel}
+	<footer class="site-footer" data-testid="site-footer">
+		<span class="site-footer-version">{data.versionLabel}</span>
+	</footer>
+{/if}
+
 <style>
+	.layout-main {
+		/* Reserve the fixed strip's height so short pages do not hide content behind it. */
+		padding-bottom: var(--footer-height);
+	}
+
+	.site-footer {
+		/* Full-bleed dark strip pinned to the bottom edge of the viewport, on every route — it must
+		   not sit at the end of the content flow, which would leave it floating mid-screen on short
+		   pages. A hairline top edge keeps it readable against a dark page background. */
+		align-items: center;
+		background: var(--color-footer-bg);
+		border-top: 1px solid var(--color-footer-edge);
+		bottom: 0;
+		color: var(--color-footer-text);
+		display: flex;
+		height: var(--footer-height);
+		justify-content: flex-start;
+		left: 0;
+		padding: 0 clamp(0.75rem, 2vw, 1.75rem);
+		position: fixed;
+		right: 0;
+		/* Below the header (65) and the drawer (84+); above page content. */
+		z-index: 60;
+	}
+
+	.site-footer-version {
+		font-size: 0.72rem;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.02em;
+	}
+
 	.masthead {
 		position: sticky;
 		top: 0;
@@ -555,6 +592,16 @@
 		.burger,
 		.burger span {
 			transition: none;
+		}
+	}
+	@media print {
+		/* Never stamp the strip across a printed sheet (price labels are printed from the app). */
+		.site-footer {
+			display: none;
+		}
+
+		.layout-main {
+			padding-bottom: 0;
 		}
 	}
 </style>
