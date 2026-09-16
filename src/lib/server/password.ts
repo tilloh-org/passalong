@@ -84,6 +84,31 @@ export function needsPasswordRehash(storedHash: string): boolean {
 }
 
 /**
+ * Classify a password hash that arrives from an imported archive.
+ *
+ * Only a native, strictly parseable hash may be carried over. Anything else (a foreign scheme such
+ * as a source application's own digest, a malformed value, or a missing hash) is refused so it is
+ * never stored, and the account is expected to receive a password reset instead.
+ *
+ * @param {string | null | undefined} storedHash - Untrusted hash read from the archive.
+ * @returns {{ usable: true; value: string } | { usable: false; reason: string }} Classification result.
+ */
+export function classifyImportedPasswordHash(
+	storedHash: string | null | undefined
+): { usable: true; value: string } | { usable: false; reason: string } {
+	if (typeof storedHash !== 'string' || storedHash.length === 0) {
+		return { usable: false, reason: 'The archive does not contain a usable password hash.' };
+	}
+	if (!parsePasswordHash(storedHash)) {
+		return {
+			usable: false,
+			reason: 'The stored hash is not a native password hash and cannot be carried over.'
+		};
+	}
+	return { usable: true, value: storedHash };
+}
+
+/**
  * Verify a bootstrap password synchronously before an account-provisioning transaction begins.
  *
  * @param {string} password - Plaintext password from the bootstrap manifest.

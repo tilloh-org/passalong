@@ -95,6 +95,44 @@ docker compose exec passalong node build/scripts/create-password-reset.js <usern
 The command prints a secret only once. Do not write it to persistent shell
 history or logs.
 
+## Taking over an existing instance
+
+A fresh instance can take over a complete data set from an archive in the
+[exchange format](docs/EXCHANGE-FORMAT.md). The takeover runs **on the first-run
+screen, before any account exists**: the dialog appears next to the first-run
+registration form, and you pick one of the imported users as the instance
+administrator, who receives a password you set there.
+
+The compressed stack ships with `BODY_SIZE_LIMIT: 256M` so an archive that
+contains images fits. If you set that variable yourself, keep it at or above the
+largest archive you intend to import — a smaller value fails the upload with a
+bare "413 Payload Too Large" before the application can show a message. Archives
+up to 256 MB are accepted; the dialog refuses a larger file before uploading it.
+
+**Operator warning — act immediately.** While an instance has no accounts, it is
+uninitialised: whoever reaches it first can either register the first account or
+run a takeover. Start a new instance only on a network you trust, and complete
+either registration or the takeover right away. Provisioning through environment
+variables happens before the HTTP server starts and is not affected by this.
+
+A takeover is a one-time, complete move:
+
+- It is refused once any account exists — start from a fresh instance.
+- It replaces nothing: an empty instance has nothing to preserve, and an
+  uninitialised instance never assigns pre-existing orphaned rows to imported
+  users automatically.
+- There is no delta import and no ongoing synchronisation afterwards.
+
+Check the validation report before activating: it lists every imported user with
+item, image and password status, the media and checksum result, and any warnings.
+Accounts whose stored password cannot be carried over are imported as
+reset-required, and the selected administrator can sign in immediately with the
+newly set password.
+
+Before switching a public hostname over, verify the imported data (portfolio,
+images, stand pages, sales, expenses, statistics, scans) and produce a backup
+from the new instance.
+
 ## Development
 
 ```bash

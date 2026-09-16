@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
+	import Icon from '$lib/components/icon.svelte';
 
 	let { data } = $props();
 
@@ -45,13 +46,13 @@
 <main class="sales-page">
 	<section class="head">
 		<p class="eyebrow">{t('portfolio.saleStatisticsEyebrow')}</p>
-		<h1 data-testid="sale-history-title">{t('saleHistory.title')}</h1>
+		<h1 data-testid="sale-history-title"><Icon name="history" />{t('saleHistory.title')}</h1>
 		<p class="sub">{t('saleHistory.sub')}</p>
 	</section>
 
 	<section class="summary" data-testid="sale-history-summary">
-		<strong
-			>{t('saleHistory.summary', {
+		<strong class="summary-line"
+			><Icon name="euro" tone="ok" />{t('saleHistory.summary', {
 				count: data.summary.soldItemCount,
 				proceeds: formatPrice(data.summary.totalProceedsCents)
 			})}</strong
@@ -59,7 +60,7 @@
 	</section>
 
 	<section class="filter-panel" aria-labelledby="sale-filter-title">
-		<h2 id="sale-filter-title">{t('saleHistory.filters')}</h2>
+		<h2 id="sale-filter-title"><Icon name="filter" />{t('saleHistory.filters')}</h2>
 		<form method="GET" class="filter-form" data-testid="sale-history-filters">
 			<label>
 				<span>{t('item.channelLabel')}</span>
@@ -106,8 +107,12 @@
 				/>
 			</label>
 			<div class="filter-actions">
-				<a class="secondary-link" href="/sales">{t('saleHistory.resetFilters')}</a>
-				<button type="submit" class="filter-submit">{t('saleHistory.applyFilters')}</button>
+				<a class="secondary-link" href="/sales"
+					><Icon name="rotate" size="sm" />{t('saleHistory.resetFilters')}</a
+				>
+				<button type="submit" class="filter-submit"
+					><Icon name="filter" size="sm" />{t('saleHistory.applyFilters')}</button
+				>
 			</div>
 		</form>
 	</section>
@@ -197,13 +202,23 @@
 		text-align: center;
 	}
 
+	.summary-line {
+		align-items: center;
+		display: inline-flex;
+		gap: 0.4rem;
+		justify-content: center;
+	}
+
 	.filter-panel {
 		margin-bottom: 1rem;
 		padding: 1rem;
 	}
 
 	.filter-panel h2 {
+		align-items: center;
+		display: flex;
 		font-size: 1rem;
+		gap: 0.4rem;
 		margin: 0 0 0.8rem;
 	}
 
@@ -234,6 +249,15 @@
 		padding: 0.65rem 0.75rem;
 	}
 
+	select {
+		appearance: none;
+		background-image: var(--select-arrow);
+		background-position: right var(--select-arrow-inset) center;
+		background-repeat: no-repeat;
+		background-size: var(--select-arrow-size);
+		padding-right: var(--select-control-end-padding);
+	}
+
 	.filter-actions {
 		align-items: center;
 		display: flex;
@@ -243,26 +267,32 @@
 	}
 
 	.secondary-link {
+		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-control);
 		color: var(--color-accent);
 		cursor: pointer;
+		display: inline-flex;
 		font-size: 0.82rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.5rem 0.85rem;
 		text-decoration: none;
 	}
 
 	.filter-submit {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-cta);
 		color: #fff;
 		cursor: pointer;
+		display: inline-flex;
 		font-size: 0.82rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.5rem 0.85rem;
 	}
 
