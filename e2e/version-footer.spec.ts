@@ -43,6 +43,60 @@ test.describe('Version footer', () => {
 		await expect(footer).toContainText(versionLabelPattern);
 	});
 
+	test('is pinned to the bottom edge of the viewport, not to the end of the content', async ({
+		page
+	}) => {
+		// arrange
+		await signIn(page);
+
+		// act — read the geometry on a page whose content is shorter than the viewport.
+		const geometry = await page.evaluate(() => {
+			const footer = document.querySelector('[data-testid="site-footer"]');
+			if (!footer) {
+				return null;
+			}
+			const f = footer.getBoundingClientRect();
+			return {
+				footerBottom: Math.round(f.bottom),
+				viewportHeight: window.innerHeight,
+				contentHeight: Math.round(document.documentElement.scrollHeight),
+				scrollY: window.scrollY
+			};
+		});
+
+		// assume — the strip touches the bottom of the screen even though the content stops short.
+		expect(geometry).not.toBeNull();
+		expect(geometry!.scrollY).toBe(0);
+		expect(geometry!.contentHeight).toBeGreaterThanOrEqual(geometry!.viewportHeight);
+		expect(Math.abs(geometry!.footerBottom - geometry!.viewportHeight)).toBeLessThanOrEqual(2);
+	});
+
+	test('stays at the bottom after scrolling a tall page', async ({ page }) => {
+		// arrange
+		await signIn(page);
+
+		// act
+		await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+		await page.waitForTimeout(200);
+		const geometry = await page.evaluate(() => {
+			const footer = document.querySelector('[data-testid="site-footer"]');
+			if (!footer) {
+				return null;
+			}
+			const f = footer.getBoundingClientRect();
+			return {
+				footerBottom: Math.round(f.bottom),
+				viewportHeight: window.innerHeight,
+				scrollY: window.scrollY
+			};
+		});
+
+		// assume
+		expect(geometry).not.toBeNull();
+		expect(geometry!.scrollY).toBeGreaterThan(0);
+		expect(Math.abs(geometry!.footerBottom - geometry!.viewportHeight)).toBeLessThanOrEqual(2);
+	});
+
 	test('spans the full viewport width and sits in the bottom left corner', async ({ page }) => {
 		// arrange
 		await signIn(page);
