@@ -1,5 +1,6 @@
 import { accessSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { normalizeImageOrientation } from '$lib/server/image-normalization';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { rm } from 'node:fs/promises';
@@ -71,12 +72,16 @@ export async function saveUploadedImage(
 		throw new Error('upload is not a supported image');
 	}
 
-	const digest = createHash('sha256').update(payload).digest(digestEncoding);
-	const storageKey = `${digest}.${type.extension}`;
+	// Bake the EXIF orientation into the pixels before the key is derived, so the stored file is
+	// upright and its name describes the bytes that are actually on disk.
+	const normalized = await normalizeImageOrientation(payload, type.mimeType);
+	const digest = createHash('sha256').update(normalized.payload).digest(digestEncoding);
+	const storedType = supportedTypes.find((candidate) => candidate.mimeType === normalized.mimeType);
+	const storageKey = `${digest}.${storedType?.extension ?? type.extension}`;
 	const destination = join(mediaRoot, storageKey);
 
 	await mkdir(dirname(destination), { recursive: true });
-	await writeFile(destination, payload, {
+	await writeFile(destination, normalized.payload, {
 		flag: payloadAlreadyExists(mediaRoot, storageKey) ? 'w' : 'wx'
 	});
 	return storageKey;
