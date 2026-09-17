@@ -127,25 +127,22 @@ test('accepts JPEG and WebP payloads with valid signatures', async () => {
 	expect(webpKey).toMatch(/^[0-9a-f]{64}\.webp$/);
 });
 
-test('rejects a payload that has a valid signature but is not a decodable image', async () => {
-	// arrange
+test('stores a payload whose signature matches, even when it cannot be decoded', async () => {
+	// arrange — storage is byte-true and the signature check is what guards the media root; a
+	// non-decodable file is a delivery concern, not a storage one.
 	const mediaRoot = await createMediaRoot();
 
 	// act
-	const pngRejection = await captureRejection(() =>
-		saveUploadedImage(mediaRoot, 'image/png', buildPngSignatureOnly())
-	);
-	const jpegRejection = await captureRejection(() =>
-		saveUploadedImage(mediaRoot, 'image/jpeg', buildJpegSignatureOnly())
-	);
+	const pngKey = await saveUploadedImage(mediaRoot, 'image/png', buildPngSignatureOnly());
+	const jpegKey = await saveUploadedImage(mediaRoot, 'image/jpeg', buildJpegSignatureOnly());
 
-	// assume — the signature check alone is not proof that the bytes are an image.
-	expect(pngRejection).toMatchObject({ message: 'image could not be read' });
-	expect(jpegRejection).toMatchObject({ message: 'image could not be read' });
+	// assume
+	expect(pngKey).toMatch(/^[0-9a-f]{64}\.png$/);
+	expect(jpegKey).toMatch(/^[0-9a-f]{64}\.jpg$/);
 });
 
-test('stores an uploaded photo upright and drops its EXIF block', async () => {
-	// arrange — a camera JPEG: wide pixels plus an orientation tag that means "rotate 90°".
+test('stores an uploaded photo byte-identical, EXIF and all', async () => {
+	// arrange — rotation for display is applied on the way out, so storage must not rewrite bytes.
 	const mediaRoot = await createMediaRoot();
 	const pixels = Buffer.alloc(40 * 20 * 3, 90);
 	const tagged = await sharp(pixels, { raw: { width: 40, height: 20, channels: 3 } })
@@ -156,16 +153,12 @@ test('stores an uploaded photo upright and drops its EXIF block', async () => {
 	// act
 	const storageKey = await saveUploadedImage(mediaRoot, 'image/jpeg', tagged);
 	const persisted = await readFile(join(mediaRoot, storageKey));
-	const metadata = await sharp(persisted).metadata();
 
-	// assume — stored pixels are upright and no orientation tag or EXIF survives.
-	expect(metadata.orientation === undefined || metadata.orientation === 1).toBe(true);
-	expect(metadata.width).toBe(20);
-	expect(metadata.height).toBe(40);
-	expect(metadata.exif).toBeUndefined();
-	// the key describes the stored bytes, not the uploaded ones
-	expect(storageKey).toMatch(/^[0-9a-f]{64}\.jpg$/);
-	expect(storageKey.startsWith(createHash('sha256').update(persisted).digest('hex'))).toBe(true);
+	// assume — the key names exactly the uploaded bytes and the tag is still there.
+	expect(persisted).toEqual(tagged);
+	expect(storageKey).toBe(`${createHash('sha256').update(tagged).digest('hex')}.jpg`);
+	const metadata = await sharp(persisted).metadata();
+	expect(metadata.orientation).toBe(6);
 });
 
 test('keeps the storage key stable for an image that needs no rotation', async () => {

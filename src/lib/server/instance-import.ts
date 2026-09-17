@@ -3,8 +3,7 @@ import { Buffer } from 'node:buffer';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
-import { buildZip, hasValidEndOfCentralDirectory, parseZip } from '$lib/server/backup';
-import { normalizeImageOrientation } from '$lib/server/image-normalization';
+import { hasValidEndOfCentralDirectory, parseZip } from '$lib/server/backup';
 import { assertArchiveWithinLimits } from '$lib/server/archive-safety';
 import { classifyImportedPasswordHash, hashPassword, validatePassword } from '$lib/server/password';
 import {
@@ -201,23 +200,14 @@ export function validateInstanceArchive(archive: Buffer): InstanceImportReport {
 export async function importInstanceArchive(
 	options: ImportInstanceOptions
 ): Promise<ImportInstanceOutcome> {
-	// The archive is verified exactly as delivered first: checksums and counts prove that nothing in
-	// it was altered in transit, and the manifest is never adjusted on the strength of a bad archive.
 	const report = validateInstanceArchive(options.archive);
 	if (report.errors.length > 0) {
 		return { imported: false, report };
 	}
 
-	// Uploads are normalized on the way in. An archive written by an older or foreign producer can
-	// still carry the original camera bytes, so the same normalization runs here — after verification
-	// and before anything reads the archive, because rewriting the media payloads invalidates the
-	// manifest checksums that describe them.
-	const archive = await normalizeArchiveMedia(options.archive);
-	const importOptions = { ...options, archive };
-
 	// The report carries no content, so read the archive again here; validation already proved it is
 	// safe to parse and internally consistent.
-	const validatedData = readArchiveData(archive);
+	const validatedData = readArchiveData(options.archive);
 	if (!validatedData) {
 		report.errors.push('The archive content could not be read.');
 		return { imported: false, report };
@@ -240,7 +230,7 @@ export async function importInstanceArchive(
 		return { imported: false, report };
 	}
 
-	const entries = parseZip(archive);
+	const entries = parseZip(options.archive);
 	const writtenMedia: string[] = [];
 	const database = new Database(options.databasePath);
 	try {
@@ -254,8 +244,7 @@ export async function importInstanceArchive(
 			for (const user of validatedData.users) {
 				writeUser(
 					database,
-					// The normalized archive: entry offsets describe this buffer, not the uploaded one.
-					importOptions,
+					options,
 					user,
 					entries,
 					writtenMedia,
@@ -590,99 +579,6 @@ function writeExpense(
  * @param {string[]} writtenMedia - Collector for media paths written during the attempt.
  * @returns {string} New storage key relative to the media root.
  */
-/**
- * Bake the EXIF orientation into every media payload of an archive and refresh the manifest.
- *
- * A pass-through writer stores image bytes exactly as the producer read them, so an archive can
- * carry camera orientation. Rewriting the payloads changes their checksums, so the manifest entries
- * are recomputed here as well; the result is handed to validation, which then verifies the manifest
- * against the bytes that will actually be imported.
- *
- * The archive is only rewritten when at least one payload changed, and it is returned untouched when
- * it cannot be parsed — in that case validation is responsible for rejecting it.
- *
- * @param {Buffer} archive - Raw archive bytes.
- * @returns {Promise<Buffer>} Archive bytes with upright media and a matching manifest.
- */
-async function normalizeArchiveMedia(archive: Buffer): Promise<Buffer> {
-	let entries: Map<string, { name: string; payloadOffset: number; size: number }>;
-	let manifest: {
-		files?: Record<string, { sha256?: string; bytes?: number }>;
-		media?: { files?: number; bytes?: number };
-	};
-	let data: ExchangeData | null;
-	try {
-		entries = parseZip(archive);
-		const manifestEntry = entries.get(MANIFEST_ENTRY_NAME);
-		const dataEntry = entries.get(DATA_ENTRY_NAME);
-		if (!manifestEntry || !dataEntry) {
-			return archive;
-		}
-		manifest = JSON.parse(readEntry(archive, manifestEntry)) as typeof manifest;
-		data = readArchiveData(archive);
-	} catch {
-		// Unreadable or unsupported archive: validation reports it with a precise reason.
-		return archive;
-	}
-	if (!manifest.files || !data) {
-		return archive;
-	}
-
-	const referenced = collectReferencedMedia(data.users);
-	const rewritten = new Map<string, Buffer>();
-	for (const name of referenced) {
-		const entry = entries.get(name);
-		if (!entry) {
-			continue;
-		}
-		// Media payloads are binary: read the raw slice, never the utf8 helper.
-		const payload = archive.subarray(entry.payloadOffset, entry.payloadOffset + entry.size);
-		try {
-			const normalized = await normalizeImageOrientation(payload);
-			if (!normalized.changed) {
-				continue;
-			}
-			rewritten.set(name, normalized.payload);
-			manifest.files[name] = {
-				sha256: createHash(CHECKSUM_ALGORITHM).update(normalized.payload).digest('hex'),
-				bytes: normalized.payload.length
-			};
-		} catch {
-			// Not a decodable image: leave it alone so validation reports the real defect.
-			continue;
-		}
-	}
-	if (rewritten.size === 0) {
-		return archive;
-	}
-
-	// Validation already proved the manifest's own media summary is consistent with its file entries.
-	// Re-encoding changes byte sizes but not the number of files, so only the byte total moves; the
-	// file count is deliberately left alone so a lying count cannot be laundered into a plausible one.
-	if (manifest.media) {
-		const mediaNames = Object.keys(manifest.files).filter((name) => name.startsWith('media/'));
-		manifest.media.bytes = mediaNames.reduce(
-			(total, name) => total + (manifest.files?.[name]?.bytes ?? 0),
-			0
-		);
-	}
-
-	const manifestPayload = Buffer.from(JSON.stringify(manifest), 'utf8');
-	const payloads: Array<[string, Buffer]> = [];
-	for (const [name, entry] of entries) {
-		if (name === MANIFEST_ENTRY_NAME) {
-			// data.json is unchanged, but the manifest now describes the normalized media.
-			payloads.push([name, manifestPayload]);
-			continue;
-		}
-		// Read every payload out of the ORIGINAL archive while its offsets are still valid; the
-		// rewritten bytes are substituted afterwards.
-		const original = archive.subarray(entry.payloadOffset, entry.payloadOffset + entry.size);
-		payloads.push([name, rewritten.get(name) ?? original]);
-	}
-	return buildZip(payloads);
-}
-
 function storeMedia(
 	options: ImportInstanceOptions,
 	entryName: string,

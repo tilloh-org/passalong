@@ -48,14 +48,13 @@ A reader must reject an archive whose recorded checksums or sizes do not match t
 
 ### Media orientation
 
-Media payloads are stored as delivered, so an archive written by another producer can carry the
-original camera bytes together with an EXIF orientation tag. On import the reader normalizes media
-after verifying the archive and before reading it: the orientation is baked into the pixels and the
-metadata block — including any GPS position — is dropped. Because that changes the bytes, the reader
-recomputes the affected checksums (`files[].sha256` and `files[].bytes`) and the `media.bytes` total
-in its working copy, so what is imported matches what the manifest describes. The archive as
-delivered is never trusted less for this: verification happens first, and a manifest that does not
-match the delivered bytes is still rejected.
+Media payloads are stored as delivered, so an archive carries whatever bytes its producer wrote —
+including the EXIF `Orientation` tag a camera records instead of rotating the pixels. Orientation is
+not normalized during import, which keeps the import byte-true and its checksums meaningful.
+
+Rotation is applied once, on the way out, when a viewer requests the file (`/media/<key>`). That
+single delivery step covers every channel that ever wrote media — upload, account transfer, instance
+import, restore, and files stored before this rule existed.
 
 ### Version rules
 

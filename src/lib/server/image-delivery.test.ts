@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
-import { normalizeImageOrientation } from '$lib/server/image-normalization';
+import { normalizeImageOrientation } from '$lib/server/image-delivery';
 
 /**
  * Build a JPEG whose pixels are a wide gradient and whose EXIF tag claims orientation 6
@@ -26,7 +26,7 @@ async function wideImageWithOrientationSix(): Promise<Buffer> {
 		.toBuffer();
 }
 
-describe('image orientation normalization', () => {
+describe('image orientation normalization (delivery)', () => {
 	it('bakes the EXIF orientation into the pixels so the stored image is upright', async () => {
 		// arrange
 		const tagged = await wideImageWithOrientationSix();
@@ -57,7 +57,7 @@ describe('image orientation normalization', () => {
 		const normalized = await normalizeImageOrientation(plain, 'image/png');
 
 		// assume — content-derived storage keys must stay stable, so a correct image is untouched.
-		expect(normalized.changed).toBe(false);
+		expect(normalized.rotated).toBe(false);
 		expect(createHash('sha256').update(normalized.payload).digest('hex')).toBe(
 			createHash('sha256').update(plain).digest('hex')
 		);
@@ -76,7 +76,7 @@ describe('image orientation normalization', () => {
 		const normalized = await normalizeImageOrientation(alreadyUpright, 'image/jpeg');
 
 		// assume
-		expect(normalized.changed).toBe(false);
+		expect(normalized.rotated).toBe(false);
 	});
 
 	it('bakes the mirrored orientations rather than rotating them', async () => {
@@ -100,7 +100,7 @@ describe('image orientation normalization', () => {
 		const { data } = await sharp(normalized.payload).raw().toBuffer({ resolveWithObject: true });
 
 		// assume — the red column moved from the left edge to the right edge.
-		expect(normalized.changed).toBe(true);
+		expect(normalized.rotated).toBe(true);
 		expect(data[0]).toBe(0);
 		expect(data[3 * 3]).toBe(255);
 	});
@@ -154,6 +154,6 @@ describe('image orientation normalization', () => {
 		const normalized = await normalizeImageOrientation(wide, 'image/jpeg');
 
 		// assume
-		expect(normalized.changed).toBe(false);
+		expect(normalized.rotated).toBe(false);
 	});
 });

@@ -7,6 +7,7 @@ import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 import { fixtureArchive, fixtureUser } from '$lib/server/exchange-fixture.test-helper';
 import { importInstanceArchive } from '$lib/server/instance-import';
+import { readImageForDelivery } from '$lib/server/image-delivery';
 import { createCollectionRepository } from '$lib/server/collection-repository';
 
 const temporaryRoots: string[] = [];
@@ -56,8 +57,8 @@ async function runImport(archive: Buffer) {
 	return { ...outcome, mediaRoot, databasePath };
 }
 
-describe('instance import — EXIF orientation', () => {
-	it('stores imported media upright even when the archive carries the camera orientation', async () => {
+describe('instance import — media is stored as delivered', () => {
+	it('imports media byte-identical and rotates it on delivery instead', async () => {
 		// arrange — an archive whose media is a JPEG that still needs a 90° rotation for display.
 		const tagged = await cameraRotatedJpeg();
 		const before = await sharp(tagged).metadata();
@@ -77,13 +78,19 @@ describe('instance import — EXIF orientation', () => {
 		database.close();
 		expect(image?.storage_key).toBeTruthy();
 
-		const stored = await sharp(readFileSync(join(outcome.mediaRoot, image.storage_key))).metadata();
+		const storedBytes = readFileSync(join(outcome.mediaRoot, image.storage_key));
+		// The import is byte-true: the delivered bytes still describe the camera orientation.
 		expect(before.orientation).toBe(6);
-		expect(before.width).toBe(40);
-		expect(before.height).toBe(20);
-		expect(stored.orientation === undefined || stored.orientation === 1).toBe(true);
-		expect(stored.width).toBe(20);
-		expect(stored.height).toBe(40);
+		expect(storedBytes).toEqual(tagged);
+		// Delivery is what makes it upright.
+		const delivered = await readImageForDelivery(
+			join(outcome.mediaRoot, image.storage_key),
+			'image/jpeg'
+		);
+		const deliveredMeta = await sharp(delivered.payload).metadata();
+		expect(delivered.rotated).toBe(true);
+		expect(deliveredMeta.width).toBe(20);
+		expect(deliveredMeta.height).toBe(40);
 	});
 
 	it('still imports when the archive media needs no rotation', async () => {
