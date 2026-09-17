@@ -42,3 +42,16 @@
 	decoding="async"
 	{...rest}
 />
+
+<style>
+	/*
+	 * Sizing that must hold for every tile, regardless of the caller. These rules live here rather
+	 * than in each page: a scoped style in a parent does not reach into a child component, and a
+	 * missing `width: 100%` renders a 480px thumbnail inside a 340px container, which overflows.
+	 */
+	img {
+		display: block;
+		max-width: 100%;
+		object-fit: cover;
+	}
+</style>

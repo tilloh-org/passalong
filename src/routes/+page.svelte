@@ -1346,8 +1346,9 @@
 	}
 
 	:global(.item-image.photo) {
+		aspect-ratio: 1;
 		height: auto;
-		object-fit: cover;
+		width: 100%;
 	}
 
 	.kat {

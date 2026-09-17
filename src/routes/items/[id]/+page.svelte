@@ -417,10 +417,9 @@
 		gap: 0.9rem;
 	}
 
-	.cover-thumb {
+	:global(.cover-thumb) {
 		border-radius: var(--radius-small);
 		height: 4.5rem;
-		object-fit: cover;
 		width: 4.5rem;
 	}
 
