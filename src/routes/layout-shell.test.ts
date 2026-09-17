@@ -33,6 +33,17 @@ describe('global layout shell', () => {
 		);
 	});
 
+	it('keeps the body box at least as tall as the viewport', () => {
+		// act
+		const source = readFileSync(appStylesPath, 'utf8');
+
+		// assume — the decorative gradient is painted on `body`. A fixed attachment does not extend
+		// the paint area beyond that box, so on a page whose body is shorter than the viewport the
+		// gradient ends early and the flat html colour continues below it: a visible edge. Pages
+		// with a tall body (portfolio, profile) hide the bug, which is why the fix has to be here.
+		expect(source).toMatch(/body\s*\{[\s\S]*?min-height:\s*100(d)?vh;/);
+	});
+
 	it('paints the theme base colour behind the fixed background', () => {
 		// act
 		const source = readFileSync(appStylesPath, 'utf8');

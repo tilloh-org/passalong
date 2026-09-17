@@ -126,6 +126,16 @@ html {
 
 body {
 	margin: 0;
+	/*
+	 * The decorative gradient below is painted on `body`. `background-attachment: fixed` changes how
+	 * that background is positioned, not how far it is painted: it still stops at this box. On a page
+	 * whose content is shorter than the viewport the gradient therefore ended early and the flat
+	 * `html` colour continued below it, which reads as a visible edge — and a short page hid the
+	 * problem only because its own background covered the seam. Stretching the body to the viewport
+	 * height makes the gradient cover the whole screen everywhere.
+	 */
+	min-height: 100vh;
+	min-height: 100dvh;
 	overflow-x: hidden;
 	background:
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.28), transparent 60%),
