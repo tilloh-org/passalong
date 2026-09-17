@@ -2,6 +2,7 @@
 	import { formatPrice } from '$lib/utils/format';
 	import { t } from '$lib/i18n/index.svelte';
 	import Icon from '$lib/components/icon.svelte';
+	import TileImage from '$lib/components/tile-image.svelte';
 	import { getFavorites, pruneFavorites, toggleFavorite } from '$lib/stand-favorites.svelte';
 	import ItemFilterForm from '$lib/components/item-filter-form.svelte';
 
@@ -111,11 +112,7 @@
 				<div class="tile" class:reserved={item.reservedAt} data-testid="stand-item">
 					<div class="img" class:has-photo={item.images.some((image) => image.isCover)}>
 						{#each item.images.filter((image) => image.isCover) as cover (cover.storageKey)}
-							<img
-								src={`/media/${encodeURIComponent(cover.storageKey)}`}
-								alt={item.title}
-								loading="lazy"
-							/>
+							<TileImage storageKey={cover.storageKey} alt={item.title} />
 						{/each}
 						{#if !item.images.some((image) => image.isCover)}
 							{item.title.slice(0, 1).toUpperCase()}
@@ -361,7 +358,7 @@
 		color: inherit;
 	}
 
-	.tile .img img {
+	.tile .img :global(img) {
 		display: block;
 		height: 100%;
 		inset: 0;

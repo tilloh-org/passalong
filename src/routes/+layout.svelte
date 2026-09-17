@@ -2,6 +2,7 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import Icon from '$lib/components/icon.svelte';
+	import TileImage from '$lib/components/tile-image.svelte';
 	import {
 		getLocale,
 		initLocale,
@@ -206,10 +207,11 @@
 				data-testid="profile-avatar-link"
 			>
 				{#if data.header?.profile?.avatarStorageKey}
-					<img
+					<TileImage
 						class="profile-avatar-img"
-						src={`/media/${encodeURIComponent(data.header?.profile?.avatarStorageKey ?? '')}`}
+						storageKey={data.header?.profile?.avatarStorageKey ?? ''}
 						alt=""
+						loading="eager"
 					/>
 				{:else}
 					<span class="profile-avatar-fallback"
@@ -365,7 +367,7 @@
 		box-shadow: var(--shadow-btn-hover);
 		transform: translateY(-1px);
 	}
-	.profile-avatar-img {
+	:global(.profile-avatar-img) {
 		height: 100%;
 		object-fit: cover;
 		width: 100%;

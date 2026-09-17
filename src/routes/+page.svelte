@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import Icon from '$lib/components/icon.svelte';
+	import TileImage from '$lib/components/tile-image.svelte';
 	import { formatPrice } from '$lib/utils/format';
 	import { minimumPasswordLength } from '$lib/password-policy';
 	import { t } from '$lib/i18n/index.svelte';
@@ -591,11 +592,10 @@
 								>
 									<div class="tile-media">
 										{#if item.coverImageKey}
-											<img
+											<TileImage
 												class="item-image photo"
-												src={`/media/${encodeURIComponent(item.coverImageKey)}`}
+												storageKey={item.coverImageKey}
 												alt={item.title}
-												loading="lazy"
 											/>
 										{:else}
 											<div class="item-image" aria-hidden="true">
@@ -1345,9 +1345,10 @@
 		width: 100%;
 	}
 
-	.item-image.photo {
+	:global(.item-image.photo) {
+		aspect-ratio: 1;
 		height: auto;
-		object-fit: cover;
+		width: 100%;
 	}
 
 	.kat {
