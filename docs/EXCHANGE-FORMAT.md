@@ -46,6 +46,16 @@ media/...              image and avatar payloads
 `files` covers **every** entry in the archive except `manifest.json` itself, including `data.json`.
 A reader must reject an archive whose recorded checksums or sizes do not match the payloads.
 
+### Media orientation
+
+Media payloads are stored as delivered, so an archive carries whatever bytes its producer wrote —
+including the EXIF `Orientation` tag a camera records instead of rotating the pixels. Orientation is
+not normalized during import, which keeps the import byte-true and its checksums meaningful.
+
+Rotation is applied once, on the way out, when a viewer requests the file (`/media/<key>`). That
+single delivery step covers every channel that ever wrote media — upload, account transfer, instance
+import, restore, and files stored before this rule existed.
+
 ### Version rules
 
 - The format version is independent of the database schema version.

@@ -71,6 +71,8 @@ export async function saveUploadedImage(
 		throw new Error('upload is not a supported image');
 	}
 
+	// Bytes are stored exactly as they arrive: the key describes what is on disk, and rotation for
+	// display happens once, on the way out (see `readImageForDelivery`).
 	const digest = createHash('sha256').update(payload).digest(digestEncoding);
 	const storageKey = `${digest}.${type.extension}`;
 	const destination = join(mediaRoot, storageKey);

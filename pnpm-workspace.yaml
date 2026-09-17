@@ -1,4 +1,6 @@
 allowBuilds:
   better-sqlite3: true
+  # libvips-backed image processing; its install script fetches the platform binary.
+  sharp: true
 overrides:
   cookie: 0.7.2
