@@ -2,6 +2,7 @@
 	import { formatPrice } from '$lib/utils/format';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
 	import Icon from '$lib/components/icon.svelte';
+	import TileImage from '$lib/components/tile-image.svelte';
 	import ItemInfoBlock from '$lib/components/item-info-block.svelte';
 
 	let { data, form } = $props();
@@ -69,9 +70,9 @@
 				{#if data.images.length}
 					<div class="cover-preview">
 						{#if coverImageKey}
-							<img
+							<TileImage
 								class="cover-thumb"
-								src={`/media/${encodeURIComponent(coverImageKey)}`}
+								storageKey={coverImageKey}
 								alt={t('item.coverAlt', { name: data.item.title })}
 							/>
 						{:else}

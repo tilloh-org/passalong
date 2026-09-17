@@ -103,6 +103,31 @@ screen, before any account exists**: the dialog appears next to the first-run
 registration form, and you pick one of the imported users as the instance
 administrator, who receives a password you set there.
 
+## Stored media and thumbnails
+
+Uploaded images are stored **exactly as received** under the media root, so a
+storage key always names the bytes that are on disk and an import or restore
+stays byte-true. Rotation for display (the EXIF orientation a camera records)
+is applied once, when a viewer requests the file, together with the removal of
+the metadata block — a photo published on a stand page therefore carries no GPS
+position.
+
+Grids and tiles request a small derivative instead of the original:
+
+```
+/media/<key>          the original, served to detail views and downloads
+/thumb/<key>-<edge>w  a thumbnail of at most <edge> pixels on its longest edge
+```
+
+Thumbnails live in `<media root>/.thumbs/`. They are **derived data**, never
+referenced from the database:
+
+- they are generated on the first request and reused afterwards;
+- the instance backup covers them, because its media walk is recursive, so
+  originals **and** thumbnails survive a restart;
+- an instance restored without them simply rebuilds them on the next request;
+- deleting the `.thumbs` directory is always safe.
+
 The compressed stack ships with `BODY_SIZE_LIMIT: 256M` so an archive that
 contains images fits. If you set that variable yourself, keep it at or above the
 largest archive you intend to import — a smaller value fails the upload with a
