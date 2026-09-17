@@ -4,6 +4,8 @@
 	import Icon from '$lib/components/icon.svelte';
 	import TileImage from '$lib/components/tile-image.svelte';
 	import ItemInfoBlock from '$lib/components/item-info-block.svelte';
+	import ImageLightbox from '$lib/components/image-lightbox.svelte';
+	import { orderImages } from '$lib/utils/lightbox';
 
 	let { data, form } = $props();
 
@@ -23,9 +25,32 @@
 	}));
 
 	const coverImageKey = $derived(data.images.find((image) => image.isCover)?.storageKey ?? null);
+
+	// The viewer shows the cover first, then the rest in stored order. The manage list keeps the
+	// stored order, so this map is what lets a click in either place open the right photo.
+	const viewerOrder = $derived(orderImages(data.images));
+	const viewerIndex = $derived(new Map(viewerOrder.map((image, index) => [image.id, index])));
+
+	const lightboxImages = $derived(
+		viewerOrder.map((image) => ({
+			src: `/media/${encodeURIComponent(image.storageKey)}`,
+			alt: t('item.photoAlt', { name: data.item.title })
+		}))
+	);
+
+	/**
+	 * Open the full-screen viewer at a given image.
+	 *
+	 * @param {number} index - Position in the gallery order.
+	 * @returns {void}
+	 */
+	function openLightbox(index: number): void {
+		lightbox?.open(index);
+	}
 	const qrCodeDataUrl = $derived(data.qrCodeDataUrl);
 
 	let imagesDialog = $state<HTMLDialogElement | null>(null);
+	let lightbox = $state<ReturnType<typeof ImageLightbox> | null>(null);
 	let editDialog = $state<HTMLDialogElement | null>(null);
 </script>
 
@@ -41,11 +66,19 @@
 	<section class="detail-card" aria-labelledby="item-title">
 		<div class="media-column">
 			{#if coverImageKey}
-				<img
-					class="cover"
-					src={`/media/${encodeURIComponent(coverImageKey)}`}
-					alt={data.item.title}
-				/>
+				<button
+					type="button"
+					class="cover-button"
+					onclick={() => openLightbox(0)}
+					aria-label={t('item.openPhoto', { number: 1 })}
+					data-testid="item-cover-button"
+				>
+					<img
+						class="cover"
+						src={`/media/${encodeURIComponent(coverImageKey)}`}
+						alt={data.item.title}
+					/>
+				</button>
 			{:else}
 				<div class="cover placeholder" aria-hidden="true">
 					{data.item.title.slice(0, 1).toUpperCase()}
@@ -136,12 +169,20 @@
 				<ul class="image-list">
 					{#each data.images as image (image.id)}
 						<li class:image-selected={image.isCover}>
-							<img
-								class="thumb"
-								src={`/media/${encodeURIComponent(image.storageKey)}`}
-								alt={t('item.photoAlt', { name: data.item.title })}
-								loading="lazy"
-							/>
+							<button
+								type="button"
+								class="thumb-button"
+								onclick={() => openLightbox(viewerIndex.get(image.id) ?? 0)}
+								aria-label={t('item.openPhoto', { number: (viewerIndex.get(image.id) ?? 0) + 1 })}
+								data-testid="item-thumb-button"
+							>
+								<img
+									class="thumb"
+									src={`/media/${encodeURIComponent(image.storageKey)}`}
+									alt={t('item.photoAlt', { name: data.item.title })}
+									loading="lazy"
+								/>
+							</button>
 							<div class="image-actions">
 								<span class="image-name" data-testid="item-image-key">
 									{image.isCover
@@ -368,6 +409,8 @@
 			</a>
 		</div>
 	</section>
+
+	<ImageLightbox bind:this={lightbox} images={lightboxImages} />
 </main>
 
 <style>
@@ -386,6 +429,37 @@
 		gap: 1.5rem;
 		grid-template-columns: minmax(16rem, 0.9fr) minmax(0, 1.4fr);
 		padding: 1.5rem;
+	}
+
+	.thumb-button {
+		background: none;
+		border: none;
+		cursor: zoom-in;
+		display: block;
+		margin: 0;
+		padding: 0;
+	}
+
+	.thumb-button:focus-visible {
+		border-radius: var(--radius-small);
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
+	}
+
+	.cover-button {
+		background: none;
+		border: none;
+		cursor: zoom-in;
+		display: block;
+		margin: 0;
+		padding: 0;
+		width: 100%;
+	}
+
+	.cover-button:focus-visible {
+		border-radius: var(--radius-card);
+		outline: 2px solid var(--color-accent);
+		outline-offset: 2px;
 	}
 
 	.media-column .cover {
