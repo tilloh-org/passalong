@@ -42,6 +42,23 @@
 	--color-ice: #7fa8bd;
 	--focus-ring: rgba(127, 168, 189, 0.35);
 	--scrim: rgba(14, 42, 58, 0.4);
+	/*
+	 * The photo viewer is the one overlay that must hide the page rather than dim it: a gallery is
+	 * looked at, and the app behind it is a distraction. Kept separate from `--scrim`, which is a
+	 * mild dim for the navigation drawer where the page stays readable on purpose.
+	 */
+	--scrim-viewer: rgba(6, 12, 18, 0.94);
+	/* Solid, never translucent: a bright photo behind a see-through button reads as disabled. */
+	--viewer-control-bg: #1e3038;
+	--viewer-control-border: rgba(255, 255, 255, 0.28);
+	--viewer-control-fg: #f0f7fa;
+	--viewer-control-bg-hover: #2b4250;
+	--shadow-viewer-control: 0 2px 10px rgba(0, 0, 0, 0.45);
+	/*
+	 * The viewer's own top strip. The page behind is almost hidden but its header sits in the same
+	 * corner as the counter, so without a backing the two texts overlap into unreadable shapes.
+	 */
+	--viewer-bar-bg: linear-gradient(rgba(6, 12, 18, 0.86), rgba(6, 12, 18, 0));
 
 	--radius-card: 16px;
 	--radius-control: 12px;
@@ -96,6 +113,13 @@
 	--color-warn-soft: rgba(224, 164, 88, 0.16);
 	--focus-ring: rgba(127, 168, 189, 0.4);
 	--scrim: rgba(0, 0, 0, 0.55);
+	--scrim-viewer: rgba(0, 0, 0, 0.96);
+	--viewer-control-bg: #2a3d47;
+	--viewer-control-border: rgba(255, 255, 255, 0.3);
+	--viewer-control-fg: #eef6fa;
+	--viewer-control-bg-hover: #37505d;
+	--shadow-viewer-control: 0 2px 12px rgba(0, 0, 0, 0.6);
+	--viewer-bar-bg: linear-gradient(rgba(0, 0, 0, 0.88), rgba(0, 0, 0, 0));
 	--glass: rgba(15, 26, 34, 0.72);
 	--select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%237fa8bd' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
 	--select-form-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%237fa8bd'/%3E%3Cpath d='m7.5 9.5 4.5 4.5 4.5-4.5' fill='none' stroke='%230f1a22' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");

@@ -184,11 +184,12 @@
 		width: 100vw;
 	}
 	.lightbox::backdrop {
-		background: rgba(6, 12, 18, 0.92);
+		background: var(--scrim-viewer);
 	}
 
 	.lightbox-bar {
 		align-items: center;
+		background: var(--viewer-bar-bg);
 		display: flex;
 		gap: 1rem;
 		justify-content: space-between;
@@ -196,29 +197,42 @@
 	}
 
 	.lightbox-counter {
-		color: var(--color-text-on-dark, #e8f0f4);
+		color: var(--viewer-control-fg);
 		font-size: 0.85rem;
 		margin: 0;
 	}
 
+	/*
+	 * Solid and always visible: these are the only way to change photo with a mouse, so they never
+	 * wait for a hover, and an opaque fill keeps a bright photo from showing through the button.
+	 */
 	.lightbox-close,
 	.lightbox-nav {
 		align-items: center;
-		background: rgba(255, 255, 255, 0.12);
-		border: 1px solid rgba(255, 255, 255, 0.22);
+		background: var(--viewer-control-bg);
+		border: 1px solid var(--viewer-control-border);
 		border-radius: 999px;
-		color: #e8f0f4;
+		color: var(--viewer-control-fg);
 		cursor: pointer;
 		display: inline-flex;
 		height: 2.75rem;
 		justify-content: center;
+		opacity: 1;
+		/* A soft halo keeps the button readable where it overlaps a light part of the photo. */
+		box-shadow: var(--shadow-viewer-control);
 		/* Comfortably above the 44px touch target minimum on a phone. */
 		width: 2.75rem;
 	}
 
 	.lightbox-close:hover,
 	.lightbox-nav:hover {
-		background: rgba(255, 255, 255, 0.2);
+		background: var(--viewer-control-bg-hover);
+	}
+
+	.lightbox-close:focus-visible,
+	.lightbox-nav:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
 	}
 
 	.lightbox-stage {
