@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionRepository, type SessionScope } from '$lib/server/collection-repository';
 import { hashSessionToken } from '$lib/server/session-token';
@@ -9,8 +10,6 @@ import { saveUploadedImage } from '$lib/server/media-storage';
 
 const temporaryDirectories: string[] = [];
 const sessionCookieName = 'passalong_session';
-const testPngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
 /**
  * Create an isolated database path for a server-action authorization test.
  *
@@ -94,8 +93,10 @@ function createActionFixtureWithOwner(): ActionFixture {
  *
  * @returns {Buffer} PNG bytes with a valid signature.
  */
-function buildTestPng(): Buffer {
-	return Buffer.concat([testPngHeader, Buffer.from('test-png-payload')]);
+async function buildTestPng(): Promise<Buffer> {
+	return sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 7, g: 7, b: 7 } } })
+		.png()
+		.toBuffer();
 }
 
 describe('instance-admin actions', () => {
@@ -124,7 +125,7 @@ describe('instance-admin actions', () => {
 		formData.set('itemId', item.id);
 		formData.append(
 			'image',
-			new File([new Uint8Array(buildTestPng())], 'photo.png', { type: 'image/png' })
+			new File([new Uint8Array(await buildTestPng())], 'photo.png', { type: 'image/png' })
 		);
 
 		// act
@@ -180,11 +181,11 @@ describe('instance-admin actions', () => {
 		const url = new URL('http://localhost/');
 		const formData = new FormData();
 		formData.set('itemId', item.id);
-		const sidePng = buildTestPng();
+		const sidePng = await buildTestPng();
 		sidePng[sidePng.length - 1] = (sidePng[sidePng.length - 1] + 1) % 256;
 		formData.append(
 			'image',
-			new File([new Uint8Array(buildTestPng())], 'front.png', { type: 'image/png' })
+			new File([new Uint8Array(await buildTestPng())], 'front.png', { type: 'image/png' })
 		);
 		formData.append(
 			'image',
@@ -484,7 +485,7 @@ describe('instance-admin actions', () => {
 		const formData = new FormData();
 		formData.set(
 			'avatar',
-			new File([new Uint8Array(buildTestPng())], 'avatar.png', { type: 'image/png' })
+			new File([new Uint8Array(await buildTestPng())], 'avatar.png', { type: 'image/png' })
 		);
 
 		// act
@@ -567,7 +568,11 @@ describe('instance-admin actions', () => {
 			},
 			scope
 		);
-		const itemImageStorageKey = await saveUploadedImage(mediaRoot, 'image/png', buildTestPng());
+		const itemImageStorageKey = await saveUploadedImage(
+			mediaRoot,
+			'image/png',
+			await buildTestPng()
+		);
 		repository.addItemImage(item.id, itemImageStorageKey, scope);
 		expect(existsSync(join(mediaRoot, itemImageStorageKey))).toBe(true);
 		const currentUsername = repository.getProfile(scope)?.username ?? 'missing';

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
 	import { formatPrice } from '$lib/utils/format';
+	import Icon from '$lib/components/icon.svelte';
 
 	let { data } = $props();
 
@@ -21,9 +22,12 @@
 	<section class="intro-card" aria-labelledby="price-labels-title">
 		<div>
 			<p class="eyebrow">{t('priceLabels.eyebrow')}</p>
-			<h1 id="price-labels-title" data-testid="price-labels-title">{t('priceLabels.title')}</h1>
+			<h1 id="price-labels-title" data-testid="price-labels-title">
+				<Icon name="tag" />{t('priceLabels.title')}
+			</h1>
 			<p class="intro-copy">{t('priceLabels.intro')}</p>
 			<p class="item-count">
+				<Icon name="qrcode" size="sm" tone="muted" />
 				{data.itemCount === 1
 					? t('priceLabels.itemCountSingular', { count: data.itemCount })
 					: t('priceLabels.itemCountPlural', { count: data.itemCount })}
@@ -36,6 +40,7 @@
 				onclick={printLabels}
 				data-testid="price-labels-print"
 			>
+				<Icon name="printer" size="sm" />
 				{t('priceLabels.print')}
 			</button>
 		</div>
@@ -67,7 +72,7 @@
 		</div>
 	{:else}
 		<section class="empty-state" data-testid="price-labels-empty">
-			<h2>{t('priceLabels.emptyTitle')}</h2>
+			<h2><Icon name="tag" />{t('priceLabels.emptyTitle')}</h2>
 			<p>{t('priceLabels.emptyIntro')}</p>
 		</section>
 	{/if}
@@ -117,6 +122,18 @@
 		margin-bottom: 0.65rem;
 	}
 
+	h1,
+	.item-count,
+	.empty-state h2 {
+		align-items: center;
+		display: flex;
+		gap: 0.45rem;
+	}
+
+	.item-count {
+		gap: 0.35rem;
+	}
+
 	.intro-copy,
 	.item-count {
 		color: var(--color-text-muted);
@@ -135,13 +152,16 @@
 	}
 
 	.print-button {
+		align-items: center;
 		background: var(--color-accent);
 		border: 1px solid var(--color-accent);
 		border-radius: var(--radius-small);
 		color: white;
 		cursor: pointer;
+		display: inline-flex;
 		font: inherit;
 		font-weight: 800;
+		gap: 0.4rem;
 		padding: 0.75rem 1rem;
 	}
 

@@ -1,8 +1,12 @@
 services:
   passalong:
     image: ghcr.io/tilloh-org/passalong:latest
-    build: .
-    container_name: passalong
+    build:
+      context: .
+      args:
+        # Commit hash for the footer label; set it in .env when building from a checkout.
+        COMMIT_HASH: ${COMMIT_HASH:-}
+    container_name: ${PASSALONG_CONTAINER_NAME:-passalong}
     restart: unless-stopped
     ports:
       - '${PASSALONG_PORT:-4242}:4242'
@@ -14,7 +18,7 @@ services:
       ORIGIN: ${PASSALONG_ORIGIN:-http://localhost:4242}
       PASSALONG_DATABASE_PATH: /data/passalong.sqlite
       PASSALONG_MEDIA_ROOT: /data/media
-      BODY_SIZE_LIMIT: 6M
+      BODY_SIZE_LIMIT: 256M
       PASSALONG_BOOTSTRAP: ${PASSALONG_BOOTSTRAP:-}
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4242']

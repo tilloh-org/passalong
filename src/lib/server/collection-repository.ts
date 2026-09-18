@@ -3686,6 +3686,28 @@ function normalizeUsername(value: string): string {
 }
 
 /**
+ * Validate a username against the instance's username policy.
+ *
+ * Exported so the instance import can apply exactly the same rule: an imported account whose name
+ * this instance would never accept must be refused, because that user could never sign in.
+ *
+ * @param {string} value - The untrusted username to normalize.
+ * @returns {{ ok: true; username: string } | { ok: false; reason: string }} Result.
+ */
+export function normalizeUsernameResult(
+	value: string
+): { ok: true; username: string } | { ok: false; reason: string } {
+	const normalized = value.trim().toLowerCase();
+	if (!usernamePattern.test(normalized)) {
+		return {
+			ok: false,
+			reason: `The username must contain ${minimumUsernameLength} to ${maximumUsernameLength} lowercase letters, numbers, periods, underscores, plus signs, or hyphens.`
+		};
+	}
+	return { ok: true, username: normalized };
+}
+
+/**
  * Validate item fields before attempting persistence.
  *
  * @param {CreateItemInput} input - Item values to validate.
