@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -386,13 +386,16 @@ function writeCollection(
 	now: string
 ): void {
 	const collectionId = randomUUID();
+	// The public handle is generated per imported stand, exactly as for a natively created one:
+	// the imported internal ids stay internal and never become a working public URL.
 	database
 		.prepare(
-			`INSERT INTO collections (id, tenant_id, owner_id, name, stand_intro, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?)`
+			`INSERT INTO collections (id, public_id, tenant_id, owner_id, name, stand_intro, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`
 		)
 		.run(
 			collectionId,
+			newPublicId(),
 			scope.tenantId,
 			scope.userId,
 			collection.name,
@@ -849,6 +852,17 @@ function validateCollection(
 		(total, item) => total + (Array.isArray(item?.images) ? item.images.length : 0),
 		0
 	);
+}
+
+/**
+ * Generate an opaque public handle for a stand page.
+ *
+ * Mirrors the repository rule so an imported stand is reachable under a handle of the same shape.
+ *
+ * @returns {string} A 32-character lowercase hex identifier.
+ */
+function newPublicId(): string {
+	return randomBytes(16).toString('hex');
 }
 
 /**

@@ -328,6 +328,27 @@ test.describe('Public stand page', () => {
 		await anonymousPage.getByTestId('stand-filter-reset').click();
 		await expect(anonymousPage.getByTestId('stand-item')).toHaveCount(2);
 
+		// act — the public handle must not be the internal collection id
+		const publicHandle = standPath.replace(/^.*\/stand\//, '');
+		// The owner's own pages still address the collection by its internal id; read it from the
+		// hidden field so the counter-check compares real values instead of assuming one.
+		await page.goto('/');
+		const internalCollectionId = await page
+			.locator('input[name="collectionId"]')
+			.first()
+			.getAttribute('value');
+		const internalIdResponse = await anonymousPage.request.get(
+			`/stand/${encodeURIComponent(internalCollectionId)}`
+		);
+		const publicHandleResponse = await anonymousPage.request.get(
+			`/stand/${encodeURIComponent(publicHandle)}`
+		);
+
+		// assume — only the opaque handle opens the stand, the internal row id stays 404
+		expect(publicHandle).not.toBe(internalCollectionId);
+		expect(publicHandleResponse.status()).toBe(200);
+		expect(internalIdResponse.status()).toBe(404);
+
 		// assume — category filter restricts the list
 		await anonymousPage.goto(`${standPath}?category=clothing`);
 		await expect(anonymousPage.getByTestId('stand-item')).toHaveCount(2);
