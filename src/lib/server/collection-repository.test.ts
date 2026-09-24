@@ -215,54 +215,6 @@ describe('collection repository', () => {
 		expect(memberIsPrivileged).toBe(false);
 	});
 
-	it('creates a multi-account bootstrap manifest once with exactly one instance administrator', () => {
-		// arrange
-		const databasePath = createDatabasePath();
-		const repository = createCollectionRepository({ databasePath });
-		const accounts = [
-			{
-				tenantName: 'Avery household',
-				username: 'avery',
-				displayName: 'Avery',
-				password: 'not-a-real-password-avery',
-				passwordHash: 'scrypt$avery$hash',
-				instanceAdmin: true
-			},
-			{
-				tenantName: 'Blake household',
-				username: 'blake',
-				displayName: 'Blake',
-				password: 'not-a-real-password-blake',
-				passwordHash: 'scrypt$blake$hash',
-				instanceAdmin: false
-			}
-		];
-
-		// act
-		repository.provisionBootstrapAccounts(accounts);
-
-		// assume
-		expect(repository.getBootstrapAccount('avery')).toEqual({
-			username: 'avery',
-			displayName: 'Avery',
-			passwordHash: 'scrypt$avery$hash',
-			tenantName: 'Avery household',
-			instanceAdmin: true
-		});
-
-		const database = new Database(databasePath, { readonly: true });
-		expect(database.prepare('SELECT COUNT(*) AS count FROM tenants').get()).toEqual({ count: 2 });
-		expect(database.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
-		expect(database.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual({
-			count: 1
-		});
-		expect(database.prepare('SELECT username FROM users ORDER BY username').all()).toEqual([
-			{ username: 'avery' },
-			{ username: 'blake' }
-		]);
-		database.close();
-	});
-
 	it('lets an authenticated admin create a collection and persist an item', () => {
 		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });

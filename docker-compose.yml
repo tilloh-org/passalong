@@ -19,7 +19,6 @@ services:
       PASSALONG_DATABASE_PATH: /data/passalong.sqlite
       PASSALONG_MEDIA_ROOT: /data/media
       BODY_SIZE_LIMIT: 256M
-      PASSALONG_BOOTSTRAP: ${PASSALONG_BOOTSTRAP:-}
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:4242']
       interval: 30s
