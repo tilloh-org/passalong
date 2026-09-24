@@ -68,6 +68,22 @@ Item cards: category pill overlaid top-left on the image, status pill and quick-
 the tile footer. Detail page: action row (delete/images/edit/reserve) right-aligned below the
 sale panel.
 
+## Icons
+
+- Icons come from the **vendored Tabler sprite**, mirroring the Marktbude approach: symbols are
+  inlined once in `src/app.html` and referenced as `#i-<name>`. Never load an icon from a CDN,
+  and never paste raw SVG paths into a component.
+- The typed registry in `src/lib/icons.ts` is the contract; `scripts/build-icon-sprite.mjs`
+  regenerates `src/app.html` from it. Adding an icon means adding it to the registry and
+  re-running the script (`node scripts/build-icon-sprite.mjs`).
+- Components render icons through `$lib/components/icon.svelte`, which is always `aria-hidden`.
+  The surrounding control carries the accessible name, so an icon never becomes a second name
+  for a button or link.
+- Icons sit left of their label and inherit the label colour; semantic tone comes from the
+  `.icon-ok` / `.icon-danger` / `.icon-warn` / `.icon-muted` modifiers.
+- Navigation pills carry one leading icon each. The label must not repeat the icon's glyph as
+  text (the “Neu” label carries no `+`, because the plus icon renders it).
+
 ## Code language
 
 All code, comments, test titles, CSS class names, `data-testid` values, and identifiers are

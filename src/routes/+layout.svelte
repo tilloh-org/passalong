@@ -1,6 +1,8 @@
 <script lang="ts">
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import Icon from '$lib/components/icon.svelte';
+	import TileImage from '$lib/components/tile-image.svelte';
 	import {
 		getLocale,
 		initLocale,
@@ -18,6 +20,8 @@
 	let headerElement: HTMLElement | undefined = $state();
 	let navElement: HTMLElement | undefined = $state();
 	let burgerButton: HTMLButtonElement | undefined = $state();
+	/** Natural width of the header row while the navigation renders inline. */
+	let inlineHeaderWidth = 0;
 
 	initLocale();
 
@@ -25,6 +29,9 @@
 		if (!headerElement || !navElement) {
 			return;
 		}
+		// Measure the row's natural width only while the navigation is inline: the
+		// drawer renders the same items at a different width, so re-measuring there
+		// would flip the decision back and forth and leave the row overflowing.
 		const measure = () => {
 			if (!navElement || !headerElement) {
 				return;
@@ -33,17 +40,10 @@
 				navOverflow = true;
 				return;
 			}
-			// Hysteresis: switch to the drawer as soon as the header row overflows. Switch back to
-			// inline only when the whole row (brand + actions + nav) genuinely fits again — measured
-			// on the drawer-mode header, where brand and actions still occupy their inline widths.
-			const brand = headerElement.querySelector('.brand-wrap');
-			const actions = headerElement.querySelector('.header-actions');
-			const reservedWidth = ((brand?.scrollWidth ?? 0) + (actions?.scrollWidth ?? 0)) * 2 + 96;
-			if (navOverflow) {
-				navOverflow = headerElement.clientWidth - reservedWidth < navElement.scrollWidth;
-			} else {
-				navOverflow = headerElement.scrollWidth > headerElement.clientWidth + 1;
+			if (!navOverflow) {
+				inlineHeaderWidth = headerElement.scrollWidth;
 			}
+			navOverflow = inlineHeaderWidth > 0 && headerElement.clientWidth < inlineHeaderWidth;
 		};
 		measure();
 		const observer = new ResizeObserver(measure);
@@ -129,12 +129,15 @@
 	{#if data.header?.isAuthenticated}
 		<nav class:open={menuOpen} bind:this={navElement}>
 			<a class="nav-cta" href="/" onclick={() => setMenuOpen(false)}>
+				<Icon name="plus" />
 				{t('nav.newItem')}
 			</a>
 			<a href="/scan" onclick={() => setMenuOpen(false)}>
+				<Icon name="scan" />
 				{t('nav.scan')}
 			</a>
 			<a href="/market-days" onclick={() => setMenuOpen(false)} data-testid="nav-market-days-link">
+				<Icon name="calendar" />
 				{t('nav.marketDays')}
 			</a>
 			<a
@@ -142,12 +145,15 @@
 				onclick={() => setMenuOpen(false)}
 				data-testid="nav-price-labels-link"
 			>
+				<Icon name="tag" />
 				{t('nav.priceLabels')}
 			</a>
 			<a href="/sales" onclick={() => setMenuOpen(false)} data-testid="nav-sale-history-link">
+				<Icon name="history" />
 				{t('nav.saleHistory')}
 			</a>
 			<a href="/statistics" onclick={() => setMenuOpen(false)} data-testid="nav-statistics-link">
+				<Icon name="chart-bar" />
 				{t('nav.statistics')}
 			</a>
 			{#if data.header?.standPath}
@@ -156,6 +162,7 @@
 					onclick={() => setMenuOpen(false)}
 					data-testid="nav-stand-link"
 				>
+					<Icon name="building-store" />
 					{t('nav.myStand')}
 				</a>
 			{/if}
@@ -179,9 +186,7 @@
 				type="button"
 				onclick={toggleTheme}
 			>
-				<svg class="icon" aria-hidden="true" focusable="false">
-					<use href={theme === 'dark' ? '#icon-sun' : '#icon-moon'} />
-				</svg>
+				<Icon name={theme === 'dark' ? 'sun' : 'moon'} />
 			</button>
 			<button
 				class="icon-btn language-toggle"
@@ -191,6 +196,7 @@
 				data-testid="language-toggle"
 				onclick={() => cycleLocale()}
 			>
+				<Icon name="world" />
 				<span class="language-label">{getLocale() === 'de' ? 'DE' : 'EN'}</span>
 			</button>
 			<a
@@ -201,10 +207,11 @@
 				data-testid="profile-avatar-link"
 			>
 				{#if data.header?.profile?.avatarStorageKey}
-					<img
+					<TileImage
 						class="profile-avatar-img"
-						src={`/media/${encodeURIComponent(data.header?.profile?.avatarStorageKey ?? '')}`}
+						storageKey={data.header?.profile?.avatarStorageKey ?? ''}
 						alt=""
+						loading="eager"
 					/>
 				{:else}
 					<span class="profile-avatar-fallback"
@@ -227,7 +234,44 @@
 	{@render children()}
 </main>
 
+{#if data.header?.isAuthenticated && data.versionLabel}
+	<footer class="site-footer" data-testid="site-footer">
+		<span class="site-footer-version">{data.versionLabel}</span>
+	</footer>
+{/if}
+
 <style>
+	.layout-main {
+		/* Reserve the fixed strip's height so short pages do not hide content behind it. */
+		padding-bottom: var(--footer-height);
+	}
+
+	.site-footer {
+		/* Full-bleed dark strip pinned to the bottom edge of the viewport, on every route — it must
+		   not sit at the end of the content flow, which would leave it floating mid-screen on short
+		   pages. A hairline top edge keeps it readable against a dark page background. */
+		align-items: center;
+		background: var(--color-footer-bg);
+		border-top: 1px solid var(--color-footer-edge);
+		bottom: 0;
+		color: var(--color-footer-text);
+		display: flex;
+		height: var(--footer-height);
+		justify-content: flex-start;
+		left: 0;
+		padding: 0 clamp(0.75rem, 2vw, 1.75rem);
+		position: fixed;
+		right: 0;
+		/* Below the header (65) and the drawer (84+); above page content. */
+		z-index: 60;
+	}
+
+	.site-footer-version {
+		font-size: 0.72rem;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.02em;
+	}
+
 	.masthead {
 		position: sticky;
 		top: 0;
@@ -239,7 +283,7 @@
 		border-bottom: 1px solid var(--color-border);
 		container-type: inline-size;
 		display: flex;
-		margin: 0 -1.5rem 2rem;
+		margin: 0 0 2rem;
 		padding: 0.65rem 1.5rem;
 	}
 	.brand-wrap {
@@ -266,13 +310,18 @@
 		box-shadow: none;
 		color: var(--color-accent);
 		cursor: pointer;
-		display: flex;
+		display: inline-flex;
 		font-size: 1.1rem;
+		gap: 0.3rem;
 		height: 40px;
 		justify-content: center;
 		padding: 0;
 		transition: all 0.25s ease;
 		width: 40px;
+	}
+	.language-toggle {
+		width: auto;
+		padding: 0 0.7rem;
 	}
 	.language-label {
 		font-size: 0.72rem;
@@ -318,7 +367,7 @@
 		box-shadow: var(--shadow-btn-hover);
 		transform: translateY(-1px);
 	}
-	.profile-avatar-img {
+	:global(.profile-avatar-img) {
 		height: 100%;
 		object-fit: cover;
 		width: 100%;
@@ -422,14 +471,22 @@
 		cursor: pointer;
 		display: inline-flex;
 		font: inherit;
-		font-size: 0.9rem;
+		/* Compact enough that the icon-led navigation still fits inline at a
+		   1280px desktop viewport instead of collapsing into the drawer. */
+		font-size: 0.82rem;
 		font-weight: 600;
+		gap: 0.3rem;
 		height: 40px;
 		justify-content: center;
-		padding: 0 14px;
+		padding: 0 8px;
 		text-decoration: none;
 		transition: all 0.25s ease;
 		white-space: nowrap;
+	}
+	/* Slightly smaller than the global default so seven icon-led pills stay on one row. */
+	nav a :global(.icon) {
+		height: 1em;
+		width: 1em;
 	}
 	nav a:hover {
 		background: var(--color-accent-soft);
@@ -537,6 +594,16 @@
 		.burger,
 		.burger span {
 			transition: none;
+		}
+	}
+	@media print {
+		/* Never stamp the strip across a printed sheet (price labels are printed from the app). */
+		.site-footer {
+			display: none;
+		}
+
+		.layout-main {
+			padding-bottom: 0;
 		}
 	}
 </style>

@@ -749,10 +749,11 @@ describe('collection repository', () => {
 			captureConstraintError(() =>
 				database
 					.prepare(
-						'INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)'
+						'INSERT INTO collections (id, public_id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?, ?)'
 					)
 					.run(
 						'collection-b',
+						'public-collection-b',
 						'tenant-b',
 						alpha.userId,
 						'Mixed collection',
@@ -1044,7 +1045,8 @@ describe('collection repository', () => {
 			{ version: '2026082601_tenant_schema_foundation' },
 			{ version: '2026083101_item_scoped_image_keys' },
 			{ version: '2026090901_market_days' },
-			{ version: '2026091001_expenses' }
+			{ version: '2026091001_expenses' },
+			{ version: '2026091701_collection_public_id' }
 		]);
 		expect(
 			migratedDatabase
@@ -1094,7 +1096,8 @@ describe('collection repository', () => {
 			{ version: '2026082601_tenant_schema_foundation' },
 			{ version: '2026083101_item_scoped_image_keys' },
 			{ version: '2026090901_market_days' },
-			{ version: '2026091001_expenses' }
+			{ version: '2026091001_expenses' },
+			{ version: '2026091701_collection_public_id' }
 		]);
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({
 			count: 2
@@ -2497,13 +2500,13 @@ describe('collection repository', () => {
 		const unknownCollectionId = '00000000-0000-0000-0000-000000000000';
 
 		// act
-		const publicView = repository.getPublicStandView(standCollection.id);
+		const publicView = repository.getPublicStandView(standCollection.publicId);
 		const unknownStandView = repository.getPublicStandView(unknownCollectionId);
 
 		// assume
 		expect(publicView?.items).toHaveLength(2);
 		expect(publicView).toEqual({
-			collectionId: standCollection.id,
+			collectionId: standCollection.publicId,
 			collectionName: 'Flohmarkt',
 			ownerAvatarStorageKey: null,
 			intro: '',
@@ -2597,9 +2600,9 @@ describe('collection repository', () => {
 		const unknownId = '00000000-0000-0000-0000-000000000000';
 
 		// act
-		const publicItem = repository.getPublicStandItem(standCollection.id, visibleItem.id);
-		const publicReserved = repository.getPublicStandItem(standCollection.id, reservedItem.id);
-		const soldResult = repository.getPublicStandItem(standCollection.id, soldItem.id);
+		const publicItem = repository.getPublicStandItem(standCollection.publicId, visibleItem.id);
+		const publicReserved = repository.getPublicStandItem(standCollection.publicId, reservedItem.id);
+		const soldResult = repository.getPublicStandItem(standCollection.publicId, soldItem.id);
 		const unknownItem = repository.getPublicStandItem(unknownId, visibleItem.id);
 
 		// assume
@@ -2660,8 +2663,8 @@ describe('collection repository', () => {
 		const unknownKey = 'unknown-hash.png';
 
 		// act
-		const publicView = repository.getPublicStandView(standCollection.id);
-		const publicItem = repository.getPublicStandItem(standCollection.id, item.id);
+		const publicView = repository.getPublicStandView(standCollection.publicId);
+		const publicItem = repository.getPublicStandItem(standCollection.publicId, item.id);
 		const publicImage = repository.findPublicItemImage('hash-second.webp');
 		const unknownImage = repository.findPublicItemImage(unknownKey);
 
@@ -2687,7 +2690,7 @@ describe('collection repository', () => {
 			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
 			owner
 		);
-		const publicViewAfterSale = repository.getPublicStandView(standCollection.id);
+		const publicViewAfterSale = repository.getPublicStandView(standCollection.publicId);
 
 		// assume
 		expect(publicViewAfterSale?.items).toHaveLength(0);
@@ -2707,9 +2710,9 @@ describe('collection repository', () => {
 		const unknownKey = 'unknown-avatar.png';
 
 		// act
-		const publicViewBefore = repository.getPublicStandView(standCollection.id);
+		const publicViewBefore = repository.getPublicStandView(standCollection.publicId);
 		repository.setProfileAvatar(owner, 'avatar-hash.png');
-		const publicViewAfter = repository.getPublicStandView(standCollection.id);
+		const publicViewAfter = repository.getPublicStandView(standCollection.publicId);
 		const avatarVisible = repository.findPublicOwnerAvatar('avatar-hash.png');
 
 		// assume
@@ -2792,35 +2795,35 @@ describe('collection repository', () => {
 		);
 
 		// act
-		const titleResults = repository.searchPublicStandItems(standCollection.id, {
+		const titleResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			query: 'Keramikvase'
 		});
-		const descriptionResults = repository.searchPublicStandItems(standCollection.id, {
+		const descriptionResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			query: 'Deko'
 		});
-		const internalNoteResults = repository.searchPublicStandItems(standCollection.id, {
+		const internalNoteResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			query: 'GeheimwortXYZ'
 		});
-		const openResults = repository.searchPublicStandItems(standCollection.id, {
+		const openResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			status: 'open'
 		});
-		const reservedResults = repository.searchPublicStandItems(standCollection.id, {
+		const reservedResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			status: 'reserved'
 		});
-		const soldStatusResults = repository.searchPublicStandItems(standCollection.id, {
+		const soldStatusResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			status: 'sold'
 		});
-		const categoryResults = repository.searchPublicStandItems(standCollection.id, {
+		const categoryResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			category: 'books'
 		});
-		const conditionResults = repository.searchPublicStandItems(standCollection.id, {
+		const conditionResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			condition: 'fair'
 		});
@@ -3111,8 +3114,166 @@ describe('collection repository', () => {
 		const unknownRoute = repository.getPublicStandItemRoute('missing-item');
 
 		// assume
-		expect(openRoute).toEqual({ collectionId: collection.id, itemId: openItem.id });
+		expect(openRoute).toEqual({ collectionId: collection.publicId, itemId: openItem.id });
 		expect(soldRoute).toBeNull();
 		expect(unknownRoute).toBeNull();
+	});
+
+	it('gives every collection a separate public identifier that never exposes the internal id', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const firstCollection = repository.createCollection({ name: 'First collection' }, owner);
+		const secondCollection = repository.createCollection({ name: 'Second collection' }, owner);
+
+		// act
+		const listed = repository.listCollectionsForOwner(owner);
+
+		// assume
+		const first = listed.find((collection) => collection.id === firstCollection.id);
+		const second = listed.find((collection) => collection.id === secondCollection.id);
+		expect(first?.publicId).toBeTruthy();
+		expect(second?.publicId).toBeTruthy();
+		// A distinct identifier per collection, never equal to the internal row id.
+		expect(first?.publicId).not.toBe(first?.id);
+		expect(second?.publicId).not.toBe(second?.id);
+		expect(first?.publicId).not.toBe(second?.publicId);
+	});
+
+	it('resolves a public stand view only through the public identifier, never the internal id', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.createItem(
+			{
+				collectionId: standCollection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			owner
+		);
+		const publicId = repository.listCollectionsForOwner(owner)[0].publicId;
+
+		// act
+		const byPublicId = repository.getPublicStandView(publicId);
+		const byInternalId = repository.getPublicStandView(standCollection.id);
+
+		// assume
+		expect(byPublicId?.collectionName).toBe('Flohmarkt');
+		expect(byPublicId?.items).toHaveLength(1);
+		// The internal id is not a public handle: it must not resolve any public view.
+		expect(byInternalId).toBeNull();
+	});
+
+	it('resolves a public stand item only through the public identifier', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const item = repository.createItem(
+			{
+				collectionId: standCollection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			owner
+		);
+		const publicId = repository.listCollectionsForOwner(owner)[0].publicId;
+
+		// act
+		const byPublicId = repository.getPublicStandItem(publicId, item.id);
+		const byInternalId = repository.getPublicStandItem(standCollection.id, item.id);
+
+		// assume
+		expect(byPublicId?.title).toBe('Vase');
+		expect(byInternalId).toBeNull();
+	});
+
+	it('returns the public identifier from the public item route and search, not the internal id', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		const item = repository.createItem(
+			{
+				collectionId: standCollection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			owner
+		);
+		const publicId = repository.listCollectionsForOwner(owner)[0].publicId;
+
+		// act
+		const route = repository.getPublicStandItemRoute(item.id);
+		const found = repository.searchPublicStandItems(publicId, {
+			...emptyItemFilters,
+			query: 'Vase'
+		});
+
+		// assume
+		expect(route).toEqual({ collectionId: publicId, itemId: item.id });
+		expect(found.map((entry) => entry.title)).toEqual(['Vase']);
+	});
+
+	it('keeps a stable public identifier when the schema migrates an existing database', () => {
+		// arrange
+		const databasePath = createDatabasePath();
+		createOriginalCoreCollectionDatabase(databasePath);
+
+		// act
+		const repository = createCollectionRepository({ databasePath });
+		const database = new Database(databasePath, { readonly: true });
+		const columns = (database.pragma('table_info(collections)') as { name: string }[]).map(
+			(column) => column.name
+		);
+		const row = database
+			.prepare('SELECT id, public_id FROM collections WHERE id = ?')
+			.get('legacy-collection') as { id: string; public_id: string | null } | undefined;
+		database.close();
+
+		// assume
+		expect(columns).toContain('public_id');
+		// The legacy row keeps its internal id and gains a generated public identifier.
+		expect(row?.id).toBe('legacy-collection');
+		expect(row?.public_id).toBeTruthy();
+		expect(row?.public_id).not.toBe('legacy-collection');
+		expect(repository.getPublicStandView('legacy-collection')).toBeNull();
+		expect(repository.getPublicStandView(row?.public_id ?? '')).not.toBeNull();
 	});
 });

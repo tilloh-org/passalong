@@ -8,7 +8,7 @@
 		"build": "vite build && tsc --project tsconfig.scripts.json",
 		"build:scripts": "tsc --project tsconfig.scripts.json",
 		"preview": "vite preview",
-		"test:e2e": "playwright test",
+		"test:e2e": "npm run build && playwright test",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -40,6 +40,8 @@
 	},
 	"dependencies": {
 		"better-sqlite3": "^13.0.3",
-		"qrcode": "^1.5.4"
+		"jsqr": "1.4.0",
+		"qrcode": "^1.5.4",
+		"sharp": "^0.35.4"
 	}
 }

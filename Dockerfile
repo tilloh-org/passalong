@@ -1,6 +1,10 @@
 # Build stage
 FROM node:22-alpine AS build
 WORKDIR /app
+# Build identity for the global footer label `v<release>-<short hash>`. `.git` is excluded from the
+# build context, so the hash cannot be derived inside the image and has to be passed in.
+ARG COMMIT_HASH=""
+ENV COMMIT_HASH=$COMMIT_HASH
 RUN apk add --no-cache python3 make g++ && corepack enable pnpm
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./

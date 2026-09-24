@@ -13,6 +13,8 @@
 	--glass: rgba(255, 255, 255, 0.72);
 
 	--color-bg: #f4f7f9;
+	/* Final stop of the decorative body gradient; `html` paints it below the first viewport. */
+	--color-bg-end: #eef2f4;
 	--color-text: #16303f;
 	--color-text-muted: #6b8796;
 	--color-text-faint: #8ba3b0;
@@ -23,6 +25,12 @@
 	--color-surface: #ffffff;
 	--color-surface-strong: #eef2f4;
 	--color-input: #ffffff;
+	/* Global footer: fixed dark chrome in both themes, so it never turns into a bright band. */
+	--color-footer-bg: #0b161d;
+	--color-footer-edge: rgba(11, 22, 29, 0.6);
+	--color-footer-text: rgba(232, 240, 244, 0.72);
+	/* Height of the fixed footer strip; the layout reserves this so nothing hides behind it. */
+	--footer-height: 2rem;
 	--color-danger: #b71c1c;
 	--color-danger-soft: rgba(183, 28, 28, 0.1);
 	--color-ok: #2e7d32;
@@ -34,10 +42,36 @@
 	--color-ice: #7fa8bd;
 	--focus-ring: rgba(127, 168, 189, 0.35);
 	--scrim: rgba(14, 42, 58, 0.4);
+	/*
+	 * The photo viewer is the one overlay that must hide the page rather than dim it: a gallery is
+	 * looked at, and the app behind it is a distraction. Kept separate from `--scrim`, which is a
+	 * mild dim for the navigation drawer where the page stays readable on purpose.
+	 */
+	--scrim-viewer: rgba(6, 12, 18, 0.94);
+	/* Solid, never translucent: a bright photo behind a see-through button reads as disabled. */
+	--viewer-control-bg: #1e3038;
+	--viewer-control-border: rgba(255, 255, 255, 0.28);
+	--viewer-control-fg: #f0f7fa;
+	--viewer-control-bg-hover: #2b4250;
+	--shadow-viewer-control: 0 2px 10px rgba(0, 0, 0, 0.45);
+	/*
+	 * The viewer's own top strip. The page behind is almost hidden but its header sits in the same
+	 * corner as the counter, so without a backing the two texts overlap into unreadable shapes.
+	 */
+	--viewer-bar-bg: linear-gradient(rgba(6, 12, 18, 0.86), rgba(6, 12, 18, 0));
 
 	--radius-card: 16px;
 	--radius-control: 12px;
 	--radius-small: 10px;
+	--select-arrow-inset: 1rem;
+	--select-arrow-size: 0.75rem;
+	--select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%231d4e63' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
+	--select-form-arrow-size: 1.45rem;
+	--select-form-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%230e2a3a'/%3E%3Cpath d='m7.5 9.5 4.5 4.5 4.5-4.5' fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
+	--checkbox-checkmark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12 4 4 10-10' fill='none' stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='3'/%3E%3C/svg%3E");
+	--select-control-end-padding: calc(
+		var(--select-arrow-inset) + var(--select-arrow-size) + 0.75rem
+	);
 
 	--gap-action-row: 0.6rem;
 	--gap-action-block: 1.1rem;
@@ -53,7 +87,9 @@
 }
 
 [data-theme='dark'] {
+	color-scheme: dark;
 	--color-bg: #0f1a22;
+	--color-bg-end: #16242e;
 	--color-text: #e8f0f4;
 	--color-text-muted: #9db4c0;
 	--color-text-faint: #7492a1;
@@ -64,6 +100,10 @@
 	--color-surface: #16242e;
 	--color-surface-strong: #1a2a33;
 	--color-input: #1a2a33;
+	--color-footer-bg: #080f14;
+	--color-footer-edge: rgba(232, 240, 244, 0.14);
+	--color-footer-text: rgba(232, 240, 244, 0.68);
+	--footer-height: 2rem;
 	--color-danger: #ef5350;
 	--color-danger-soft: rgba(239, 83, 80, 0.14);
 	--color-ok: #66bb6a;
@@ -73,7 +113,16 @@
 	--color-warn-soft: rgba(224, 164, 88, 0.16);
 	--focus-ring: rgba(127, 168, 189, 0.4);
 	--scrim: rgba(0, 0, 0, 0.55);
+	--scrim-viewer: rgba(0, 0, 0, 0.96);
+	--viewer-control-bg: #2a3d47;
+	--viewer-control-border: rgba(255, 255, 255, 0.3);
+	--viewer-control-fg: #eef6fa;
+	--viewer-control-bg-hover: #37505d;
+	--shadow-viewer-control: 0 2px 12px rgba(0, 0, 0, 0.6);
+	--viewer-bar-bg: linear-gradient(rgba(0, 0, 0, 0.88), rgba(0, 0, 0, 0));
 	--glass: rgba(15, 26, 34, 0.72);
+	--select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%237fa8bd' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
+	--select-form-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%237fa8bd'/%3E%3Cpath d='m7.5 9.5 4.5 4.5 4.5-4.5' fill='none' stroke='%230f1a22' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.5'/%3E%3C/svg%3E");
 
 	--shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
 	--shadow-tile: 0 4px 14px rgba(0, 0, 0, 0.3);
@@ -91,15 +140,32 @@
 
 html {
 	-webkit-text-size-adjust: 100%;
+	/*
+	 * The decorative body background is viewport-fixed, so it only paints the first
+	 * viewport. Everything below that would fall through to the canvas default (white)
+	 * on tall pages. Painting the gradient's final colour here keeps the seam invisible.
+	 */
+	background-color: var(--color-bg-end);
 }
 
 body {
 	margin: 0;
+	/*
+	 * The decorative gradient below is painted on `body`. `background-attachment: fixed` changes how
+	 * that background is positioned, not how far it is painted: it still stops at this box. On a page
+	 * whose content is shorter than the viewport the gradient therefore ended early and the flat
+	 * `html` colour continued below it, which reads as a visible edge — and a short page hid the
+	 * problem only because its own background covered the seam. Stretching the body to the viewport
+	 * height makes the gradient cover the whole screen everywhere.
+	 */
+	min-height: 100vh;
+	min-height: 100dvh;
 	overflow-x: hidden;
 	background:
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.28), transparent 60%),
 		radial-gradient(900px 500px at -10% 20%, rgba(232, 226, 213, 0.55), transparent 55%),
-		linear-gradient(180deg, var(--color-bg) 0%, #eef2f4 100%);
+		linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-end) 100%);
+	background-attachment: fixed;
 	color: var(--color-text);
 	font-family:
 		system-ui,
@@ -118,7 +184,8 @@ body {
 	background:
 		radial-gradient(1200px 600px at 85% -10%, rgba(127, 168, 189, 0.12), transparent 60%),
 		radial-gradient(900px 500px at -10% 20%, rgba(224, 164, 88, 0.08), transparent 55%),
-		linear-gradient(180deg, #0f1a22 0%, #16242e 100%);
+		linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-end) 100%);
+	background-attachment: fixed;
 }
 
 /* dezente Wellen-Linie oben */
@@ -150,6 +217,47 @@ body::before {
 
 a {
 	color: var(--color-accent);
+}
+
+/* ---------- Icons (vendored Tabler sprite) ---------- */
+
+.icon {
+	display: inline-block;
+	flex: 0 0 auto;
+	height: 1.15em;
+	vertical-align: -0.18em;
+	width: 1.15em;
+	fill: none;
+	stroke: currentColor;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	stroke-width: 2;
+}
+
+.icon-sm {
+	height: 1em;
+	width: 1em;
+}
+
+.icon-lg {
+	height: 1.5em;
+	width: 1.5em;
+}
+
+.icon-muted {
+	color: var(--color-text-muted);
+}
+
+.icon-ok {
+	color: var(--color-ok);
+}
+
+.icon-danger {
+	color: var(--color-danger);
+}
+
+.icon-warn {
+	color: var(--color-warn);
 }
 
 h1,
