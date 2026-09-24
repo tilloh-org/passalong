@@ -7,7 +7,7 @@
 	const avatarFallback = $derived((data.profile.displayName ?? 'P').slice(0, 1).toUpperCase());
 	const standUrl = $derived(
 		data.activeCollection
-			? `${page.url.origin}/stand/${encodeURIComponent(data.activeCollection.id)}`
+			? `${page.url.origin}/stand/${encodeURIComponent(data.activeCollection.publicId)}`
 			: ''
 	);
 
@@ -217,7 +217,7 @@
 							</button>
 							<a
 								class="stand-open"
-								href={`/stand/${encodeURIComponent(data.activeCollection.id)}`}
+								href={`/stand/${encodeURIComponent(data.activeCollection.publicId)}`}
 								target="_blank"
 								rel="noopener"
 								data-testid="open-stand-link"

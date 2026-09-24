@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { verifyPasswordSync } from './password';
 
@@ -70,6 +70,8 @@ export interface Collection {
 	name: string;
 	ownerName: string;
 	standIntro: string;
+	/** Opaque handle used in public stand URLs; never the internal row id. */
+	publicId: string;
 }
 
 export interface Item {
@@ -466,6 +468,7 @@ const userAvatarVersion = '2026090202_user_avatar';
 const collectionStandIntroVersion = '2026090203_collection_stand_intro';
 const marketDaysVersion = '2026090901_market_days';
 const expensesVersion = '2026091001_expenses';
+const collectionPublicIdVersion = '2026091701_collection_public_id';
 const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
@@ -715,14 +718,15 @@ export function createCollectionRepository(
 		createCollection(input, scope) {
 			const name = requireText(input.name, 'name');
 			const collectionId = randomUUID();
+			const publicId = newPublicId();
 			const result = database
 				.prepare(
-					`INSERT INTO collections (id, tenant_id, owner_id, name, created_at)
-					 SELECT ?, tenant_id, id, ?, ?
+					`INSERT INTO collections (id, public_id, tenant_id, owner_id, name, created_at)
+					 SELECT ?, ?, tenant_id, id, ?, ?
 					 FROM users
 					 WHERE id = ? AND tenant_id = ?`
 				)
-				.run(collectionId, name, new Date().toISOString(), scope.userId, scope.tenantId);
+				.run(collectionId, publicId, name, new Date().toISOString(), scope.userId, scope.tenantId);
 			if (result.changes !== singleDatabaseRowChange) {
 				throw new Error('authenticated owner was not found');
 			}
@@ -730,22 +734,30 @@ export function createCollectionRepository(
 				id: collectionId,
 				name,
 				ownerName: getOwnerDisplayName(database, scope),
-				standIntro: ''
+				standIntro: '',
+				publicId
 			};
 		},
 
 		getCollectionForOwner(collectionId, scope) {
 			const row = database
 				.prepare(
-					`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
+					`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 				)
 				.get(collectionId, scope.userId, scope.tenantId) as
-				{ id: string; name: string; stand_intro: string; owner_name: string } | undefined;
+				| { id: string; public_id: string; name: string; stand_intro: string; owner_name: string }
+				| undefined;
 			return row
-				? { id: row.id, name: row.name, ownerName: row.owner_name, standIntro: row.stand_intro }
+				? {
+						id: row.id,
+						name: row.name,
+						ownerName: row.owner_name,
+						publicId: row.public_id,
+						standIntro: row.stand_intro
+					}
 				: null;
 		},
 
@@ -759,7 +771,8 @@ export function createCollectionRepository(
 		listCollectionsForOwner(scope) {
 			return database
 				.prepare(
-					`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
+					`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro,
+					        users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.owner_id = ? AND collections.tenant_id = ?
@@ -769,6 +782,7 @@ export function createCollectionRepository(
 				.map((row) => {
 					const collection = row as {
 						id: string;
+						public_id: string;
 						name: string;
 						owner_name: string;
 						stand_intro: string;
@@ -777,7 +791,8 @@ export function createCollectionRepository(
 						id: collection.id,
 						name: collection.name,
 						ownerName: collection.owner_name,
-						standIntro: collection.stand_intro
+						standIntro: collection.stand_intro,
+						publicId: collection.public_id
 					};
 				});
 		},
@@ -1731,17 +1746,24 @@ export function createCollectionRepository(
 		 */
 		getPublicStandItemRoute(itemId) {
 			const item = database
-				.prepare('SELECT id, collection_id FROM items WHERE id = ? AND sold_at IS NULL')
-				.get(itemId) as { id: string; collection_id: string } | undefined;
-			return item ? { collectionId: item.collection_id, itemId: item.id } : null;
+				.prepare(
+					`SELECT items.id, collections.public_id AS collection_public_id
+					 FROM items
+					 JOIN collections ON collections.id = items.collection_id
+					 WHERE items.id = ? AND items.sold_at IS NULL`
+				)
+				.get(itemId) as { id: string; collection_public_id: string } | undefined;
+			return item ? { collectionId: item.collection_public_id, itemId: item.id } : null;
 		},
 
-		getPublicStandView(collectionId) {
+		getPublicStandView(publicId) {
+			// Public callers hold only the opaque handle: resolve through public_id so the internal
+			// row id is never a working URL.
 			const collection = database
 				.prepare(
-					'SELECT collections.name, collections.stand_intro, users.avatar_storage_key AS owner_avatar_storage_key FROM collections JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id WHERE collections.id = ?'
+					'SELECT collections.name, collections.stand_intro, users.avatar_storage_key AS owner_avatar_storage_key FROM collections JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id WHERE collections.public_id = ?'
 				)
-				.get(collectionId) as
+				.get(publicId) as
 				{ name: string; stand_intro: string; owner_avatar_storage_key: string | null } | undefined;
 			if (!collection) {
 				return null;
@@ -1749,9 +1771,14 @@ export function createCollectionRepository(
 			const items = (
 				database
 					.prepare(
-						'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
+						`SELECT items.id, items.title, items.price_cents, items.category, items.condition,
+						        items.external_description, items.reserved_at, items.is_complete, items.is_functional
+						 FROM items
+						 JOIN collections ON collections.id = items.collection_id
+						 WHERE collections.public_id = ? AND items.sold_at IS NULL
+						 ORDER BY items.created_at DESC, items.id DESC`
 					)
-					.all(collectionId) as {
+					.all(publicId) as {
 					id: string;
 					title: string;
 					price_cents: number;
@@ -1775,7 +1802,7 @@ export function createCollectionRepository(
 				images: listPublicItemImages(database, row.id)
 			}));
 			return {
-				collectionId,
+				collectionId: publicId,
 				collectionName: collection.name,
 				ownerAvatarStorageKey: collection.owner_avatar_storage_key,
 				intro: collection.stand_intro,
@@ -1783,9 +1810,11 @@ export function createCollectionRepository(
 			};
 		},
 
-		searchPublicStandItems(collectionId, filters) {
-			const clauses = ['items.collection_id = ?', 'items.sold_at IS NULL'];
-			const parameters: (string | number)[] = [collectionId];
+		searchPublicStandItems(publicId, filters) {
+			// `items.collection_id` joins through collections so the caller can only ever search the
+			// stand it holds the public handle for.
+			const clauses = ['collections.public_id = ?', 'items.sold_at IS NULL'];
+			const parameters: (string | number)[] = [publicId];
 			if (filters.query && filters.query.trim().length > 0) {
 				const escapedQuery = filters.query.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
 				const pattern = `%${escapedQuery}%`;
@@ -1812,8 +1841,10 @@ export function createCollectionRepository(
 			}
 			const items = database
 				.prepare(
-					`SELECT id, title, price_cents, category, condition, external_description, reserved_at
+					`SELECT items.id, items.title, items.price_cents, items.category, items.condition,
+					        items.external_description, items.reserved_at
 					 FROM items
+					 JOIN collections ON collections.id = items.collection_id
 					 WHERE ${clauses.join(' AND ')}
 					 ORDER BY items.created_at DESC, items.id DESC`
 				)
@@ -1842,12 +1873,16 @@ export function createCollectionRepository(
 			}));
 		},
 
-		getPublicStandItem(collectionId, itemId) {
+		getPublicStandItem(publicId, itemId) {
 			const item = database
 				.prepare(
-					'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE id = ? AND collection_id = ? AND sold_at IS NULL'
+					`SELECT items.id, items.title, items.price_cents, items.category, items.condition,
+					        items.external_description, items.reserved_at, items.is_complete, items.is_functional
+					 FROM items
+					 JOIN collections ON collections.id = items.collection_id
+					 WHERE items.id = ? AND collections.public_id = ? AND items.sold_at IS NULL`
 				)
-				.get(itemId, collectionId) as
+				.get(itemId, publicId) as
 				| {
 						id: string;
 						title: string;
@@ -2318,13 +2353,14 @@ function getCollectionForOwnerRow(
 ): Collection {
 	const row = database
 		.prepare(
-			`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
+			`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro, users.display_name AS owner_name
 			 FROM collections
 			 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 			 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 		)
 		.get(collectionId, scope.userId, scope.tenantId) as
-		{ id: string; name: string; stand_intro: string; owner_name: string } | undefined;
+		| { id: string; public_id: string; name: string; stand_intro: string; owner_name: string }
+		| undefined;
 	if (!row) {
 		throw new Error('collection was not found');
 	}
@@ -2332,6 +2368,7 @@ function getCollectionForOwnerRow(
 		id: row.id,
 		name: row.name,
 		ownerName: row.owner_name,
+		publicId: row.public_id,
 		standIntro: row.stand_intro
 	};
 }
@@ -2613,7 +2650,7 @@ function initializeSchema(database: Database.Database): void {
 			const appliedAt = new Date().toISOString();
 			database
 				.prepare(
-					'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)'
+					'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)'
 				)
 				.run(
 					tenantSchemaFoundationVersion,
@@ -2635,6 +2672,8 @@ function initializeSchema(database: Database.Database): void {
 					marketDaysVersion,
 					appliedAt,
 					expensesVersion,
+					appliedAt,
+					collectionPublicIdVersion,
 					appliedAt
 				);
 		})();
@@ -2718,6 +2757,7 @@ function createSchema(database: Database.Database): void {
 		);
 		CREATE TABLE IF NOT EXISTS collections (
 			id TEXT PRIMARY KEY,
+			public_id TEXT NOT NULL UNIQUE,
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
@@ -2870,6 +2910,7 @@ function migrateSchema(database: Database.Database): void {
 	migrateCollectionStandIntro(database);
 	migrateMarketDays(database);
 	migrateExpenses(database);
+	migrateCollectionPublicId(database);
 }
 
 /**
@@ -2878,6 +2919,52 @@ function migrateSchema(database: Database.Database): void {
  * @param {Database.Database} database - The SQLite connection to migrate.
  * @returns {void}
  */
+/**
+ * Generate an opaque public handle for a stand page.
+ *
+ * A stand URL must not carry the internal row id: the identifier is the only thing a buyer holds,
+ * so it has to be unguessable and independent of every internal key. 128 random bits rendered as
+ * lowercase hex carry the same entropy as the session tokens used elsewhere.
+ *
+ * @returns {string} A 32-character lowercase hex identifier.
+ */
+function newPublicId(): string {
+	return randomBytes(16).toString('hex');
+}
+
+/**
+ * Add the public stand identifier to collections once, backfilling every existing row.
+ *
+ * Runs additively: the column is added when missing, existing rows keep their internal id and gain
+ * a generated handle, and the unique index makes a collision impossible at the database level.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateCollectionPublicId(database: Database.Database): void {
+	if (hasMigrationVersion(database, collectionPublicIdVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'collections', 'public_id')) {
+			// SQLite cannot add a UNIQUE column directly; add it nullable, backfill, then index.
+			database.exec('ALTER TABLE collections ADD COLUMN public_id TEXT');
+			const rows = database.prepare('SELECT id FROM collections').all() as { id: string }[];
+			const update = database.prepare('UPDATE collections SET public_id = ? WHERE id = ?');
+			for (const row of rows) {
+				update.run(newPublicId(), row.id);
+			}
+			database.exec(
+				'CREATE UNIQUE INDEX IF NOT EXISTS collections_public_id_unique_idx ON collections(public_id)'
+			);
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(collectionPublicIdVersion, new Date().toISOString());
+	})();
+}
+
 function migrateCollectionStandIntro(database: Database.Database): void {
 	if (hasMigrationVersion(database, collectionStandIntroVersion)) {
 		return;
@@ -3292,6 +3379,7 @@ function rebuildCollections(database: Database.Database): void {
 	database.exec(`
 		CREATE TABLE collections_next (
 			id TEXT PRIMARY KEY,
+			public_id TEXT NOT NULL UNIQUE,
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
@@ -3300,8 +3388,8 @@ function rebuildCollections(database: Database.Database): void {
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
 		);
-		INSERT INTO collections_next (id, tenant_id, owner_id, name, created_at)
-		SELECT id, tenant_id, owner_id, name, created_at FROM collections;
+		INSERT INTO collections_next (id, public_id, tenant_id, owner_id, name, created_at)
+		SELECT id, lower(hex(randomblob(16))), tenant_id, owner_id, name, created_at FROM collections;
 	`);
 	assertCopiedRowCount(database, 'collections', 'collections_next');
 }

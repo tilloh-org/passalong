@@ -34,7 +34,7 @@ export const load: LayoutServerLoad = async ({ cookies, url }) => {
 			isAuthenticated: Boolean(scope),
 			isInstanceAdmin: scope ? getCollectionRepository().isInstanceAdmin(scope) : false,
 			profile: scope ? getCollectionRepository().getProfile(scope) : null,
-			standPath: activeCollection ? `/stand/${encodeURIComponent(activeCollection.id)}` : null
+			standPath: activeCollection ? `/stand/${encodeURIComponent(activeCollection.publicId)}` : null
 		}
 	};
 };
