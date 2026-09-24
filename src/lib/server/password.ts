@@ -1,4 +1,4 @@
-import { randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
 
 const keyLength = 64;
@@ -106,32 +106,6 @@ export function classifyImportedPasswordHash(
 		};
 	}
 	return { usable: true, value: storedHash };
-}
-
-/**
- * Verify a bootstrap password synchronously before an account-provisioning transaction begins.
- *
- * @param {string} password - Plaintext password from the bootstrap manifest.
- * @param {string} storedHash - Existing supported scrypt storage value.
- * @returns {boolean} Whether the password matches the existing storage value.
- */
-export function verifyPasswordSync(password: string, storedHash: string): boolean {
-	const parsedHash = parsePasswordHash(storedHash);
-	if (!parsedHash || !isSafePasswordInput(password)) {
-		return false;
-	}
-
-	try {
-		const actualKey = scryptSync(
-			password,
-			parsedHash.salt,
-			keyLength,
-			scryptOptions(parsedHash.parameters)
-		);
-		return timingSafeEqual(parsedHash.expectedKey, actualKey);
-	} catch {
-		return false;
-	}
 }
 
 /**

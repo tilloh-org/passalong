@@ -50,8 +50,10 @@ export default defineConfig({
 	],
 	webServer: [
 		{
-			command:
-				'rm -rf /tmp/passalong-e2e.sqlite* /tmp/passalong-e2e-media && npm run build && ORIGIN=http://localhost:4173 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-media BODY_SIZE_LIMIT=256M PORT=4173 node build/index.js',
+			// The bootstrap manifest is a live regression guard: a fresh instance must ignore it and
+			// keep browser registration open. If environment provisioning ever comes back, this server
+			// starts with an account already present and every spec that registers fails.
+			command: `rm -rf /tmp/passalong-e2e.sqlite* /tmp/passalong-e2e-media && npm run build && ORIGIN=http://localhost:4173 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-media BODY_SIZE_LIMIT=256M PORT=4173 PASSALONG_BOOTSTRAP='{"accounts":[{"tenantName":"Bootstrap household","username":"bootstrap-admin","displayName":"Bootstrap Admin","password":"bootstrap-admin-password","instanceAdmin":true}]}' node build/index.js`,
 			url: 'http://localhost:4173',
 			reuseExistingServer: !process.env.CI,
 			timeout: 120_000
