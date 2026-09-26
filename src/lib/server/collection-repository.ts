@@ -1,6 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
-import { verifyPasswordSync } from './password';
 
 export const itemCategories = [
 	'clothing',
@@ -260,15 +259,6 @@ export interface CreateInitialAdminInput {
 	passwordHash: string;
 }
 
-export interface BootstrapProvisionAccount {
-	tenantName: string;
-	username: string;
-	displayName: string;
-	password: string;
-	passwordHash: string;
-	instanceAdmin: boolean;
-}
-
 export interface CreateCollectionInput {
 	name: string;
 }
@@ -322,14 +312,6 @@ export interface LoginAccount extends AdminAccount {
 	passwordResetRequired?: true;
 }
 
-export interface BootstrapAccountDetails {
-	username: string;
-	displayName: string;
-	passwordHash: string;
-	tenantName: string;
-	instanceAdmin: boolean;
-}
-
 export interface LoginRateLimitStatus {
 	blocked: boolean;
 	retryAfterSeconds: number;
@@ -339,8 +321,6 @@ export interface CollectionRepository {
 	hasAdminAccount(): boolean;
 	hasAccounts(): boolean;
 	createInitialAdmin(input: CreateInitialAdminInput): AdminAccount;
-	provisionBootstrapAccounts(accounts: BootstrapProvisionAccount[]): void;
-	getBootstrapAccount(username: string): BootstrapAccountDetails | null;
 	getUserForLogin(username: string): LoginAccount | null;
 	createCollection(input: CreateCollectionInput, scope: SessionScope): Collection;
 	getCollectionForOwner(collectionId: string, scope: SessionScope): Collection | null;
@@ -469,7 +449,6 @@ const collectionStandIntroVersion = '2026090203_collection_stand_intro';
 const marketDaysVersion = '2026090901_market_days';
 const expensesVersion = '2026091001_expenses';
 const collectionPublicIdVersion = '2026091701_collection_public_id';
-const requiredInstanceAdministratorCount = 1;
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
 const initialFailureCount = 1;
@@ -557,133 +536,6 @@ export function createCollectionRepository(
 			});
 
 			return { userId, tenantId, username, displayName };
-		},
-
-		/**
-		 * Create bootstrap accounts once without changing existing records.
-		 *
-		 * Every immutable comparison and insert runs under the same immediate transaction,
-		 * so a conflicting concurrent startup cannot apply a partial manifest.
-		 *
-		 * @param {BootstrapProvisionAccount[]} accounts - Validated bootstrap accounts.
-		 * @returns {void}
-		 * @throws {Error} When the manifest conflicts or would add another instance administrator.
-		 */
-		provisionBootstrapAccounts(accounts) {
-			const normalizedAccounts = accounts.map((account) => ({
-				tenantName: requireText(account.tenantName, 'tenantName'),
-				username: normalizeUsername(account.username),
-				displayName: requireText(account.displayName, 'displayName'),
-				password: requirePassword(account.password),
-				passwordHash: requireText(account.passwordHash, 'passwordHash'),
-				instanceAdmin: account.instanceAdmin
-			}));
-
-			runImmediateTransaction(database, () => {
-				const hasAccounts = Boolean(database.prepare('SELECT 1 FROM users LIMIT 1').get());
-				const existingAdministratorCount = (
-					database
-						.prepare("SELECT COUNT(*) AS count FROM instance_roles WHERE role = 'instance_admin'")
-						.get() as {
-						count: number;
-					}
-				).count;
-				const accountsToCreate = normalizedAccounts.filter((account) => {
-					const existingAccount = readBootstrapAccount(database, account.username);
-					if (!existingAccount) {
-						return true;
-					}
-					if (
-						existingAccount.tenantName !== account.tenantName ||
-						existingAccount.displayName !== account.displayName ||
-						existingAccount.instanceAdmin !== account.instanceAdmin ||
-						!verifyPasswordSync(account.password, existingAccount.passwordHash)
-					) {
-						throw new Error('Bootstrap configuration conflicts with an existing account.');
-					}
-					return false;
-				});
-				const newAdministratorCount = accountsToCreate.filter(
-					({ instanceAdmin }) => instanceAdmin
-				).length;
-
-				if (
-					!hasAccounts &&
-					normalizedAccounts.length > 0 &&
-					normalizedAccounts.filter(({ instanceAdmin }) => instanceAdmin).length !==
-						requiredInstanceAdministratorCount
-				) {
-					throw new Error('bootstrap configuration requires exactly one instance administrator');
-				}
-				if (hasAccounts && newAdministratorCount > 0) {
-					throw new Error('bootstrap configuration cannot create another instance administrator');
-				}
-				if (existingAdministratorCount > requiredInstanceAdministratorCount) {
-					throw new Error('instance administrator role is not unique');
-				}
-
-				for (const account of accountsToCreate) {
-					const tenantId = randomUUID();
-					const userId = randomUUID();
-					const createdAt = new Date().toISOString();
-					database
-						.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
-						.run(tenantId, account.tenantName, createdAt);
-					database
-						.prepare(
-							`INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at)
-							 VALUES (?, ?, ?, ?, ?, ?)`
-						)
-						.run(
-							userId,
-							tenantId,
-							account.username,
-							account.displayName,
-							account.passwordHash,
-							createdAt
-						);
-					if (account.instanceAdmin) {
-						database
-							.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
-							.run(userId, 'instance_admin', createdAt);
-					}
-				}
-			});
-		},
-
-		/**
-		 * Read the immutable bootstrap-relevant fields for an existing account.
-		 *
-		 * @param {string} username - Case-insensitive account username.
-		 * @returns {BootstrapAccountDetails | null} Existing bootstrap account details, or null.
-		 */
-		getBootstrapAccount(username) {
-			const row = database
-				.prepare(
-					`SELECT users.username, users.display_name, users.password_hash, tenants.name AS tenant_name,
-					 EXISTS(SELECT 1 FROM instance_roles WHERE instance_roles.user_id = users.id AND instance_roles.role = 'instance_admin') AS instance_admin
-					 FROM users
-					 JOIN tenants ON tenants.id = users.tenant_id
-					 WHERE users.username = ?`
-				)
-				.get(normalizeUsername(username)) as
-				| {
-						username: string;
-						display_name: string;
-						password_hash: string;
-						tenant_name: string;
-						instance_admin: number;
-				  }
-				| undefined;
-			return row
-				? {
-						username: row.username,
-						displayName: row.display_name,
-						passwordHash: row.password_hash,
-						tenantName: row.tenant_name,
-						instanceAdmin: row.instance_admin === sqliteTrue
-					}
-				: null;
 		},
 
 		getUserForLogin(username) {
@@ -2236,59 +2088,6 @@ export function createCollectionRepository(
 			return getCollectionForOwnerRow(database, collectionId, scope);
 		}
 	};
-}
-
-/**
- * Read immutable bootstrap attributes for one normalized username.
- *
- * @param {Database.Database} database - The SQLite connection.
- * @param {string} username - Normalized account username.
- * @returns {BootstrapAccountDetails | null} Existing account details or null.
- */
-function readBootstrapAccount(
-	database: Database.Database,
-	username: string
-): BootstrapAccountDetails | null {
-	const row = database
-		.prepare(
-			`SELECT users.username, users.display_name, users.password_hash, tenants.name AS tenant_name,
-			 EXISTS(SELECT 1 FROM instance_roles WHERE instance_roles.user_id = users.id AND instance_roles.role = 'instance_admin') AS instance_admin
-			 FROM users
-			 JOIN tenants ON tenants.id = users.tenant_id
-			 WHERE users.username = ?`
-		)
-		.get(username) as
-		| {
-				username: string;
-				display_name: string;
-				password_hash: string;
-				tenant_name: string;
-				instance_admin: number;
-		  }
-		| undefined;
-	return row
-		? {
-				username: row.username,
-				displayName: row.display_name,
-				passwordHash: row.password_hash,
-				tenantName: row.tenant_name,
-				instanceAdmin: row.instance_admin === sqliteTrue
-			}
-		: null;
-}
-
-/**
- * Require a non-empty password without trimming its secret bytes.
- *
- * @param {string} value - Plaintext password supplied only for bootstrap verification.
- * @returns {string} The unchanged password value.
- * @throws {Error} If the password is empty.
- */
-function requirePassword(value: string): string {
-	if (value.length === 0) {
-		throw new Error('password must not be empty');
-	}
-	return value;
 }
 
 /**

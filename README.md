@@ -52,22 +52,16 @@ PASSALONG_PORT=4242
 # PASSALONG_ORIGIN=https://passalong.example.com
 ```
 
-### Unattended first setup
+### Accounts
 
-Instead of browser registration, an optional one-line bootstrap manifest can
-provision accounts during startup:
+Accounts are created in the application, never through environment variables.
 
-```dotenv
-PASSALONG_BOOTSTRAP={"accounts":[{"tenantName":"Example household","username":"admin","displayName":"Example admin","password":"replace-with-a-unique-password","instanceAdmin":true}]}
-```
+On an empty database the registration form is open: the first account you
+create becomes the **instance administrator**. Once that account exists the
+registration closes, and the instance administrator adds every further account.
 
-On an empty database, a non-empty manifest must create exactly one instance
-administrator; an empty `accounts` list makes no changes. On an existing
-database, it remains create-only: it can add only non-administrator accounts,
-while configured existing accounts must match their stored tenant, display name,
-role, and password exactly. Later starts never update or delete records.
-**Never commit `.env` or bootstrap credentials.** Keep the manifest private and
-remove it after first setup when it is no longer needed.
+Keep `.env` out of version control. It holds deployment values only — no
+credentials for creating accounts exist there.
 
 ## Deploy behind a reverse proxy
 
