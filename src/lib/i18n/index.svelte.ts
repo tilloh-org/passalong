@@ -242,6 +242,13 @@ const de: Record<string, string> = {
 	'profile.downloadZipExport': 'ZIP-Export herunterladen',
 	'profile.confirmUsername': 'Benutzername bestätigen',
 	'profile.deleteAccountFinal': 'Konto endgültig löschen',
+	'profile.deleteAccountNext': 'Weiter zur letzten Warnung',
+	'profile.deleteAccountFinalTitle': 'Letzte Warnung',
+	'profile.deleteAccountFinalHint':
+		'Dieser Schritt lässt sich nicht rückgängig machen. Dein Konto und alle zugehörigen Daten werden endgültig gelöscht.',
+	'profile.deleteAccountFinalBackupHint':
+		'Wenn du deine Daten behalten willst, lade sie jetzt als ZIP herunter. Danach sind sie unwiederbringlich weg.',
+	'profile.deleteAccountFinalBack': 'Zurück',
 	'profile.adminAreaTitle': 'Admin Bereich',
 	'profile.adminAreaHint':
 		'Technische Verwaltung der Instanz: Passwort-Reset-Codes, Backups und Restore.',
@@ -257,6 +264,34 @@ const de: Record<string, string> = {
 	'admin.oneTimeResetCode': 'Einmaliger Zurücksetzungscode',
 	'admin.resetSecretHint':
 		'Den Code jetzt über einen privaten Kanal weitergeben. Er wird nicht erneut angezeigt.',
+	'admin.accountsTitle': 'Konten',
+	'admin.accountsIntro':
+		'Lege Konten für weitere Nutzer an. Sie vergeben ihr Passwort selbst mit dem Einladungscode.',
+	'admin.accountsUsername': 'Benutzername',
+	'admin.accountsDisplayName': 'Anzeigename',
+	'admin.accountsCreate': 'Konto anlegen',
+	'admin.accountsCreated': 'Konto {username} wurde angelegt',
+	'admin.accountsInvitationCode': 'Einladungscode',
+	'admin.accountsInvitationHint':
+		'Den Code jetzt über einen privaten Kanal weitergeben. Er wird nicht erneut angezeigt und läuft nach 24 Stunden ab.',
+	'admin.accountsColumnUsername': 'Benutzer',
+	'admin.accountsColumnDisplayName': 'Anzeige',
+	'admin.accountsColumnCreatedAt': 'Angelegt',
+	'admin.accountsColumnLastSignedInAt': 'Angemeldet',
+	'admin.accountsColumnRole': 'Rolle',
+	'admin.accountsColumnActions': 'Aktion',
+	'admin.accountsRoleAdministrator': 'Instanzadmin',
+	'admin.accountsRoleMember': 'Nutzer',
+	'admin.accountsNeverSignedIn': 'Noch nie',
+	'admin.accountsDelete': 'Löschen',
+	'admin.accountsDeleteTitle': 'Konto löschen bestätigen',
+	'admin.accountsDeleteDialogHint':
+		'Alle Daten dieses Kontos werden endgültig entfernt: Sammlungen, Artikel, Bilder, Markttage und Ausgaben.',
+	'admin.accountsDeleteBackupHint':
+		'Wiederherstellen lässt sich nur das vollständige Instanz-Backup, kein einzelnes Konto. Lade vorher ein Backup herunter, wenn du die Daten behalten willst.',
+	'admin.accountsDeleteConfirmLabel': 'Benutzername zur Bestätigung',
+	'admin.accountsDeleteFinal': 'Konto endgültig löschen',
+	'admin.accountsEmpty': 'Noch keine weiteren Konten angelegt.',
 	'admin.backupRestoreTitle': 'Backup & Restore',
 	'admin.fullBackupTitle': 'Vollständiges Backup',
 	'admin.fullBackupHint':
@@ -669,6 +704,13 @@ const en: Record<string, string> = {
 	'profile.downloadZipExport': 'Download ZIP export',
 	'profile.confirmUsername': 'Confirm username',
 	'profile.deleteAccountFinal': 'Delete account permanently',
+	'profile.deleteAccountNext': 'Continue to the final warning',
+	'profile.deleteAccountFinalTitle': 'Final warning',
+	'profile.deleteAccountFinalHint':
+		'This step cannot be undone. Your account and all of its data are deleted permanently.',
+	'profile.deleteAccountFinalBackupHint':
+		'If you want to keep your data, download it as a ZIP now. Afterwards it is gone for good.',
+	'profile.deleteAccountFinalBack': 'Back',
 	'profile.adminAreaTitle': 'Admin area',
 	'profile.adminAreaHint':
 		'Technical administration of the instance: password reset codes, backups and restore.',
@@ -683,6 +725,34 @@ const en: Record<string, string> = {
 	'admin.createResetCode': 'Generate reset code',
 	'admin.oneTimeResetCode': 'One-time reset code',
 	'admin.resetSecretHint': 'Share the code now via a private channel. It will not be shown again.',
+	'admin.accountsTitle': 'Accounts',
+	'admin.accountsIntro':
+		'Create accounts for other users. They choose their own password with the invitation code.',
+	'admin.accountsUsername': 'Username',
+	'admin.accountsDisplayName': 'Display name',
+	'admin.accountsCreate': 'Create account',
+	'admin.accountsCreated': 'Account {username} was created',
+	'admin.accountsInvitationCode': 'Invitation code',
+	'admin.accountsInvitationHint':
+		'Hand the code over through a private channel now. It is not shown again and expires after 24 hours.',
+	'admin.accountsColumnUsername': 'Username',
+	'admin.accountsColumnDisplayName': 'Display',
+	'admin.accountsColumnCreatedAt': 'Created',
+	'admin.accountsColumnLastSignedInAt': 'Signed in',
+	'admin.accountsColumnRole': 'Role',
+	'admin.accountsColumnActions': 'Action',
+	'admin.accountsRoleAdministrator': 'Instance admin',
+	'admin.accountsRoleMember': 'User',
+	'admin.accountsNeverSignedIn': 'Never',
+	'admin.accountsDelete': 'Delete',
+	'admin.accountsDeleteTitle': 'Confirm account deletion',
+	'admin.accountsDeleteDialogHint':
+		'All data of this account is removed permanently: collections, items, images, market days and expenses.',
+	'admin.accountsDeleteBackupHint':
+		'Only the complete instance backup can be restored, never a single account. Download a backup first if you want to keep the data.',
+	'admin.accountsDeleteConfirmLabel': 'Username for confirmation',
+	'admin.accountsDeleteFinal': 'Delete account permanently',
+	'admin.accountsEmpty': 'No further accounts created yet.',
 	'admin.backupRestoreTitle': 'Backup & restore',
 	'admin.fullBackupTitle': 'Full backup',
 	'admin.fullBackupHint': 'Downloads a ZIP file with database, media and checksum manifest.',

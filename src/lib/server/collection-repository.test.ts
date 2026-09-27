@@ -3229,3 +3229,256 @@ describe('collection repository', () => {
 		expect(repository.getPublicStandView(row?.public_id ?? '')).not.toBeNull();
 	});
 });
+
+describe('instance account administration', () => {
+	/**
+	 * Create a repository with one instance administrator and one invited member account.
+	 *
+	 * @returns {object} Repository, administrator scope, member details and invitation secret.
+	 */
+	function createAdministeredRepository() {
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const administrator = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$admin-salt$admin-key'
+		});
+		const invitation = repository.createAccountInvitation(
+			{ username: 'blake', displayName: 'Blake' },
+			'invitation-secret-hash',
+			'2026-12-31T00:00:00.000Z'
+		);
+		return { databasePath, repository, administrator, invitation };
+	}
+
+	it('creates an invited account without a password and with its own household', () => {
+		// arrange
+		const { databasePath, administrator, invitation } = createAdministeredRepository();
+		const database = new Database(databasePath, { readonly: true });
+		const row = database
+			.prepare(
+				'SELECT id, tenant_id, username, display_name, password_hash, password_reset_required FROM users WHERE username = ?'
+			)
+			.get('blake') as
+			| {
+					id: string;
+					tenant_id: string;
+					display_name: string;
+					password_hash: string | null;
+					password_reset_required: number;
+			  }
+			| undefined;
+		const inviteRole = database
+			.prepare('SELECT 1 FROM instance_roles WHERE user_id = ?')
+			.get(row?.id ?? '') as { 1: number } | undefined;
+		const invitationRow = database
+			.prepare('SELECT secret_hash, expires_at, consumed_at FROM password_resets WHERE user_id = ?')
+			.get(row?.id ?? '') as
+			{ secret_hash: string; expires_at: string; consumed_at: string | null } | undefined;
+		database.close();
+
+		// assume
+		expect(invitation).toMatchObject({ username: 'blake', displayName: 'Blake' });
+		expect(row?.display_name).toBe('Blake');
+		// The account starts without a password so the invitation code is the only way in.
+		expect(row?.password_hash).toBeNull();
+		expect(row?.password_reset_required).toBe(1);
+		// A new account is its own data boundary, never a member of the administrator's household.
+		expect(row?.tenant_id).toBe(invitation.tenantId);
+		expect(row?.tenant_id).not.toBe(administrator.tenantId);
+		expect(inviteRole).toBeUndefined();
+		expect(invitationRow).toEqual({
+			secret_hash: 'invitation-secret-hash',
+			expires_at: '2026-12-31T00:00:00.000Z',
+			consumed_at: null
+		});
+	});
+
+	it('refuses an invited account whose username is taken in any letter case', () => {
+		// arrange
+		const { repository } = createAdministeredRepository();
+
+		// act
+		let duplicateError: unknown;
+		try {
+			repository.createAccountInvitation(
+				{ username: 'AVERY', displayName: 'Other Avery' },
+				'other-secret-hash',
+				'2026-12-31T00:00:00.000Z'
+			);
+		} catch (error) {
+			duplicateError = error;
+		}
+
+		// assume
+		expect(duplicateError).toBeInstanceOf(Error);
+	});
+
+	it('lets the invited member consume the code and sign in', () => {
+		// arrange
+		const { repository, invitation } = createAdministeredRepository();
+
+		// act
+		const scope = repository.consumePasswordReset(
+			'blake',
+			'invitation-secret-hash',
+			'scrypt$member-salt$member-key'
+		);
+		const loginUser = repository.getUserForLogin('blake');
+
+		// assume
+		expect(scope).toEqual({ userId: invitation.userId, tenantId: invitation.tenantId });
+		expect(loginUser?.passwordHash).toBe('scrypt$member-salt$member-key');
+		expect(loginUser?.passwordResetRequired).toBeUndefined();
+		// Consuming an invitation must never grant instance administration.
+		expect(repository.isInstanceAdmin(scope!)).toBe(false);
+	});
+
+	it('lists accounts with creation time, last sign-in and administrator mark', () => {
+		// arrange
+		const { repository, administrator, invitation } = createAdministeredRepository();
+
+		// act
+		const beforeSignIn = repository.listAccounts();
+
+		// assume
+		expect(beforeSignIn.map((account) => account.username)).toEqual(['avery', 'blake']);
+		expect(beforeSignIn[0]).toMatchObject({
+			userId: administrator.userId,
+			displayName: 'Avery',
+			isInstanceAdmin: true,
+			lastSignedInAt: null
+		});
+		expect(beforeSignIn[0].createdAt).toEqual(expect.any(String));
+		expect(beforeSignIn[1]).toMatchObject({
+			username: 'blake',
+			isInstanceAdmin: false,
+			lastSignedInAt: null
+		});
+
+		// act
+		repository.createSessionForUser(
+			{ userId: invitation.userId, tenantId: invitation.tenantId },
+			'member-session-token-hash'
+		);
+		const afterSignIn = repository.listAccounts();
+
+		// assume
+		expect(afterSignIn[1].lastSignedInAt).toEqual(expect.any(String));
+		expect(afterSignIn[1].lastSignedInAt).not.toBeNull();
+	});
+
+	it('reports the newest sign-in when an account holds several sessions', () => {
+		// arrange
+		const { databasePath, repository, invitation } = createAdministeredRepository();
+		const scope = { userId: invitation.userId, tenantId: invitation.tenantId };
+		repository.createSessionForUser(scope, 'first-session-token-hash');
+		repository.createSessionForUser(scope, 'second-session-token-hash');
+		const database = new Database(databasePath, { readonly: true });
+		const insertedSessions = database
+			.prepare('SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?')
+			.get(invitation.userId) as { count: number };
+		database.close();
+
+		// act
+		const accounts = repository.listAccounts();
+
+		// assume
+		expect(insertedSessions.count).toBe(2);
+		// Several sessions must not duplicate the account row.
+		expect(accounts).toHaveLength(2);
+		expect(accounts[1].lastSignedInAt).toEqual(expect.any(String));
+	});
+
+	it('deletes an account with its data through the administrator path', () => {
+		// arrange
+		const { databasePath, repository, invitation } = createAdministeredRepository();
+		const memberScope = { userId: invitation.userId, tenantId: invitation.tenantId };
+		const collection = repository.createCollection({ name: 'Blake stand' }, memberScope);
+		const item = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Blake lamp',
+				priceCents: 1500,
+				category: 'home',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: true,
+				isFunctional: true
+			},
+			memberScope
+		);
+		repository.addItemImage(item.id, 'member-item-image.jpg', memberScope);
+
+		// act
+		const artifacts = repository.deleteAccountByAdmin(invitation.userId);
+
+		// assume
+		expect(artifacts).toEqual({
+			avatarStorageKey: null,
+			itemImageStorageKeys: ['member-item-image.jpg']
+		});
+		const database = new Database(databasePath, { readonly: true });
+		const remainingUsers = database
+			.prepare('SELECT COUNT(*) AS count FROM users WHERE id = ?')
+			.get(invitation.userId) as { count: number };
+		const remainingItems = database
+			.prepare('SELECT COUNT(*) AS count FROM items WHERE owner_id = ?')
+			.get(invitation.userId) as { count: number };
+		const remainingCollections = database
+			.prepare('SELECT COUNT(*) AS count FROM collections WHERE owner_id = ?')
+			.get(invitation.userId) as { count: number };
+		const remainingHousehold = database
+			.prepare('SELECT COUNT(*) AS count FROM tenants WHERE id = ?')
+			.get(invitation.tenantId) as { count: number };
+		database.close();
+		expect(remainingUsers.count).toBe(0);
+		expect(remainingItems.count).toBe(0);
+		expect(remainingCollections.count).toBe(0);
+		// The emptied household must not linger.
+		expect(remainingHousehold.count).toBe(0);
+		// The freed username can be handed out again.
+		expect(() =>
+			repository.createAccountInvitation(
+				{ username: 'blake', displayName: 'Blake again' },
+				'reuse-secret-hash',
+				'2026-12-31T00:00:00.000Z'
+			)
+		).not.toThrow();
+	});
+
+	it('refuses to delete the instance administrator through the administrator path', () => {
+		// arrange
+		const { repository, administrator } = createAdministeredRepository();
+
+		// act
+		let refusal: unknown;
+		try {
+			repository.deleteAccountByAdmin(administrator.userId);
+		} catch (error) {
+			refusal = error;
+		}
+
+		// assume
+		expect(refusal).toBeInstanceOf(Error);
+		expect(repository.getProfile(administrator)).not.toBeNull();
+	});
+
+	it('refuses to delete an unknown account through the administrator path', () => {
+		// arrange
+		const { repository } = createAdministeredRepository();
+
+		// act
+		let refusal: unknown;
+		try {
+			repository.deleteAccountByAdmin('no-such-user');
+		} catch (error) {
+			refusal = error;
+		}
+
+		// assume
+		expect(refusal).toBeInstanceOf(Error);
+	});
+});

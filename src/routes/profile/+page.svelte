@@ -17,6 +17,7 @@
 	let standIntroBaseline = $state('');
 	let deleteAccountDraft = $state('');
 	let deleteAccountDialog = $state<HTMLDialogElement | null>(null);
+	let deleteAccountFinalDialog = $state<HTMLDialogElement | null>(null);
 
 	$effect(() => {
 		standIntroBaseline = data.activeCollection?.standIntro ?? '';
@@ -63,12 +64,39 @@
 		deleteAccountDraft = '';
 		if (!deleteAccountDialog?.open) {
 			deleteAccountDialog?.showModal();
+		}
+	}
+
+	/**
+	 * Advance from the warning step to the final confirmation step.
+	 *
+	 * The two-step flow is deliberate: the last dialog is the only place that submits,
+	 * so the irreversible action never sits behind a single click.
+	 *
+	 * @returns {void}
+	 */
+	function openDeleteAccountFinalDialog(): void {
+		deleteAccountDraft = '';
+		deleteAccountDialog?.close();
+		if (!deleteAccountFinalDialog?.open) {
+			deleteAccountFinalDialog?.showModal();
 			queueMicrotask(() => {
-				deleteAccountDialog
+				deleteAccountFinalDialog
 					?.querySelector<HTMLInputElement>('[data-testid="delete-account-input"]')
 					?.focus();
 			});
 		}
+	}
+
+	/**
+	 * Step back from the final confirmation to the warning step.
+	 *
+	 * @returns {void}
+	 */
+	function returnToDeleteAccountWarning(): void {
+		deleteAccountDraft = '';
+		deleteAccountFinalDialog?.close();
+		openDeleteAccountDialog();
 	}
 
 	async function copyStandLink(): Promise<void> {
@@ -358,8 +386,13 @@
 						<h3 id="delete-account-dialog-title">
 							<Icon name="alert-triangle" tone="danger" />{t('profile.deleteAccountConfirmTitle')}
 						</h3>
-						<button type="button" class="secondary" onclick={() => deleteAccountDialog?.close()}
-							><Icon name="x" size="sm" />{t('profile.close')}</button
+						<button
+							type="button"
+							class="secondary"
+							onclick={() => {
+								deleteAccountDraft = '';
+								deleteAccountDialog?.close();
+							}}><Icon name="x" size="sm" />{t('profile.close')}</button
 						>
 					</div>
 					<p class="dialog-hint">
@@ -380,6 +413,52 @@
 							href="/profile/export"
 							download
 							data-testid="export-account-archive"
+							><Icon name="download" size="sm" />{t('profile.downloadZipExport')}</a
+						>
+					</div>
+					<div class="delete-account-actions">
+						<button
+							type="button"
+							class="danger"
+							data-testid="delete-account-continue"
+							onclick={() => openDeleteAccountFinalDialog()}
+							><Icon name="alert-triangle" size="sm" />{t('profile.deleteAccountNext')}</button
+						>
+					</div>
+				</dialog>
+
+				<dialog
+					bind:this={deleteAccountFinalDialog}
+					class="delete-account-dialog"
+					aria-labelledby="delete-account-final-dialog-title"
+					data-testid="delete-account-final-dialog"
+				>
+					<div class="dialog-head">
+						<h3 id="delete-account-final-dialog-title">
+							<Icon name="alert-triangle" tone="danger" />{t('profile.deleteAccountFinalTitle')}
+						</h3>
+						<button
+							type="button"
+							class="secondary"
+							onclick={() => deleteAccountFinalDialog?.close()}
+							><Icon name="x" size="sm" />{t('profile.close')}</button
+						>
+					</div>
+					<p class="dialog-hint">{t('profile.deleteAccountFinalHint')}</p>
+					<div
+						class="delete-account-warning"
+						role="note"
+						aria-label={t('profile.deleteAccountWarningLabel')}
+					>
+						<Icon name="alert-triangle" tone="danger" />
+						<span>{t('profile.deleteAccountFinalBackupHint')}</span>
+					</div>
+					<div class="delete-account-export">
+						<a
+							class="secondary delete-account-export-link"
+							href="/profile/export"
+							download
+							data-testid="export-account-archive-final"
 							><Icon name="download" size="sm" />{t('profile.downloadZipExport')}</a
 						>
 					</div>
@@ -406,14 +485,23 @@
 						{#if form?.deleteAccountError}
 							<p class="form-error" role="alert">{form.deleteAccountError}</p>
 						{/if}
-						<button
-							type="submit"
-							class="danger"
-							data-testid="delete-account-submit"
-							disabled={!deleteAccountReady}
-							aria-disabled={!deleteAccountReady}
-							><Icon name="trash" size="sm" />{t('profile.deleteAccountFinal')}</button
-						>
+						<div class="delete-account-actions">
+							<button
+								type="button"
+								class="secondary"
+								data-testid="delete-account-back"
+								onclick={() => returnToDeleteAccountWarning()}
+								>{t('profile.deleteAccountFinalBack')}</button
+							>
+							<button
+								type="submit"
+								class="danger"
+								data-testid="delete-account-submit"
+								disabled={!deleteAccountReady}
+								aria-disabled={!deleteAccountReady}
+								><Icon name="trash" size="sm" />{t('profile.deleteAccountFinal')}</button
+							>
+						</div>
 					</form>
 				</dialog>
 			</div>
@@ -969,5 +1057,11 @@
 		.avatar-remove-form {
 			grid-column: 2;
 		}
+	}
+
+	.delete-account-actions {
+		display: flex;
+		gap: var(--gap-action-row);
+		justify-content: flex-end;
 	}
 </style>
