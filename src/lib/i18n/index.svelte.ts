@@ -233,7 +233,7 @@ const de: Record<string, string> = {
 	'profile.deleteAccountConfirmTitle': 'Konto löschen bestätigen',
 	'profile.close': 'Schließen',
 	'profile.deleteAccountDialogHint':
-		'Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Zum Bestätigen gib bitte deinen Benutzernamen ein.',
+		'Das löscht dein Konto, deine Sammlungen und deine Artikel unwiderruflich. Auf der nächsten Seite bestätigst du mit deinem Benutzernamen.',
 	'profile.deleteAccountWarning':
 		'Mit der Bestätigung werden deine Account-Daten unwiederbringlich gelöscht.',
 	'profile.deleteAccountWarningLabel': 'Warnhinweis zur Konto-Löschung',
@@ -697,7 +697,7 @@ const en: Record<string, string> = {
 	'profile.deleteAccountConfirmTitle': 'Confirm account deletion',
 	'profile.close': 'Close',
 	'profile.deleteAccountDialogHint':
-		'This permanently deletes your account, your collections and your items. To confirm, please enter your username.',
+		'This permanently deletes your account, your collections and your items. You confirm with your username on the next step.',
 	'profile.deleteAccountWarning': 'Confirming will irretrievably delete your account data.',
 	'profile.deleteAccountWarningLabel': 'Account deletion warning',
 	'profile.deleteAccountExportHint': 'If you want to keep the data, download it as a ZIP now.',

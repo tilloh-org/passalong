@@ -4,6 +4,7 @@
 	import Icon from '$lib/components/icon.svelte';
 	import TileImage from '$lib/components/tile-image.svelte';
 	import ItemInfoBlock from '$lib/components/item-info-block.svelte';
+	import DialogShell from '$lib/components/dialog-shell.svelte';
 	import ImageLightbox from '$lib/components/image-lightbox.svelte';
 	import { orderImages } from '$lib/utils/lightbox';
 
@@ -49,9 +50,9 @@
 	}
 	const qrCodeDataUrl = $derived(data.qrCodeDataUrl);
 
-	let imagesDialog = $state<HTMLDialogElement | null>(null);
+	let imagesShell = $state<ReturnType<typeof DialogShell> | null>(null);
 	let lightbox = $state<ReturnType<typeof ImageLightbox> | null>(null);
-	let editDialog = $state<HTMLDialogElement | null>(null);
+	let editShell = $state<ReturnType<typeof DialogShell> | null>(null);
 </script>
 
 <svelte:head>
@@ -124,18 +125,15 @@
 				{/if}
 			</section>
 
-			<dialog
+			<DialogShell
 				class="images-dialog"
-				bind:this={imagesDialog}
-				aria-label={t('item.photosDialogLabel')}
-				data-testid="images-dialog"
+				bind:this={imagesShell}
+				ariaLabel={t('item.photosDialogLabel')}
+				testId="images-dialog"
 			>
-				<div class="dialog-head">
+				{#snippet header()}
 					<h3><Icon name="photo" />{t('item.managePhotos')}</h3>
-					<button type="button" class="secondary" onclick={() => imagesDialog?.close()}
-						>{t('profile.close')}</button
-					>
-				</div>
+				{/snippet}
 				<p class="dialog-hint">{t('item.setCoverHint')}</p>
 				<form
 					method="POST"
@@ -211,7 +209,7 @@
 						</li>
 					{/each}
 				</ul>
-			</dialog>
+			</DialogShell>
 
 			<section class="panel" aria-labelledby="sale-title">
 				<h2 id="sale-title"><Icon name="euro" />{t('item.saleTitle')}</h2>
@@ -289,7 +287,7 @@
 		<button
 			type="button"
 			class="action-btn blue-btn"
-			onclick={() => imagesDialog?.showModal()}
+			onclick={() => imagesShell?.open()}
 			data-testid="images-dialog-trigger"
 		>
 			<Icon name="photo" size="sm" />
@@ -298,7 +296,7 @@
 		<button
 			type="button"
 			class="action-btn blue-btn"
-			onclick={() => editDialog?.showModal()}
+			onclick={() => editShell?.open()}
 			data-testid="edit-dialog-trigger"
 		>
 			<Icon name="edit" size="sm" />
@@ -313,18 +311,15 @@
 		</form>
 	</section>
 
-	<dialog
+	<DialogShell
 		class="edit-dialog"
-		bind:this={editDialog}
-		aria-label={t('item.editDialogLabel')}
-		data-testid="edit-dialog"
+		bind:this={editShell}
+		ariaLabel={t('item.editDialogLabel')}
+		testId="edit-dialog"
 	>
-		<div class="dialog-head">
+		{#snippet header()}
 			<h3><Icon name="edit" />{t('item.editDialogTitle')}</h3>
-			<button type="button" class="secondary" onclick={() => editDialog?.close()}
-				>{t('profile.close')}</button
-			>
-		</div>
+		{/snippet}
 		<form method="POST" action="?/updateItem">
 			<input name="itemId" type="hidden" value={data.item.id} />
 			<div class="form-grid">
@@ -389,7 +384,7 @@
 				{t('profile.saveChanges')}
 			</button>
 		</form>
-	</dialog>
+	</DialogShell>
 
 	<section class="qr-panel" aria-labelledby="qr-title" data-testid="item-qr-panel">
 		<h2 id="qr-title">
@@ -563,27 +558,16 @@
 		color: var(--color-warn, #f0b300);
 	}
 
-	.edit-dialog {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
+	/* Only the width hint stays screen-scoped; the shell owns chrome and spacing. */
+	:global(.edit-dialog) {
 		max-width: min(34rem, 92vw);
-		padding: 1.25rem;
 		width: 34rem;
 	}
 
-	.edit-dialog::backdrop {
-		background: rgba(10, 20, 28, 0.6);
-	}
-
-	.dialog-textarea {
-		margin-top: 0.85rem;
-	}
-
-	.edit-dialog .flag-checkboxes {
+	:global(.edit-dialog .flag-checkboxes) {
 		display: flex;
-		gap: 1.1rem;
-		margin: 0.9rem 0;
+		gap: var(--gap-dialog-block);
+		margin: 0;
 	}
 
 	label.checkbox {
@@ -625,14 +609,14 @@
 		accent-color: var(--color-info, #3884ff);
 	}
 
-	.edit-dialog form {
+	:global(.edit-dialog form) {
 		display: grid;
+		gap: var(--gap-dialog-block);
 	}
 
-	.edit-dialog form > button,
-	.images-dialog .dialog-upload > button {
+	:global(.edit-dialog form > button),
+	:global(.images-dialog .dialog-upload > button) {
 		justify-self: end;
-		margin-top: 0.4rem;
 	}
 
 	.sold-badge {
@@ -752,26 +736,12 @@
 		gap: 0.85rem;
 	}
 
-	.images-dialog {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
+	:global(.images-dialog) {
 		max-width: min(48rem, 92vw);
-		padding: 1.25rem;
 	}
 
-	.images-dialog::backdrop {
-		background: rgba(10, 20, 28, 0.6);
-	}
-
-	.dialog-head {
-		align-items: center;
-		display: flex;
-		gap: 1rem;
-		justify-content: space-between;
-	}
-
-	.dialog-head h3 {
+	:global(.images-dialog .dialog-head h3),
+	:global(.edit-dialog .dialog-head h3) {
 		align-items: center;
 		display: flex;
 		font-size: 1.05rem;
@@ -779,10 +749,9 @@
 		margin: 0;
 	}
 
-	.dialog-hint {
+	:global(.images-dialog .dialog-hint) {
 		color: var(--color-text-muted);
 		font-size: 0.82rem;
-		margin: 0.35rem 0 0.9rem;
 	}
 
 	.image-list {

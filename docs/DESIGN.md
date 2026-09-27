@@ -47,8 +47,19 @@ UI; deviations need an explicit decision (e.g. in the PR description).
 ## Modals
 
 - Native `<dialog>` elements with a dimmed backdrop.
+- Every modal is built from the shared `$lib/components/dialog-shell.svelte`, which owns the
+  chrome so no screen re-declares it. It offers two variants:
+  - `variant="modal"` — the standard dialog: card surface, `--radius-card`, `--shadow-card`,
+    `1.25rem` padding, and a top-right close button labelled „Schließen". This is the default.
+  - `variant="fullscreen"` — the immersive viewer: no card surface, no padding, own scrim
+    (`--scrim-viewer`) and its own bar. For a viewer that should **hide** the page rather than
+    dim it (see the photo viewer).
 - Every modal has a header row with a bold title on the left and a light „Schließen" button on
   the right; Escape and the close button dismiss it.
+- **Internal spacing is token-driven.** The gaps inside a dialog use the shared variables
+  (`--gap-dialog-head` between the header and the first block, `--gap-dialog-block` between
+  blocks, `--gap-dialog-field` between a field label and its control) instead of per-screen
+  values, so every dialog keeps the same rhythm.
 - Form fields inside modals share the page-wide field styling: rounded corners, light border,
   sans-serif inherited font, visible focus ring.
 

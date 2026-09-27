@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { t } from '$lib/i18n/index.svelte';
+	import DialogShell from '$lib/components/dialog-shell.svelte';
 	import Icon from '$lib/components/icon.svelte';
 	import { nextIndex, previousIndex, swipeDirection } from '$lib/utils/lightbox';
 
@@ -18,7 +19,7 @@
 		onclose?: () => void;
 	} = $props();
 
-	let dialog = $state<HTMLDialogElement | null>(null);
+	let shell = $state<ReturnType<typeof DialogShell> | null>(null);
 	let currentIndex = $state(0);
 	let touchStart = $state<{ x: number; y: number } | null>(null);
 
@@ -32,7 +33,7 @@
 	 */
 	export function open(index?: number): void {
 		currentIndex = index ?? currentIndex;
-		dialog?.showModal();
+		shell?.open();
 	}
 
 	/**
@@ -41,7 +42,7 @@
 	 * @returns {void}
 	 */
 	export function close(): void {
-		dialog?.close();
+		shell?.close();
 	}
 
 	/**
@@ -108,31 +109,36 @@
 	}
 </script>
 
-<dialog
-	bind:this={dialog}
+<DialogShell
+	variant="fullscreen"
+	bind:this={shell}
 	class="lightbox"
-	data-testid="item-lightbox"
-	onclose={() => onclose?.()}
+	ariaLabel={t('item.lightboxLabel')}
+	testId="item-lightbox"
+	showClose={false}
 	onkeydown={handleKeydown}
+	{onclose}
 >
-	<div class="lightbox-bar">
-		{#if hasGallery}
-			<p class="lightbox-counter" data-testid="lightbox-counter">
-				{t('item.lightboxCounter', { current: currentIndex + 1, total: images.length })}
-			</p>
-		{:else}
-			<span></span>
-		{/if}
-		<button
-			type="button"
-			class="lightbox-close"
-			onclick={close}
-			aria-label={t('item.lightboxClose')}
-			data-testid="lightbox-close"
-		>
-			<Icon name="x" size="sm" />
-		</button>
-	</div>
+	{#snippet bar()}
+		<div class="lightbox-bar">
+			{#if hasGallery}
+				<p class="lightbox-counter" data-testid="lightbox-counter">
+					{t('item.lightboxCounter', { current: currentIndex + 1, total: images.length })}
+				</p>
+			{:else}
+				<span></span>
+			{/if}
+			<button
+				type="button"
+				class="lightbox-close"
+				onclick={close}
+				aria-label={t('item.lightboxClose')}
+				data-testid="lightbox-close"
+			>
+				<Icon name="x" size="sm" />
+			</button>
+		</div>
+	{/snippet}
 
 	<div
 		class="lightbox-stage"
@@ -170,30 +176,16 @@
 			</button>
 		{/if}
 	</div>
-</dialog>
+</DialogShell>
 
 <style>
-	.lightbox {
-		background: transparent;
-		border: none;
-		height: 100dvh;
-		margin: 0;
-		max-height: 100dvh;
-		max-width: 100vw;
-		padding: 0;
-		width: 100vw;
-	}
-	.lightbox::backdrop {
-		background: var(--scrim-viewer);
-	}
-
+	/* The dialog-shell owns the frame and the viewer scrim; only the bar contents are here. */
 	.lightbox-bar {
 		align-items: center;
-		background: var(--viewer-bar-bg);
 		display: flex;
-		gap: 1rem;
+		gap: var(--gap-dialog-head);
 		justify-content: space-between;
-		padding: max(0.75rem, env(safe-area-inset-top)) 1rem 0.75rem;
+		width: 100%;
 	}
 
 	.lightbox-counter {

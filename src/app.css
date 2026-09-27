@@ -75,6 +75,11 @@
 
 	--gap-action-row: 0.6rem;
 	--gap-action-block: 1.1rem;
+	/* Dialog internals: one rhythm for every modal dialog, so title, hint, warning,
+	   and form do not drift apart per screen. The full-screen viewer keeps its own. */
+	--gap-dialog-head: 0.75rem;
+	--gap-dialog-block: 0.85rem;
+	--gap-dialog-field: 0.3rem;
 
 	--shadow-card: 0 10px 30px rgba(14, 42, 58, 0.1);
 	--shadow-tile: 0 4px 14px rgba(14, 42, 58, 0.08);

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import DialogShell from '$lib/components/dialog-shell.svelte';
 	import Icon from '$lib/components/icon.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	let { data, form } = $props();
@@ -16,8 +17,8 @@
 	let standIntroDraft = $state('');
 	let standIntroBaseline = $state('');
 	let deleteAccountDraft = $state('');
-	let deleteAccountDialog = $state<HTMLDialogElement | null>(null);
-	let deleteAccountFinalDialog = $state<HTMLDialogElement | null>(null);
+	let deleteAccountShell = $state<ReturnType<typeof DialogShell> | null>(null);
+	let deleteAccountFinalShell = $state<ReturnType<typeof DialogShell> | null>(null);
 
 	$effect(() => {
 		standIntroBaseline = data.activeCollection?.standIntro ?? '';
@@ -62,8 +63,8 @@
 
 	function openDeleteAccountDialog(): void {
 		deleteAccountDraft = '';
-		if (!deleteAccountDialog?.open) {
-			deleteAccountDialog?.showModal();
+		if (!deleteAccountShell?.isOpen()) {
+			deleteAccountShell?.open();
 		}
 	}
 
@@ -77,13 +78,11 @@
 	 */
 	function openDeleteAccountFinalDialog(): void {
 		deleteAccountDraft = '';
-		deleteAccountDialog?.close();
-		if (!deleteAccountFinalDialog?.open) {
-			deleteAccountFinalDialog?.showModal();
+		deleteAccountShell?.close();
+		if (!deleteAccountFinalShell?.isOpen()) {
+			deleteAccountFinalShell?.open();
 			queueMicrotask(() => {
-				deleteAccountFinalDialog
-					?.querySelector<HTMLInputElement>('[data-testid="delete-account-input"]')
-					?.focus();
+				deleteAccountFinalShell?.focusTestId('delete-account-input');
 			});
 		}
 	}
@@ -95,7 +94,7 @@
 	 */
 	function returnToDeleteAccountWarning(): void {
 		deleteAccountDraft = '';
-		deleteAccountFinalDialog?.close();
+		deleteAccountFinalShell?.close();
 		openDeleteAccountDialog();
 	}
 
@@ -376,25 +375,16 @@
 					</button>
 				</section>
 
-				<dialog
-					bind:this={deleteAccountDialog}
-					class="delete-account-dialog"
-					aria-labelledby="delete-account-dialog-title"
-					data-testid="delete-account-dialog"
+				<DialogShell
+					bind:this={deleteAccountShell}
+					labelledBy="delete-account-dialog-title"
+					testId="delete-account-dialog"
 				>
-					<div class="dialog-head">
+					{#snippet header()}
 						<h3 id="delete-account-dialog-title">
 							<Icon name="alert-triangle" tone="danger" />{t('profile.deleteAccountConfirmTitle')}
 						</h3>
-						<button
-							type="button"
-							class="secondary"
-							onclick={() => {
-								deleteAccountDraft = '';
-								deleteAccountDialog?.close();
-							}}><Icon name="x" size="sm" />{t('profile.close')}</button
-						>
-					</div>
+					{/snippet}
 					<p class="dialog-hint">
 						{t('profile.deleteAccountDialogHint')}
 					</p>
@@ -425,25 +415,18 @@
 							><Icon name="alert-triangle" size="sm" />{t('profile.deleteAccountNext')}</button
 						>
 					</div>
-				</dialog>
+				</DialogShell>
 
-				<dialog
-					bind:this={deleteAccountFinalDialog}
-					class="delete-account-dialog"
-					aria-labelledby="delete-account-final-dialog-title"
-					data-testid="delete-account-final-dialog"
+				<DialogShell
+					bind:this={deleteAccountFinalShell}
+					labelledBy="delete-account-final-dialog-title"
+					testId="delete-account-final-dialog"
 				>
-					<div class="dialog-head">
+					{#snippet header()}
 						<h3 id="delete-account-final-dialog-title">
 							<Icon name="alert-triangle" tone="danger" />{t('profile.deleteAccountFinalTitle')}
 						</h3>
-						<button
-							type="button"
-							class="secondary"
-							onclick={() => deleteAccountFinalDialog?.close()}
-							><Icon name="x" size="sm" />{t('profile.close')}</button
-						>
-					</div>
+					{/snippet}
 					<p class="dialog-hint">{t('profile.deleteAccountFinalHint')}</p>
 					<div
 						class="delete-account-warning"
@@ -503,7 +486,7 @@
 							>
 						</div>
 					</form>
-				</dialog>
+				</DialogShell>
 			</div>
 		</div>
 
@@ -788,27 +771,14 @@
 		justify-self: end;
 	}
 
-	.delete-account-dialog {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
+	/* Only the width hint is screen-scoped; the shell owns every other dialog rule. */
+	:global(.delete-account-dialog) {
 		max-width: min(32rem, 92vw);
-		padding: 1.25rem;
 		width: 32rem;
 	}
 
-	.delete-account-dialog::backdrop {
-		background: rgba(10, 20, 28, 0.6);
-	}
-
-	.dialog-head {
-		align-items: center;
-		display: flex;
-		gap: 0.75rem;
-		justify-content: space-between;
-	}
-
-	.dialog-head h3 {
+	/* The header row and its title live in the shell, so their styling crosses the boundary. */
+	:global(.delete-account-dialog .dialog-head h3) {
 		align-items: center;
 		display: flex;
 		font-size: 1.05rem;
@@ -816,25 +786,10 @@
 		margin: 0;
 	}
 
-	.dialog-head button.secondary {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		box-shadow: none;
-		color: var(--color-accent);
-		font-size: 0.85rem;
-		padding: 0.5rem 0.9rem;
-	}
-
-	.dialog-head button.secondary:hover {
-		background: var(--color-accent-soft);
-		transform: none;
-	}
-
-	.dialog-hint {
+	:global(.delete-account-dialog .dialog-hint) {
 		color: var(--color-text-muted);
 		font-size: 0.82rem;
 		line-height: 1.5;
-		margin: 0.25rem 0 0.75rem;
 	}
 
 	.delete-account-warning {

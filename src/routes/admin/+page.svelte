@@ -1,11 +1,12 @@
 <script lang="ts">
+	import DialogShell from '$lib/components/dialog-shell.svelte';
 	import Icon from '$lib/components/icon.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 
 	let { data, form } = $props();
 
 	let restoreFile: File | undefined = $state();
-	let deleteAccountDialog: HTMLDialogElement | null = $state(null);
+	let deleteAccountShell = $state<ReturnType<typeof DialogShell> | null>(null);
 	type AccountTarget = { userId: string; username: string };
 	let deleteAccountTarget = $state<AccountTarget | null>(null);
 	let deleteAccountDraft = $state('');
@@ -24,20 +25,22 @@
 	function openDeleteAccountDialog(account: { userId: string; username: string }): void {
 		deleteAccountTarget = account;
 		deleteAccountDraft = '';
-		if (!deleteAccountDialog?.open) {
-			deleteAccountDialog?.showModal();
+		if (!deleteAccountShell?.isOpen()) {
+			deleteAccountShell?.open();
 		}
 	}
 
 	/**
-	 * Close the deletion dialog and forget the selected account.
+	 * Forget the selected account.
+	 *
+	 * Runs on every close path — the close control, Escape, and the submit redirect — so a stale
+	 * target can never leak into the next dialog opening.
 	 *
 	 * @returns {void}
 	 */
-	function closeDeleteAccountDialog(): void {
+	function forgetDeleteAccountTarget(): void {
 		deleteAccountDraft = '';
 		deleteAccountTarget = null;
-		deleteAccountDialog?.close();
 	}
 
 	/**
@@ -265,20 +268,17 @@
 		</div>
 	</section>
 
-	<dialog
-		bind:this={deleteAccountDialog}
-		class="delete-account-dialog"
-		aria-labelledby="admin-delete-account-dialog-title"
-		data-testid="admin-delete-account-dialog"
+	<DialogShell
+		bind:this={deleteAccountShell}
+		labelledBy="admin-delete-account-dialog-title"
+		testId="admin-delete-account-dialog"
+		onclose={forgetDeleteAccountTarget}
 	>
-		<div class="dialog-head">
+		{#snippet header()}
 			<h3 id="admin-delete-account-dialog-title">
 				<Icon name="alert-triangle" tone="danger" />{t('admin.accountsDeleteTitle')}
 			</h3>
-			<button type="button" class="secondary" onclick={closeDeleteAccountDialog}
-				><Icon name="x" size="sm" />{t('profile.close')}</button
-			>
-		</div>
+		{/snippet}
 		<p class="dialog-hint">{t('admin.accountsDeleteDialogHint')}</p>
 		<div
 			class="delete-account-warning"
@@ -329,7 +329,7 @@
 				>
 			</div>
 		</form>
-	</dialog>
+	</DialogShell>
 </main>
 
 <style>
@@ -637,41 +637,6 @@
 		font-size: 0.75rem;
 		padding: 0.3rem 0.45rem;
 		white-space: nowrap;
-	}
-
-	.delete-account-dialog {
-		background: var(--color-bg-elevated);
-		border: 1px solid var(--color-border);
-		border-radius: 0.75rem;
-		box-shadow: var(--shadow-viewer-control);
-		color: var(--color-text);
-		max-width: 32rem;
-		padding: 1.25rem;
-	}
-
-	.delete-account-dialog::backdrop {
-		background: var(--scrim-viewer);
-	}
-
-	.delete-account-dialog .dialog-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-	}
-
-	.delete-account-dialog .dialog-head h3 {
-		align-items: center;
-		display: flex;
-		font-size: 1rem;
-		gap: 0.4rem;
-		margin: 0;
-	}
-
-	.delete-account-dialog .dialog-hint {
-		color: var(--color-text-muted);
-		font-size: 0.85rem;
-		margin: 0.6rem 0;
 	}
 
 	.delete-account-warning {
