@@ -232,6 +232,10 @@
 		display: flex;
 		height: calc(100dvh - 4.5rem);
 		justify-content: center;
+		/* The stage is the positioning context for the overlaid arrows, so it must span the
+		   viewer. Without an explicit width it shrinks to its content and the arrows leave the
+		   viewport. */
+		width: 100%;
 		padding: 0 0.5rem max(1rem, env(safe-area-inset-bottom));
 		position: relative;
 		touch-action: pan-y;

@@ -60,6 +60,13 @@ UI; deviations need an explicit decision (e.g. in the PR description).
   (`--gap-dialog-head` between the header and the first block, `--gap-dialog-block` between
   blocks, `--gap-dialog-field` between a field label and its control) instead of per-screen
   values, so every dialog keeps the same rhythm.
+- **Actions never span the full width.** A button or link keeps its natural width; only long-form
+  content (inputs, selects, tables) spans the dialog. A full-width bar reads as a block, not as a
+  control, and it competes with the dialog's real primary action.
+- **Adjacent controls form one action row.** When a control is followed by another control, they
+  render side by side in a single row — never stacked as separate full-width bars. The row wraps on
+  a narrow dialog, and within it the primary control keeps the rightmost slot while secondary
+  controls sit to its left (a leading control such as an export link sits first).
 - Form fields inside modals share the page-wide field styling: rounded corners, light border,
   sans-serif inherited font, visible focus ring.
 

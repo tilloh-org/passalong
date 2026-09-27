@@ -396,8 +396,8 @@
 						<Icon name="alert-triangle" tone="danger" />
 						<span>{t('profile.deleteAccountWarning')}</span>
 					</div>
-					<div class="delete-account-export">
-						<p class="delete-account-export-hint">{t('profile.deleteAccountExportHint')}</p>
+					<p class="delete-account-export-hint">{t('profile.deleteAccountExportHint')}</p>
+					<div class="delete-account-actions dialog-actions">
 						<a
 							class="secondary delete-account-export-link"
 							href="/profile/export"
@@ -405,8 +405,6 @@
 							data-testid="export-account-archive"
 							><Icon name="download" size="sm" />{t('profile.downloadZipExport')}</a
 						>
-					</div>
-					<div class="delete-account-actions">
 						<button
 							type="button"
 							class="danger"
@@ -436,15 +434,6 @@
 						<Icon name="alert-triangle" tone="danger" />
 						<span>{t('profile.deleteAccountFinalBackupHint')}</span>
 					</div>
-					<div class="delete-account-export">
-						<a
-							class="secondary delete-account-export-link"
-							href="/profile/export"
-							download
-							data-testid="export-account-archive-final"
-							><Icon name="download" size="sm" />{t('profile.downloadZipExport')}</a
-						>
-					</div>
 					<form
 						method="POST"
 						action="?/deleteAccount"
@@ -468,7 +457,14 @@
 						{#if form?.deleteAccountError}
 							<p class="form-error" role="alert">{form.deleteAccountError}</p>
 						{/if}
-						<div class="delete-account-actions">
+						<div class="delete-account-actions dialog-actions">
+							<a
+								class="secondary delete-account-export-link"
+								href="/profile/export"
+								download
+								data-testid="export-account-archive-final"
+								><Icon name="download" size="sm" />{t('profile.downloadZipExport')}</a
+							>
 							<button
 								type="button"
 								class="secondary"
@@ -847,11 +843,6 @@
 		gap: var(--gap-action-row);
 	}
 
-	.delete-account-export {
-		display: grid;
-		gap: 0.35rem;
-	}
-
 	.delete-account-export-hint {
 		color: var(--color-text-muted);
 		font-size: 0.8rem;
@@ -1014,9 +1005,5 @@
 		}
 	}
 
-	.delete-account-actions {
-		display: flex;
-		gap: var(--gap-action-row);
-		justify-content: flex-end;
-	}
+	/* The action-row layout comes from the dialog shell's shared `.dialog-actions` rule. */
 </style>

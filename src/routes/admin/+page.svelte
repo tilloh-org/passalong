@@ -131,7 +131,7 @@
 				{#if form && 'accountIssueError' in form && form.accountIssueError}
 					<p class="form-error" role="alert">{form.accountIssueError}</p>
 				{/if}
-				<div class="account-create-actions">
+				<div class="account-create-actions dialog-actions">
 					<button type="submit" data-testid="create-account-submit">
 						<Icon name="plus" size="sm" />{t('admin.accountsCreate')}
 					</button>
@@ -318,7 +318,7 @@
 					required
 				/>
 			</label>
-			<div class="account-create-actions">
+			<div class="account-create-actions dialog-actions">
 				<button
 					type="submit"
 					class="danger"
@@ -597,11 +597,6 @@
 	.accounts-create-form label {
 		display: grid;
 		gap: 0.3rem;
-	}
-
-	.account-create-actions {
-		display: flex;
-		justify-content: flex-end;
 	}
 
 	.accounts-table {

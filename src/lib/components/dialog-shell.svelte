@@ -196,6 +196,45 @@
 	.dialog-body {
 		display: grid;
 		gap: var(--gap-dialog-block);
+		/*
+		 * A grid stretches its children to the column width, which turned every action in a
+		 * dialog into a full-width bar. Children keep their natural width by default; the few
+		 * blocks that genuinely need the full width opt in below.
+		 */
+		justify-items: start;
+	}
+
+	/*
+	 * Action rows: adjacent controls read as one row of options, never as stacked bars. The
+	 * primary control keeps the rightmost slot, secondary controls sit to its left.
+	 */
+	.dialog-body :global(.dialog-actions) {
+		align-items: center;
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--gap-action-row);
+		justify-content: flex-end;
+		width: 100%;
+	}
+
+	/* An action row that belongs to the flow of a sentence reads left-aligned. */
+	.dialog-body :global(.dialog-actions.is-leading) {
+		justify-content: flex-start;
+	}
+
+	/*
+	 * Long-form content spans the dialog; only controls keep their natural width. `max-width`
+	 * rather than `width` so a control that must stay compact (the shell's own close button)
+	 * is not stretched.
+	 */
+	.dialog-body :global(input),
+	.dialog-body :global(textarea),
+	.dialog-body :global(select),
+	.dialog-body :global(table),
+	.dialog-body :global(form),
+	.dialog-body :global(section),
+	.dialog-body :global(p) {
+		width: 100%;
 	}
 
 	/* A field label sits tightly above its control, everywhere. */
@@ -254,9 +293,15 @@
 		background: var(--scrim-viewer);
 	}
 
+	/*
+	 * The viewer lays out its own full-bleed stage. It must not inherit the modal's
+	 * shrink-to-content rule: a stage narrowed to its content pulls the absolutely positioned
+	 * nav arrows off-screen (measured: stage width 17 px instead of 390 px, next arrow at -35).
+	 */
 	.dialog-shell.fullscreen .dialog-body {
 		display: block;
 		height: 100%;
+		width: 100%;
 	}
 
 	.dialog-shell.fullscreen .dialog-head {
