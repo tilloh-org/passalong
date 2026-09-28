@@ -59,7 +59,15 @@ export async function hashPassword(password: string): Promise<string> {
  * @param {string} storedHash - The stored scrypt value.
  * @returns {Promise<boolean>} Whether the password is valid.
  */
-export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+export async function verifyPassword(
+	password: string,
+	storedHash: string | null
+): Promise<boolean> {
+	// An invited account carries no password until its code is consumed, and an
+	// account without a stored hash must simply never authenticate.
+	if (typeof storedHash !== 'string') {
+		return false;
+	}
 	const parsedHash = parsePasswordHash(storedHash);
 	if (!parsedHash || !isSafePasswordInput(password)) {
 		return false;

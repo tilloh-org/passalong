@@ -5,6 +5,7 @@
 <script lang="ts">
 	import BarList from '$lib/components/statistics/bar-list.svelte';
 	import ChartToggle from '$lib/components/statistics/chart-toggle.svelte';
+	import DialogShell from '$lib/components/dialog-shell.svelte';
 	import Icon from '$lib/components/icon.svelte';
 	import PieChart from '$lib/components/statistics/pie-chart.svelte';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
@@ -18,8 +19,8 @@
 	let proceedsChartType = $state<ChartType>('bars');
 	let salesChartType = $state<ChartType>('pie');
 	let expenseFormOpen = $state(false);
-	let editDialog: HTMLDialogElement | undefined = $state();
-	let expenseDialog: HTMLDialogElement | undefined = $state();
+	let editShell = $state<ReturnType<typeof DialogShell> | null>(null);
+	let expenseShell = $state<ReturnType<typeof DialogShell> | null>(null);
 	let editExpenseId = $state('');
 	let editExpenseLabel = $state('');
 	let editExpenseCategory = $state<ExpenseCategory>('fee');
@@ -72,12 +73,7 @@
 
 	/** Open the market-day edit dialog. */
 	function openEditDialog(): void {
-		editDialog?.showModal();
-	}
-
-	/** Close the market-day edit dialog. */
-	function closeEditDialog(): void {
-		editDialog?.close();
+		editShell?.open();
 	}
 
 	/**
@@ -91,12 +87,7 @@
 		editExpenseCategory = expense.category;
 		editExpenseAmount = formatPrice(expense.amountCents);
 		editExpenseDate = expense.expenseDate;
-		expenseDialog?.showModal();
-	}
-
-	/** Close the expense edit dialog. */
-	function closeExpenseDialog(): void {
-		expenseDialog?.close();
+		expenseShell?.open();
 	}
 </script>
 
@@ -400,18 +391,16 @@
 	</section>
 </main>
 
-<dialog
+<DialogShell
 	class="edit-dialog"
-	bind:this={editDialog}
-	aria-label={t('marketDays.edit')}
-	data-testid="market-days-edit-dialog"
+	bind:this={editShell}
+	ariaLabel={t('marketDays.edit')}
+	closeLabel={t('marketDays.cancel')}
+	testId="market-days-edit-dialog"
 >
-	<div class="dialog-head">
+	{#snippet header()}
 		<h2>{t('marketDays.editTitle')}</h2>
-		<button type="button" class="secondary" onclick={closeEditDialog}
-			>{t('marketDays.cancel')}</button
-		>
-	</div>
+	{/snippet}
 	<form method="POST" action="?/updateMarketDay" class="form-grid">
 		<input type="hidden" name="marketDayId" value={data.marketDay.id} />
 		<input type="hidden" name="returnTo" value={returnTo} />
@@ -459,20 +448,18 @@
 			<button type="submit"><Icon name="check" size="sm" />{t('marketDays.save')}</button>
 		</div>
 	</form>
-</dialog>
+</DialogShell>
 
-<dialog
+<DialogShell
 	class="edit-dialog"
-	bind:this={expenseDialog}
-	aria-label={t('expenses.edit')}
-	data-testid="expenses-edit-dialog"
+	bind:this={expenseShell}
+	ariaLabel={t('expenses.edit')}
+	closeLabel={t('marketDays.cancel')}
+	testId="expenses-edit-dialog"
 >
-	<div class="dialog-head">
+	{#snippet header()}
 		<h2>{t('expenses.edit')}</h2>
-		<button type="button" class="secondary" onclick={closeExpenseDialog}
-			>{t('marketDays.cancel')}</button
-		>
-	</div>
+	{/snippet}
 	<form method="POST" action="?/updateExpense" class="form-grid">
 		<input type="hidden" name="expenseId" value={editExpenseId} />
 		<input type="hidden" name="marketDayId" value={data.marketDay.id} />
@@ -515,7 +502,7 @@
 			>
 		</div>
 	</form>
-</dialog>
+</DialogShell>
 
 <style>
 	.market-day-detail-page {
@@ -745,22 +732,11 @@
 		margin: 1rem 0 0;
 		padding: 0.8rem;
 	}
-	.edit-dialog {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
-		color: var(--color-text);
+	:global(.edit-dialog) {
 		max-width: min(38rem, 92vw);
-		padding: 1.25rem;
 		width: 38rem;
 	}
-	.dialog-head {
-		align-items: center;
-		display: flex;
-		justify-content: space-between;
-	}
-	.dialog-head h2 {
+	:global(.edit-dialog .dialog-head h2) {
 		align-items: center;
 		color: var(--color-accent-strong);
 		display: flex;
@@ -770,7 +746,7 @@
 	}
 	.form-grid {
 		display: grid;
-		gap: 0.8rem;
+		gap: var(--gap-dialog-block);
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		margin-top: 1rem;
 	}

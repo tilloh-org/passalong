@@ -22,7 +22,7 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'chromium',
-			testIgnore: /instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts/,
+			testIgnore: /instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts/,
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4173',
@@ -37,6 +37,16 @@ export default defineConfig({
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4174'
+			}
+		},
+		{
+			// Account administration needs the first registration to be a known administrator, so
+			// it runs against its own fresh instance like the takeover and privacy projects.
+			name: 'admin-accounts',
+			testMatch: /admin-accounts\.spec\.ts/,
+			use: {
+				...devices['Desktop Chrome'],
+				baseURL: 'http://localhost:4176'
 			}
 		},
 		{
@@ -69,6 +79,13 @@ export default defineConfig({
 			command:
 				'rm -rf /tmp/passalong-e2e-privacy.sqlite* /tmp/passalong-e2e-privacy-media && ORIGIN=http://localhost:4175 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-privacy.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-privacy-media BODY_SIZE_LIMIT=256M PORT=4175 node build/index.js',
 			url: 'http://localhost:4175',
+			reuseExistingServer: !process.env.CI,
+			timeout: 120_000
+		},
+		{
+			command:
+				'rm -rf /tmp/passalong-e2e-accounts.sqlite* /tmp/passalong-e2e-accounts-media && ORIGIN=http://localhost:4176 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-accounts.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-accounts-media BODY_SIZE_LIMIT=256M PORT=4176 node build/index.js',
+			url: 'http://localhost:4176',
 			reuseExistingServer: !process.env.CI,
 			timeout: 120_000
 		}

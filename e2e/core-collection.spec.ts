@@ -703,6 +703,13 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('delete-account-dialog')).toBeHidden();
 		await page.getByTestId('delete-account-trigger').click();
 		await expect(page.getByTestId('delete-account-dialog')).toBeVisible();
+		// The warning step offers the export and never submits on its own.
+		await expect(page.getByTestId('export-account-archive')).toBeVisible();
+		await expect(page.getByTestId('delete-account-final-dialog')).toBeHidden();
+		await page.getByTestId('delete-account-continue').click();
+
+		// act — the final dialog is the only place that can delete, and only with the typed username
+		await expect(page.getByTestId('delete-account-final-dialog')).toBeVisible();
 		await expect(page.getByTestId('delete-account-submit')).toBeDisabled();
 		await page.getByTestId('delete-account-input').fill(winningAccount.username);
 		await expect(page.getByTestId('delete-account-submit')).toBeEnabled();

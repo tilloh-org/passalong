@@ -4,20 +4,25 @@ import { describe, expect, it } from 'vitest';
 
 const appStylesPath = resolve(process.cwd(), 'src/app.css');
 const lightboxPath = resolve(process.cwd(), 'src/lib/components/image-lightbox.svelte');
+const shellPath = resolve(process.cwd(), 'src/lib/components/dialog-shell.svelte');
 
 describe('photo viewer chrome', () => {
 	it('dims the page behind the viewer almost completely', () => {
-		// arrange
+		// arrange — the shell owns the full-screen scrim, because every viewer shares it
 		const source = readFileSync(lightboxPath, 'utf8');
+		const shell = readFileSync(shellPath, 'utf8');
 		const tokens = readFileSync(appStylesPath, 'utf8');
 
 		// act
-		const backdropRule = /\.lightbox::backdrop\s*\{([\s\S]*?)\}/.exec(source)?.[1] ?? '';
+		const backdropRule =
+			/\.dialog-shell\.fullscreen::backdrop\s*\{([\s\S]*?)\}/.exec(shell)?.[1] ?? '';
 		const scrimValue = /--scrim-viewer:\s*rgba\([^)]*?([\d.]+)\s*\);/.exec(tokens)?.[1];
+		const usesShell = /variant="fullscreen"/.test(source);
 
 		// assume — the viewer is the one surface where the page behind must be barely visible, so
 		// its scrim is near-opaque and its own token. The shared `--scrim` is a mild dim meant for
 		// the navigation drawer, where the page must stay readable.
+		expect(usesShell).toBe(true);
 		expect(backdropRule).toContain('background: var(--scrim-viewer);');
 		expect(scrimValue, 'a --scrim-viewer token must exist').toBeDefined();
 		expect(Number(scrimValue)).toBeGreaterThanOrEqual(0.9);

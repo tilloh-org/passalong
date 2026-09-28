@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import DialogShell from '$lib/components/dialog-shell.svelte';
 	import Icon from '$lib/components/icon.svelte';
 	import { t } from '$lib/i18n/index.svelte';
 	let { data, form } = $props();
@@ -16,7 +17,8 @@
 	let standIntroDraft = $state('');
 	let standIntroBaseline = $state('');
 	let deleteAccountDraft = $state('');
-	let deleteAccountDialog = $state<HTMLDialogElement | null>(null);
+	let deleteAccountShell = $state<ReturnType<typeof DialogShell> | null>(null);
+	let deleteAccountFinalShell = $state<ReturnType<typeof DialogShell> | null>(null);
 
 	$effect(() => {
 		standIntroBaseline = data.activeCollection?.standIntro ?? '';
@@ -61,14 +63,39 @@
 
 	function openDeleteAccountDialog(): void {
 		deleteAccountDraft = '';
-		if (!deleteAccountDialog?.open) {
-			deleteAccountDialog?.showModal();
+		if (!deleteAccountShell?.isOpen()) {
+			deleteAccountShell?.open();
+		}
+	}
+
+	/**
+	 * Advance from the warning step to the final confirmation step.
+	 *
+	 * The two-step flow is deliberate: the last dialog is the only place that submits,
+	 * so the irreversible action never sits behind a single click.
+	 *
+	 * @returns {void}
+	 */
+	function openDeleteAccountFinalDialog(): void {
+		deleteAccountDraft = '';
+		deleteAccountShell?.close();
+		if (!deleteAccountFinalShell?.isOpen()) {
+			deleteAccountFinalShell?.open();
 			queueMicrotask(() => {
-				deleteAccountDialog
-					?.querySelector<HTMLInputElement>('[data-testid="delete-account-input"]')
-					?.focus();
+				deleteAccountFinalShell?.focusTestId('delete-account-input');
 			});
 		}
+	}
+
+	/**
+	 * Step back from the final confirmation to the warning step.
+	 *
+	 * @returns {void}
+	 */
+	function returnToDeleteAccountWarning(): void {
+		deleteAccountDraft = '';
+		deleteAccountFinalShell?.close();
+		openDeleteAccountDialog();
 	}
 
 	async function copyStandLink(): Promise<void> {
@@ -348,20 +375,16 @@
 					</button>
 				</section>
 
-				<dialog
-					bind:this={deleteAccountDialog}
-					class="delete-account-dialog"
-					aria-labelledby="delete-account-dialog-title"
-					data-testid="delete-account-dialog"
+				<DialogShell
+					bind:this={deleteAccountShell}
+					labelledBy="delete-account-dialog-title"
+					testId="delete-account-dialog"
 				>
-					<div class="dialog-head">
+					{#snippet header()}
 						<h3 id="delete-account-dialog-title">
 							<Icon name="alert-triangle" tone="danger" />{t('profile.deleteAccountConfirmTitle')}
 						</h3>
-						<button type="button" class="secondary" onclick={() => deleteAccountDialog?.close()}
-							><Icon name="x" size="sm" />{t('profile.close')}</button
-						>
-					</div>
+					{/snippet}
 					<p class="dialog-hint">
 						{t('profile.deleteAccountDialogHint')}
 					</p>
@@ -373,8 +396,8 @@
 						<Icon name="alert-triangle" tone="danger" />
 						<span>{t('profile.deleteAccountWarning')}</span>
 					</div>
-					<div class="delete-account-export">
-						<p class="delete-account-export-hint">{t('profile.deleteAccountExportHint')}</p>
+					<p class="delete-account-export-hint">{t('profile.deleteAccountExportHint')}</p>
+					<div class="delete-account-actions dialog-actions">
 						<a
 							class="secondary delete-account-export-link"
 							href="/profile/export"
@@ -382,6 +405,34 @@
 							data-testid="export-account-archive"
 							><Icon name="download" size="sm" />{t('profile.downloadZipExport')}</a
 						>
+						<button
+							type="button"
+							class="danger"
+							data-testid="delete-account-continue"
+							onclick={() => openDeleteAccountFinalDialog()}
+							><Icon name="alert-triangle" size="sm" />{t('profile.deleteAccountNext')}</button
+						>
+					</div>
+				</DialogShell>
+
+				<DialogShell
+					bind:this={deleteAccountFinalShell}
+					labelledBy="delete-account-final-dialog-title"
+					testId="delete-account-final-dialog"
+				>
+					{#snippet header()}
+						<h3 id="delete-account-final-dialog-title">
+							<Icon name="alert-triangle" tone="danger" />{t('profile.deleteAccountFinalTitle')}
+						</h3>
+					{/snippet}
+					<p class="dialog-hint">{t('profile.deleteAccountFinalHint')}</p>
+					<div
+						class="delete-account-warning"
+						role="note"
+						aria-label={t('profile.deleteAccountWarningLabel')}
+					>
+						<Icon name="alert-triangle" tone="danger" />
+						<span>{t('profile.deleteAccountFinalBackupHint')}</span>
 					</div>
 					<form
 						method="POST"
@@ -406,16 +457,32 @@
 						{#if form?.deleteAccountError}
 							<p class="form-error" role="alert">{form.deleteAccountError}</p>
 						{/if}
-						<button
-							type="submit"
-							class="danger"
-							data-testid="delete-account-submit"
-							disabled={!deleteAccountReady}
-							aria-disabled={!deleteAccountReady}
-							><Icon name="trash" size="sm" />{t('profile.deleteAccountFinal')}</button
-						>
+						<div class="delete-account-actions dialog-actions">
+							<a
+								class="secondary delete-account-export-link"
+								href="/profile/export"
+								download
+								data-testid="export-account-archive-final"
+								><Icon name="download" size="sm" />{t('profile.downloadZipExport')}</a
+							>
+							<button
+								type="button"
+								class="secondary"
+								data-testid="delete-account-back"
+								onclick={() => returnToDeleteAccountWarning()}
+								>{t('profile.deleteAccountFinalBack')}</button
+							>
+							<button
+								type="submit"
+								class="danger"
+								data-testid="delete-account-submit"
+								disabled={!deleteAccountReady}
+								aria-disabled={!deleteAccountReady}
+								><Icon name="trash" size="sm" />{t('profile.deleteAccountFinal')}</button
+							>
+						</div>
 					</form>
-				</dialog>
+				</DialogShell>
 			</div>
 		</div>
 
@@ -700,27 +767,14 @@
 		justify-self: end;
 	}
 
-	.delete-account-dialog {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
+	/* Only the width hint is screen-scoped; the shell owns every other dialog rule. */
+	:global(.delete-account-dialog) {
 		max-width: min(32rem, 92vw);
-		padding: 1.25rem;
 		width: 32rem;
 	}
 
-	.delete-account-dialog::backdrop {
-		background: rgba(10, 20, 28, 0.6);
-	}
-
-	.dialog-head {
-		align-items: center;
-		display: flex;
-		gap: 0.75rem;
-		justify-content: space-between;
-	}
-
-	.dialog-head h3 {
+	/* The header row and its title live in the shell, so their styling crosses the boundary. */
+	:global(.delete-account-dialog .dialog-head h3) {
 		align-items: center;
 		display: flex;
 		font-size: 1.05rem;
@@ -728,25 +782,10 @@
 		margin: 0;
 	}
 
-	.dialog-head button.secondary {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		box-shadow: none;
-		color: var(--color-accent);
-		font-size: 0.85rem;
-		padding: 0.5rem 0.9rem;
-	}
-
-	.dialog-head button.secondary:hover {
-		background: var(--color-accent-soft);
-		transform: none;
-	}
-
-	.dialog-hint {
+	:global(.delete-account-dialog .dialog-hint) {
 		color: var(--color-text-muted);
 		font-size: 0.82rem;
 		line-height: 1.5;
-		margin: 0.25rem 0 0.75rem;
 	}
 
 	.delete-account-warning {
@@ -802,11 +841,6 @@
 	.import-panel form {
 		display: grid;
 		gap: var(--gap-action-row);
-	}
-
-	.delete-account-export {
-		display: grid;
-		gap: 0.35rem;
 	}
 
 	.delete-account-export-hint {
@@ -970,4 +1004,6 @@
 			grid-column: 2;
 		}
 	}
+
+	/* The action-row layout comes from the dialog shell's shared `.dialog-actions` rule. */
 </style>

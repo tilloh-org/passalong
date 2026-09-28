@@ -307,6 +307,20 @@ export interface AdminAccount extends SessionScope {
 	displayName: string;
 }
 
+export interface CreateAccountInvitationInput {
+	username: string;
+	displayName: string;
+}
+
+export interface AdminAccountEntry {
+	userId: string;
+	username: string;
+	displayName: string;
+	createdAt: string;
+	lastSignedInAt: string | null;
+	isInstanceAdmin: boolean;
+}
+
 export interface LoginAccount extends AdminAccount {
 	passwordHash: string;
 	passwordResetRequired?: true;
@@ -332,6 +346,13 @@ export interface CollectionRepository {
 	revokeSession(tokenHash: string): void;
 	revokeSessionsForUser(scope: SessionScope): void;
 	deleteAccount(scope: SessionScope): DeletedAccountArtifacts;
+	createAccountInvitation(
+		input: CreateAccountInvitationInput,
+		secretHash: string,
+		expiresAt: string
+	): AdminAccount;
+	listAccounts(): AdminAccountEntry[];
+	deleteAccountByAdmin(userId: string): DeletedAccountArtifacts;
 	transaction<T>(callback: () => T): T;
 	getLoginAttemptStatus(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
 	recordLoginFailure(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
@@ -723,52 +744,122 @@ export function createCollectionRepository(
 		},
 
 		deleteAccount(scope) {
+			return runImmediateTransaction(database, () => deleteAccountRows(database, scope));
+		},
+
+		/**
+		 * Create an account for an invited member without a password.
+		 *
+		 * The account receives its own household, so it is a data boundary of its own,
+		 * and no instance role. The caller passes the hash of a single-use invitation
+		 * code; the member sets their real password by consuming that code.
+		 *
+		 * @param {CreateAccountInvitationInput} input - Username and display name of the new account.
+		 * @param {string} secretHash - Hash of the single-use invitation code.
+		 * @param {string} expiresAt - ISO timestamp after which the code is rejected.
+		 * @returns {AdminAccount} The created account.
+		 */
+		createAccountInvitation(input, secretHash, expiresAt) {
+			const username = normalizeUsername(input.username);
+			const displayName = requireText(input.displayName, 'displayName');
+			const validatedSecretHash = requireText(secretHash, 'secretHash');
+			const validatedExpiry = requireText(expiresAt, 'expiresAt');
+			const tenantId = randomUUID();
+			const userId = randomUUID();
+			const createdAt = new Date().toISOString();
+
+			runImmediateTransaction(database, () => {
+				database
+					.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+					.run(tenantId, `${displayName}'s household`, createdAt);
+				database
+					.prepare(
+						`INSERT INTO users (id, tenant_id, username, display_name, password_hash, password_reset_required, created_at)
+						 VALUES (?, ?, ?, ?, NULL, 1, ?)`
+					)
+					.run(userId, tenantId, username, displayName, createdAt);
+				database
+					.prepare(
+						'INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+					)
+					.run(randomUUID(), userId, tenantId, validatedSecretHash, validatedExpiry, createdAt);
+			});
+
+			return { userId, tenantId, username, displayName };
+		},
+
+		/**
+		 * List every account for the instance administration.
+		 *
+		 * The sign-in timestamp is the newest session of the account, so the list needs
+		 * no extra column. Several sessions must not duplicate a row, hence the aggregate.
+		 *
+		 * @returns {AdminAccountEntry[]} Accounts ordered by username.
+		 */
+		listAccounts() {
+			const rows = database
+				.prepare(
+					`SELECT users.id AS user_id,
+					        users.username,
+					        users.display_name,
+					        users.created_at,
+					        MAX(sessions.created_at) AS last_signed_in_at,
+					        EXISTS(
+					          SELECT 1 FROM instance_roles
+					          WHERE instance_roles.user_id = users.id AND instance_roles.role = 'instance_admin'
+					        ) AS is_instance_admin
+					 FROM users
+					 LEFT JOIN sessions ON sessions.user_id = users.id AND sessions.tenant_id = users.tenant_id
+					 GROUP BY users.id
+					 ORDER BY users.username COLLATE NOCASE`
+				)
+				.all() as {
+				user_id: string;
+				username: string;
+				display_name: string;
+				created_at: string;
+				last_signed_in_at: string | null;
+				is_instance_admin: number;
+			}[];
+			return rows.map((row) => ({
+				userId: row.user_id,
+				username: row.username,
+				displayName: row.display_name,
+				createdAt: row.created_at,
+				lastSignedInAt: row.last_signed_in_at,
+				isInstanceAdmin: row.is_instance_admin === sqliteTrue
+			}));
+		},
+
+		/**
+		 * Delete an account on behalf of the instance administration.
+		 *
+		 * The instance administrator cannot be a target: removing the only administrative
+		 * account would leave the instance without access. The deletion itself is the same
+		 * routine as self-deletion, so owned data and media artifacts are reported alike.
+		 *
+		 * @param {string} userId - Identifier of the account to remove.
+		 * @returns {DeletedAccountArtifacts} Media keys that the caller must clear from storage.
+		 */
+		deleteAccountByAdmin(userId) {
+			const validatedUserId = requireText(userId, 'userId');
 			return runImmediateTransaction(database, () => {
-				const profile = database
-					.prepare('SELECT username, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?')
-					.get(scope.userId, scope.tenantId) as
-					{ username: string; avatar_storage_key: string | null } | undefined;
-				if (!profile) {
-					throw new Error('authenticated owner was not found');
+				const account = database
+					.prepare('SELECT id, tenant_id FROM users WHERE id = ?')
+					.get(validatedUserId) as { id: string; tenant_id: string } | undefined;
+				if (!account) {
+					throw new Error('account not found');
 				}
-				const itemImageStorageKeys = (
-					database
-						.prepare(
-							`SELECT DISTINCT item_images.storage_key
-							 FROM item_images
-							 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
-							 WHERE items.owner_id = ? AND items.tenant_id = ?`
-						)
-						.all(scope.userId, scope.tenantId) as { storage_key: string }[]
-				).map(({ storage_key }) => storage_key);
-				database
-					.prepare("DELETE FROM login_attempts WHERE scope = 'username' AND subject = ?")
-					.run(profile.username);
-				database
-					.prepare('DELETE FROM items WHERE owner_id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				database
-					.prepare('DELETE FROM market_days WHERE owner_id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				database
-					.prepare('DELETE FROM expenses WHERE owner_id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				database
-					.prepare('DELETE FROM collections WHERE owner_id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				database
-					.prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				const remainingUsers = database
-					.prepare('SELECT 1 FROM users WHERE tenant_id = ? LIMIT 1')
-					.get(scope.tenantId);
-				if (!remainingUsers) {
-					database.prepare('DELETE FROM tenants WHERE id = ?').run(scope.tenantId);
+				const holdsInstanceRole = database
+					.prepare('SELECT 1 FROM instance_roles WHERE user_id = ?')
+					.get(validatedUserId);
+				if (holdsInstanceRole) {
+					throw new Error('the instance administrator cannot be deleted');
 				}
-				return {
-					avatarStorageKey: profile.avatar_storage_key,
-					itemImageStorageKeys
-				};
+				return deleteAccountRows(database, {
+					userId: account.id,
+					tenantId: account.tenant_id
+				});
 			});
 		},
 
@@ -2502,6 +2593,60 @@ function isEmptyDatabase(database: Database.Database): boolean {
  * @param {Database.Database} database - The SQLite connection to initialize.
  * @returns {void}
  */
+/**
+ * Remove one account with everything it owns, inside a caller-held transaction.
+ *
+ * Self-deletion and administrator deletion must not drift apart, so both paths run
+ * this routine. Empty households are removed as well: a tenant without users is
+ * unreachable and would only linger. Storage keys are returned rather than deleted,
+ * because media lives outside the database.
+ *
+ * @param {Database.Database} database - The open SQLite connection.
+ * @param {SessionScope} scope - The account and household to remove.
+ * @returns {DeletedAccountArtifacts} Media keys the caller must clear from storage.
+ * @throws {Error} When the account does not exist.
+ */
+function deleteAccountRows(
+	database: Database.Database,
+	scope: SessionScope
+): DeletedAccountArtifacts {
+	const profile = database
+		.prepare('SELECT username, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?')
+		.get(scope.userId, scope.tenantId) as
+		{ username: string; avatar_storage_key: string | null } | undefined;
+	if (!profile) {
+		throw new Error('authenticated owner was not found');
+	}
+	const itemImageStorageKeys = (
+		database
+			.prepare(
+				`SELECT DISTINCT item_images.storage_key
+				 FROM item_images
+				 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+				 WHERE items.owner_id = ? AND items.tenant_id = ?`
+			)
+			.all(scope.userId, scope.tenantId) as { storage_key: string }[]
+	).map(({ storage_key }) => storage_key);
+	database
+		.prepare("DELETE FROM login_attempts WHERE scope = 'username' AND subject = ?")
+		.run(profile.username);
+	for (const table of ['items', 'market_days', 'expenses', 'collections'] as const) {
+		database
+			.prepare(`DELETE FROM ${table} WHERE owner_id = ? AND tenant_id = ?`)
+			.run(scope.userId, scope.tenantId);
+	}
+	database
+		.prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?')
+		.run(scope.userId, scope.tenantId);
+	const remainingUsers = database
+		.prepare('SELECT 1 FROM users WHERE tenant_id = ? LIMIT 1')
+		.get(scope.tenantId);
+	if (!remainingUsers) {
+		database.prepare('DELETE FROM tenants WHERE id = ?').run(scope.tenantId);
+	}
+	return { avatarStorageKey: profile.avatar_storage_key, itemImageStorageKeys };
+}
+
 function createSchema(database: Database.Database): void {
 	database.exec(`
 		CREATE TABLE IF NOT EXISTS tenants (

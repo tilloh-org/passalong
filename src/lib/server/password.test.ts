@@ -85,7 +85,9 @@ describe('password hashing', () => {
 			'scrypt$v1$1048576$8$1$MTIzNDU2Nzg5MDEyMzQ1Ng$UJxyDTFa1s4wRzUMU2Q1Qj_CoTXQjdhiIsfZa32CA8_6pMzwKjZqWTKM36GAEhU2gCTRX70bXUUeJUATz6W8ww',
 			'scrypt$v1$16384$8$1$not_base64!$also-not-base64!',
 			'scrypt$not_base64!$also-not-base64!',
-			'argon2$anything'
+			'argon2$anything',
+			// An invited account carries no password until the code is consumed.
+			''
 		];
 
 		// act
