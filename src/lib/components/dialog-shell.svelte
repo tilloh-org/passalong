@@ -17,10 +17,6 @@
 	 *   the page with the much darker `--scrim-viewer` and paints no card, because anything else
 	 *   on screen competes with the content. Its close control floats over the content, and a
 	 *   caller that needs its own top bar (a counter, a title) passes `bar`.
-	 *
-	 * Spacing is token-driven: `--gap-dialog-head` between the header row and the body,
-	 * `--gap-dialog-block` between body blocks, `--gap-dialog-field` between a field label and
-	 * its control.
 	 */
 
 	/** The two jobs a dialog can do; see the component note above. */
@@ -101,19 +97,6 @@
 	}
 
 	/**
-	 * Focus the first control inside the dialog body.
-	 *
-	 * @returns {void}
-	 */
-	export function focusFirstControl(): void {
-		dialog
-			?.querySelector<HTMLElement>(
-				'.dialog-body input, .dialog-body select, .dialog-body textarea, .dialog-body button'
-			)
-			?.focus();
-	}
-
-	/**
 	 * Focus a control by its test id, for dialogs that open on a specific field.
 	 *
 	 * @param {string} testIdValue - The `data-testid` of the control to focus.
@@ -181,7 +164,6 @@
 		background: var(--scrim);
 	}
 
-	/* The header row and the blocks below it share one rhythm for every dialog. */
 	.dialog-head {
 		align-items: center;
 		display: flex;
@@ -204,10 +186,6 @@
 		justify-items: start;
 	}
 
-	/*
-	 * Action rows: adjacent controls read as one row of options, never as stacked bars. The
-	 * primary control keeps the rightmost slot, secondary controls sit to its left.
-	 */
 	.dialog-body :global(.dialog-actions) {
 		align-items: center;
 		display: flex;
@@ -217,16 +195,10 @@
 		width: 100%;
 	}
 
-	/* An action row that belongs to the flow of a sentence reads left-aligned. */
 	.dialog-body :global(.dialog-actions.is-leading) {
 		justify-content: flex-start;
 	}
 
-	/*
-	 * Long-form content spans the dialog; only controls keep their natural width. `max-width`
-	 * rather than `width` so a control that must stay compact (the shell's own close button)
-	 * is not stretched.
-	 */
 	.dialog-body :global(input),
 	.dialog-body :global(textarea),
 	.dialog-body :global(select),
@@ -237,7 +209,6 @@
 		width: 100%;
 	}
 
-	/* A field label sits tightly above its control, everywhere. */
 	.dialog-body :global(label) {
 		display: grid;
 		gap: var(--gap-dialog-field);
@@ -275,7 +246,6 @@
 		outline-offset: 2px;
 	}
 
-	/* The full-screen viewer hides the page instead of dimming it, and paints no card. */
 	.dialog-shell.fullscreen {
 		background: transparent;
 		border: none;
@@ -311,10 +281,6 @@
 		z-index: 2;
 	}
 
-	/*
-	 * A viewer label repeats nothing, so the glyph alone is enough on narrow screens where the
-	 * bar already carries text.
-	 */
 	@media (max-width: 30rem) {
 		.dialog-shell.fullscreen .dialog-close-label {
 			display: none;
