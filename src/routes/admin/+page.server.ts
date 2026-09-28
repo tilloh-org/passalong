@@ -4,6 +4,7 @@ import { getCollectionRepository } from '$lib/server/repository';
 import { getDatabasePath } from '$lib/server/repository';
 import { getMediaRoot } from '$lib/server/media-root';
 import { restoreInstanceBackup } from '$lib/server/backup';
+import { removeStoredMedia } from '$lib/server/media-storage';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
 import { writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
@@ -26,6 +27,11 @@ const minutesPerHour = 60;
 const passwordResetLifetimeHours = 1;
 const passwordResetLifetimeMilliseconds =
 	passwordResetLifetimeHours * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
+// An invitation waits for a person the administrator has to reach, so it lives longer
+// than a self-service reset that the account holder triggers themselves.
+const accountInvitationLifetimeHours = 24;
+const accountInvitationLifetimeMilliseconds =
+	accountInvitationLifetimeHours * minutesPerHour * secondsPerMinute * millisecondsPerSecond;
 
 /**
  * Load instance administration data for instance admins only.
@@ -50,7 +56,7 @@ export const load: PageServerLoad = ({ cookies, url }) => {
 	if (scope && !getCollectionRepository().isInstanceAdmin(scope)) {
 		redirect(httpStatus.seeOther, '/');
 	}
-	return {};
+	return { accounts: getCollectionRepository().listAccounts() };
 };
 
 export const actions: Actions = {
@@ -87,6 +93,75 @@ export const actions: Actions = {
 		} catch (error) {
 			return fail(httpStatus.badRequest, { passwordResetIssueError: getErrorMessage(error) });
 		}
+	},
+
+	createAccount: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope || !getCollectionRepository().isInstanceAdmin(scope)) {
+			return fail(httpStatus.unauthorized, {
+				accountIssueError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
+		}
+
+		try {
+			const formData = await request.formData();
+			const invitationSecret = createSessionToken();
+			const account = getCollectionRepository().createAccountInvitation(
+				{
+					username: getFormText(formData, 'username'),
+					displayName: getFormText(formData, 'displayName')
+				},
+				hashSessionToken(invitationSecret),
+				new Date(Date.now() + accountInvitationLifetimeMilliseconds).toISOString()
+			);
+			return { createdAccount: account.username, invitationSecret };
+		} catch (error) {
+			return fail(httpStatus.badRequest, { accountIssueError: getErrorMessage(error) });
+		}
+	},
+
+	deleteAccountByAdmin: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope || !getCollectionRepository().isInstanceAdmin(scope)) {
+			return fail(httpStatus.unauthorized, {
+				accountIssueError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
+		}
+
+		const formData = await request.formData();
+		const accountId = getFormText(formData, 'accountId');
+		const confirmation = getFormText(formData, 'confirmUsername');
+		const target = getCollectionRepository()
+			.listAccounts()
+			.find((account) => account.userId === accountId);
+		if (!target) {
+			return fail(httpStatus.notFound, { accountIssueError: 'Das Konto wurde nicht gefunden.' });
+		}
+		if (confirmation.trim().toLowerCase() !== target.username.toLowerCase()) {
+			return fail(httpStatus.badRequest, {
+				accountIssueError: 'Bitte gib den Benutzernamen zur Bestätigung ein.'
+			});
+		}
+
+		try {
+			const artifacts = getCollectionRepository().deleteAccountByAdmin(accountId);
+			for (const storageKey of [
+				...artifacts.itemImageStorageKeys,
+				artifacts.avatarStorageKey
+			].filter((value): value is string => Boolean(value))) {
+				await removeStoredMedia(getMediaRoot(), storageKey);
+			}
+		} catch (error) {
+			return fail(httpStatus.badRequest, { accountIssueError: getErrorMessage(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/admin');
 	},
 
 	restoreBackup: async ({ cookies, request, url }) => {

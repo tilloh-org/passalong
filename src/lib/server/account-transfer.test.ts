@@ -5,18 +5,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionRepository, type SessionScope } from '$lib/server/collection-repository';
 import { createAccountExport, importAccountExport } from '$lib/server/account-transfer';
 import { saveUploadedImage } from '$lib/server/media-storage';
+import sharp from 'sharp';
 import { parseZip } from '$lib/server/backup';
 
 const temporaryDirectories: string[] = [];
-const testPngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
 /**
- * Build a minimal valid PNG payload for transfer tests.
+ * Build a real, decodable PNG payload for transfer tests.
  *
- * @returns {Buffer} PNG bytes with a valid signature.
+ * @returns {Promise<Buffer>} PNG bytes.
  */
-function buildTestPng(): Buffer {
-	return Buffer.concat([testPngHeader, Buffer.from('test-png-payload')]);
+async function buildTestPng(): Promise<Buffer> {
+	return sharp({ create: { width: 4, height: 4, channels: 3, background: { r: 9, g: 9, b: 9 } } })
+		.png()
+		.toBuffer();
 }
 
 /**
@@ -83,7 +84,7 @@ describe('account transfer archives', () => {
 		const sourceImageKey = await saveUploadedImage(
 			sourceFixture.mediaRoot,
 			'image/png',
-			buildTestPng()
+			await buildTestPng()
 		);
 		const sourceImage = sourceFixture.repository.addItemImage(
 			sourceItem.id,
@@ -106,7 +107,7 @@ describe('account transfer archives', () => {
 		const targetAvatarKey = await saveUploadedImage(
 			targetFixture.mediaRoot,
 			'image/png',
-			buildTestPng()
+			await buildTestPng()
 		);
 		targetFixture.repository.setProfileAvatar(targetFixture.scope, targetAvatarKey);
 		const targetCollection = targetFixture.repository.createCollection(

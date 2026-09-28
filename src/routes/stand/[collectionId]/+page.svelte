@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { t } from '$lib/i18n/index.svelte';
+	import DialogShell from '$lib/components/dialog-shell.svelte';
+	import Icon from '$lib/components/icon.svelte';
+	import TileImage from '$lib/components/tile-image.svelte';
 	import { getFavorites, pruneFavorites, toggleFavorite } from '$lib/stand-favorites.svelte';
 	import ItemFilterForm from '$lib/components/item-filter-form.svelte';
 
@@ -61,7 +64,7 @@
 			.filter((item) => item !== undefined)
 	);
 
-	let favoritesDialog: HTMLDialogElement | undefined = $state();
+	let favoritesShell = $state<ReturnType<typeof DialogShell> | null>(null);
 </script>
 
 <svelte:head>
@@ -110,11 +113,7 @@
 				<div class="tile" class:reserved={item.reservedAt} data-testid="stand-item">
 					<div class="img" class:has-photo={item.images.some((image) => image.isCover)}>
 						{#each item.images.filter((image) => image.isCover) as cover (cover.storageKey)}
-							<img
-								src={`/media/${encodeURIComponent(cover.storageKey)}`}
-								alt={item.title}
-								loading="lazy"
-							/>
+							<TileImage storageKey={cover.storageKey} alt={item.title} />
 						{/each}
 						{#if !item.images.some((image) => image.isCover)}
 							{item.title.slice(0, 1).toUpperCase()}
@@ -126,9 +125,7 @@
 						{/if}
 						{#if item.images.length > 1}
 							<span class="photo-count" data-testid="stand-item-photo-count">
-								<svg class="icon" aria-hidden="true" focusable="false">
-									<use href="#icon-photo" />
-								</svg>
+								<Icon name="photo" size="sm" />
 								{item.images.length}
 							</span>
 						{/if}
@@ -141,9 +138,7 @@
 							type="button"
 							onclick={() => onToggleFavorite(item.id)}
 						>
-							<svg class="icon" aria-hidden="true" focusable="false">
-								<use href={isFavorite(item.id) ? '#icon-heart-filled' : '#icon-heart-outline'} />
-							</svg>
+							<Icon name={isFavorite(item.id) ? 'heart-filled' : 'heart'} />
 						</button>
 					</div>
 					<a
@@ -187,13 +182,13 @@
 	</footer>
 </main>
 
-<dialog
+<DialogShell
 	class="favorites-dialog"
-	bind:this={favoritesDialog}
-	aria-label={t('stand.favoritesTitle')}
-	data-testid="favorites-dialog"
+	bind:this={favoritesShell}
+	ariaLabel={t('stand.favoritesTitle')}
+	testId="favorites-dialog"
 >
-	<div class="dialog-head">
+	{#snippet header()}
 		<div class="dialog-brand">
 			<div class="brand-avatar" aria-hidden="true">
 				{data.stand.collectionName.slice(0, 1).toUpperCase()}
@@ -205,10 +200,7 @@
 				</p>
 			</div>
 		</div>
-		<button type="button" class="dialog-close" onclick={() => favoritesDialog?.close()}>
-			{t('stand.favoritesClose')}
-		</button>
-	</div>
+	{/snippet}
 	{#if favoriteItems.length}
 		<div class="favorites-grid" data-testid="favorites-grid">
 			{#each favoriteItems as item (item.id)}
@@ -229,19 +221,17 @@
 	{:else}
 		<p class="favorites-empty" data-testid="favorites-empty">{t('stand.favoritesEmpty')}</p>
 	{/if}
-</dialog>
+</DialogShell>
 
 {#if data.stand.items.length}
 	<div class="favorites-bar" data-testid="favorites-bar">
 		<button
 			type="button"
-			onclick={() => favoritesDialog?.showModal()}
+			onclick={() => favoritesShell?.open()}
 			aria-label={t('stand.favoritesOpen')}
 			data-testid="favorites-bar-trigger"
 		>
-			<svg class="icon" aria-hidden="true" focusable="false">
-				<use href={favoriteIds.length ? '#icon-heart-filled' : '#icon-heart-outline'} />
-			</svg>
+			<Icon name={favoriteIds.length ? 'heart-filled' : 'heart'} size="lg" />
 			{t('stand.favoritesTitle')}
 			{#if favoriteIds.length}
 				<span class="favorites-badge" data-testid="favorites-badge">{favoriteIds.length}</span>
@@ -366,7 +356,7 @@
 		color: inherit;
 	}
 
-	.tile .img img {
+	.tile .img :global(img) {
 		display: block;
 		height: 100%;
 		inset: 0;
@@ -396,11 +386,6 @@
 		z-index: 2;
 	}
 
-	.photo-count .icon {
-		height: 0.85rem;
-		width: 0.85rem;
-	}
-
 	.favorite-toggle {
 		align-items: center;
 		background: var(--glass);
@@ -418,11 +403,6 @@
 		transition: all 0.25s ease;
 		width: 2.2rem;
 		z-index: 2;
-	}
-
-	.favorite-toggle .icon {
-		height: 1.15rem;
-		width: 1.15rem;
 	}
 
 	.favorite-toggle:hover {
@@ -587,11 +567,6 @@
 		outline-offset: 2px;
 	}
 
-	.favorites-bar .icon {
-		height: 1.15rem;
-		width: 1.15rem;
-	}
-
 	.favorites-badge {
 		align-items: center;
 		background: var(--color-accent);
@@ -605,33 +580,20 @@
 		padding: 0 6px;
 	}
 
-	.favorites-dialog {
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
+	/* The shell owns surface, backdrop, spacing and the close control. Only the brand
+	   block and the width hint are screen-scoped. */
+	:global(.favorites-dialog) {
 		max-width: min(34rem, 92vw);
-		padding: 1.25rem;
 		width: 34rem;
 	}
 
-	.favorites-dialog::backdrop {
-		background: var(--scrim);
-	}
-
-	.favorites-dialog .dialog-head {
+	:global(.favorites-dialog .dialog-brand) {
 		align-items: center;
 		display: flex;
-		justify-content: space-between;
-		margin-bottom: 0.75rem;
+		gap: var(--gap-dialog-head);
 	}
 
-	.favorites-dialog .dialog-brand {
-		align-items: center;
-		display: flex;
-		gap: 10px;
-	}
-
-	.favorites-dialog .brand-avatar {
+	:global(.favorites-dialog .brand-avatar) {
 		align-items: center;
 		background: var(--color-surface);
 		border: 3px solid var(--color-border);
@@ -645,38 +607,16 @@
 		width: 44px;
 	}
 
-	.favorites-dialog .dialog-head h3 {
+	:global(.favorites-dialog .dialog-head h3) {
 		color: var(--color-accent-strong);
 		font-size: 1.1rem;
 		margin: 0;
 	}
 
-	.favorites-dialog .brand-stand {
+	:global(.favorites-dialog .brand-stand) {
 		color: var(--color-text-muted);
 		font-size: 0.8rem;
-		margin: 2px 0 0;
-	}
-
-	.favorites-dialog .dialog-close {
-		background: none;
-		border: 1px solid var(--color-border);
-		border-radius: 999px;
-		color: var(--color-accent);
-		cursor: pointer;
-		font: inherit;
-		font-size: 0.85rem;
-		font-weight: 600;
-		padding: 6px 14px;
-		transition: all 0.25s ease;
-	}
-
-	.favorites-dialog .dialog-close:hover {
-		background: var(--color-accent-soft);
-	}
-
-	.favorites-dialog .dialog-close:focus-visible {
-		outline: 2px solid var(--focus-ring);
-		outline-offset: 2px;
+		margin: 0;
 	}
 
 	.favorites-grid {

@@ -70,6 +70,8 @@ test.describe('Public stand page', () => {
 			await page.getByLabel('Name der Sammlung').fill('Flohmarkt-Stand');
 			await page.getByRole('button', { name: 'Sammlung anlegen' }).click();
 		} else {
+			// A retry runs against the same database, so the collection may already exist. Creating
+			// it again would leave two identically named entries and make the switcher ambiguous.
 			await page.request.post('/?/createCollection', {
 				form: { collectionName: 'Flohmarkt-Stand' },
 				headers: { Origin: 'http://localhost:4173' }
@@ -78,6 +80,7 @@ test.describe('Public stand page', () => {
 			await page
 				.getByTestId('collection-switcher')
 				.getByRole('link', { name: 'Flohmarkt-Stand' })
+				.first()
 				.click();
 		}
 
@@ -103,6 +106,33 @@ test.describe('Public stand page', () => {
 		await expect(page).toHaveURL(/\/items\//);
 		const ownerItemPath = new URL(page.url()).pathname;
 		const itemId = ownerItemPath.split('/').at(-1)!;
+
+		// act — the owner gives the vase two photos, so the buyer gallery has something to show.
+		// A retry against the reused database finds them already stored and must not add more.
+		const vaseImageCount = await page
+			.getByTestId('images-dialog-trigger')
+			.evaluate((trigger) => Number(/\((\d+)\)/.exec(trigger.textContent ?? '')?.[1] ?? 0));
+		if (vaseImageCount < 2) {
+			await page.getByTestId('images-dialog-trigger').click();
+			await expect(page.getByTestId('images-dialog')).toBeVisible();
+			const galleryPng = Buffer.from(
+				'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+				'base64'
+			);
+			const galleryPngDetail = Buffer.from(
+				'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/AAAMBAQAY3Y2wAAAAAElFTkSuQmCC',
+				'base64'
+			);
+			await page.getByTestId('item-image-input').setInputFiles([
+				{ name: 'vase.png', mimeType: 'image/png', buffer: galleryPng },
+				{ name: 'vase-detail.png', mimeType: 'image/png', buffer: galleryPngDetail }
+			]);
+			await page.getByRole('button', { name: 'Foto speichern' }).click();
+		}
+
+		// assume — two photos are stored against the item; the dialog closed itself after the
+		// upload redirect, so the count is read from the trigger on the page
+		await expect(page.getByTestId('images-dialog-trigger')).toContainText('2');
 
 		// act — the owner follows the neutral QR route
 		await page.goto(`/q/${itemId}`);
@@ -184,11 +214,12 @@ test.describe('Public stand page', () => {
 		// assume
 		expect(unknownResponse.status()).toBe(404);
 
-		// act — a buyer opens the public item detail page from the tile
-		await anonymousPage.getByTestId('stand-item').first().locator('.tile-link').click();
+		// act — a buyer opens the photographed item's public detail page from its tile
+		const photographedCard = anonymousPage.getByTestId('stand-item').filter({ hasText: 'Vase' });
+		await photographedCard.locator('.tile-link').click();
 		await expect(anonymousPage.getByTestId('stand-item-detail')).toBeVisible();
 		await expect(anonymousPage.getByTestId('stand-item-hint')).toContainText('Flohmarkt-Stand');
-		await expect(anonymousPage.locator('.item-title')).toHaveText(firstCardTitle!);
+		await expect(anonymousPage.locator('.item-title')).toHaveText('Vase');
 		await expect(anonymousPage.locator('.back-link')).toBeVisible();
 		const itemNotFound = await anonymousPage.request.get(
 			'/stand/00000000-0000-0000-0000-000000000000/00000000-0000-0000-0000-000000000001'
@@ -196,6 +227,86 @@ test.describe('Public stand page', () => {
 
 		// assume — unknown collection/item ids stay 404 on the public detail page
 		expect(itemNotFound.status()).toBe(404);
+
+		// act — the buyer opens the gallery on a phone-sized viewport
+		await anonymousPage.setViewportSize({ width: 390, height: 844 });
+		const galleryStrip = anonymousPage.getByTestId('stand-item-gallery');
+		const galleryThumbs = anonymousPage.getByTestId('stand-item-thumb');
+		await expect(galleryStrip).toBeVisible();
+		await expect(galleryThumbs).toHaveCount(2);
+
+		// assume — no thumbnail overflows the viewport, which is what a sideways-scrolling strip
+		// would otherwise do on a narrow screen
+		const thumbOverflow = await galleryStrip.evaluate((strip) => {
+			const bounds = strip.getBoundingClientRect();
+			return [...strip.querySelectorAll('button')].some((button) => {
+				const box = button.getBoundingClientRect();
+				return box.right > bounds.right + 1 || box.left < bounds.left - 1;
+			});
+		});
+		expect(thumbOverflow).toBe(false);
+
+		// act — the buyer zooms into the second photo
+		await galleryThumbs.nth(1).click();
+
+		// assume — every viewer control is reachable on a phone; a control rendered outside the
+		// viewport cannot be tapped and looks like a missing button
+		for (const controlTestId of ['lightbox-close', 'lightbox-previous', 'lightbox-next']) {
+			const box = await anonymousPage.getByTestId(controlTestId).boundingBox();
+			expect(box, `${controlTestId} must be rendered`).not.toBeNull();
+			expect(box!.x, `${controlTestId} must start inside the viewport`).toBeGreaterThanOrEqual(0);
+			expect(
+				box!.x + box!.width,
+				`${controlTestId} must end inside the viewport`
+			).toBeLessThanOrEqual(390);
+		}
+
+		// assume — the viewer opens on that photo and reports the position in the gallery
+		const lightbox = anonymousPage.getByTestId('item-lightbox');
+		await expect(lightbox).toBeVisible();
+		await expect(anonymousPage.getByTestId('lightbox-counter')).toHaveText('Foto 2 von 2');
+		await expect(anonymousPage.getByTestId('lightbox-image')).toBeVisible();
+
+		// act — arrow keys and the on-screen buttons move through the gallery, wrapping at the end
+		await anonymousPage.keyboard.press('ArrowRight');
+		await expect(anonymousPage.getByTestId('lightbox-counter')).toHaveText('Foto 1 von 2');
+		await anonymousPage.getByTestId('lightbox-previous').click();
+		await expect(anonymousPage.getByTestId('lightbox-counter')).toHaveText('Foto 2 von 2');
+
+		// act — a swipe to the left advances, a vertical drag does not
+		const stage = anonymousPage.locator('.lightbox-stage');
+		await stage.dispatchEvent('touchstart', {
+			touches: [{ clientX: 300, clientY: 400, identifier: 1 }],
+			changedTouches: [{ clientX: 300, clientY: 400, identifier: 1 }]
+		});
+		await stage.dispatchEvent('touchend', {
+			touches: [],
+			changedTouches: [{ clientX: 330, clientY: 520, identifier: 1 }]
+		});
+
+		// assume — the mostly vertical drag left the photo where it was
+		await expect(anonymousPage.getByTestId('lightbox-counter')).toHaveText('Foto 2 von 2');
+
+		// act — a deliberate horizontal swipe advances
+		await stage.dispatchEvent('touchstart', {
+			touches: [{ clientX: 300, clientY: 400, identifier: 1 }],
+			changedTouches: [{ clientX: 300, clientY: 400, identifier: 1 }]
+		});
+		await stage.dispatchEvent('touchend', {
+			touches: [],
+			changedTouches: [{ clientX: 180, clientY: 410, identifier: 1 }]
+		});
+
+		// assume — one image further, wrapped back to the first
+		await expect(anonymousPage.getByTestId('lightbox-counter')).toHaveText('Foto 1 von 2');
+
+		// act — the buyer closes the viewer
+		await anonymousPage.getByTestId('lightbox-close').click();
+
+		// assume — the viewer is gone and the gallery is still there
+		await expect(lightbox).toBeHidden();
+		await expect(galleryStrip).toBeVisible();
+		await anonymousPage.setViewportSize({ width: 1280, height: 900 });
 
 		// act — anonymous access to an unknown media key
 		const unknownMediaResponse = await anonymousPage.request.get('/media/not-a-real-key.png');
@@ -216,6 +327,27 @@ test.describe('Public stand page', () => {
 		// assume — the reset link clears the filters
 		await anonymousPage.getByTestId('stand-filter-reset').click();
 		await expect(anonymousPage.getByTestId('stand-item')).toHaveCount(2);
+
+		// act — the public handle must not be the internal collection id
+		const publicHandle = standPath.replace(/^.*\/stand\//, '');
+		// The owner's own pages still address the collection by its internal id; read it from the
+		// hidden field so the counter-check compares real values instead of assuming one.
+		await page.goto('/');
+		const internalCollectionId = await page
+			.locator('input[name="collectionId"]')
+			.first()
+			.getAttribute('value');
+		const internalIdResponse = await anonymousPage.request.get(
+			`/stand/${encodeURIComponent(internalCollectionId)}`
+		);
+		const publicHandleResponse = await anonymousPage.request.get(
+			`/stand/${encodeURIComponent(publicHandle)}`
+		);
+
+		// assume — only the opaque handle opens the stand, the internal row id stays 404
+		expect(publicHandle).not.toBe(internalCollectionId);
+		expect(publicHandleResponse.status()).toBe(200);
+		expect(internalIdResponse.status()).toBe(404);
 
 		// assume — category filter restricts the list
 		await anonymousPage.goto(`${standPath}?category=clothing`);

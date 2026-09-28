@@ -220,6 +220,9 @@ interface ZipEntry {
 }
 
 const localFileHeaderSignature = 0x04034b50;
+
+/** The only supported ZIP compression method: stored (uncompressed). */
+const storedCompressionMethod = 0;
 const localFileHeaderFixedLength = 30;
 const tamperedArchiveMessage = 'archive is not a valid backup';
 
@@ -240,8 +243,13 @@ export function hasValidEndOfCentralDirectory(payload: Buffer): boolean {
 /**
  * Parse a store-method ZIP archive into entry offsets.
  *
+ * Only stored (uncompressed) entries are supported. A compressed entry is rejected rather than read:
+ * its payload length would not be its content length, so reading it "successfully" would mean
+ * trusting a declared uncompressed size instead of the bytes actually present.
+ *
  * @param {Buffer} payload - Archive bytes.
  * @returns {Map<string, ZipEntry>} Entries keyed by name.
+ * @throws {Error} If an entry declares a compression method other than "stored".
  */
 export function parseZip(payload: Buffer): Map<string, ZipEntry> {
 	const entries = new Map<string, ZipEntry>();
@@ -249,6 +257,10 @@ export function parseZip(payload: Buffer): Map<string, ZipEntry> {
 	while (offset + localFileHeaderFixedLength <= payload.length) {
 		if (payload.readUInt32LE(offset) !== localFileHeaderSignature) {
 			break;
+		}
+		const compressionMethod = payload.readUInt16LE(offset + 8);
+		if (compressionMethod !== storedCompressionMethod) {
+			throw new Error(`archive entry uses the unsupported compression method ${compressionMethod}`);
 		}
 		const nameLength = payload.readUInt16LE(offset + 26);
 		const extraLength = payload.readUInt16LE(offset + 28);

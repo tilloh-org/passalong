@@ -52,8 +52,9 @@ pnpm dev
 3. Run the required gates locally before pushing (see below).
 4. If the change affects the UI, refresh the committed screenshots before
    opening or updating the PR.
-5. Update the PR description so it always points at the latest screenshots
-   for the current commit.
+5. Update the PR **description** so it always embeds the latest screenshots
+   for the current commit. Screenshots belong in the description, not in PR
+   comments.
 6. Push the branch and open a pull request **against `develop`**.
    - `main` is release-only. PRs against `main` will be closed.
 
@@ -102,13 +103,16 @@ and checked in Assume.
 
 - Every visible UI change gets a current screenshot committed under
   `docs/feature-development/<branch-slug>/`.
-- When the UI changes again, regenerate the screenshot and replace the old
-  one in the PR description.
-- Use the latest screenshots only; do not leave stale image links in the PR
-  body.
-- Use **commit-pinned raw GitHub image URLs** in the PR description
-  (`https://github.com/tilloh-org/passalong/raw/<sha>/<path>`) so the linked
-  image stays stable after squashes and merges.
+- **The branch carries only current screenshots.** When the UI changes again,
+  regenerate or delete the stale image in the same commit that changes the UI.
+  A superseded screenshot left in the tree is a wrong claim about the UI.
+- **Embed screenshots in the PR description**, not in PR comments — the
+  description is the single source of visual evidence. Use markdown images
+  with **commit-pinned raw GitHub URLs**
+  (`![alt](https://github.com/tilloh-org/passalong/raw/<sha>/<path>)`) so the
+  linked image stays stable after squashes and merges.
+- Use the latest screenshots only; replace stale image references in the
+  description instead of appending new ones.
 
 ### Conventional commits
 

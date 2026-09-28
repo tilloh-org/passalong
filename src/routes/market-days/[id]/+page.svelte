@@ -5,6 +5,8 @@
 <script lang="ts">
 	import BarList from '$lib/components/statistics/bar-list.svelte';
 	import ChartToggle from '$lib/components/statistics/chart-toggle.svelte';
+	import DialogShell from '$lib/components/dialog-shell.svelte';
+	import Icon from '$lib/components/icon.svelte';
 	import PieChart from '$lib/components/statistics/pie-chart.svelte';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
 	import { formatPrice } from '$lib/utils/format';
@@ -17,8 +19,8 @@
 	let proceedsChartType = $state<ChartType>('bars');
 	let salesChartType = $state<ChartType>('pie');
 	let expenseFormOpen = $state(false);
-	let editDialog: HTMLDialogElement | undefined = $state();
-	let expenseDialog: HTMLDialogElement | undefined = $state();
+	let editShell = $state<ReturnType<typeof DialogShell> | null>(null);
+	let expenseShell = $state<ReturnType<typeof DialogShell> | null>(null);
 	let editExpenseId = $state('');
 	let editExpenseLabel = $state('');
 	let editExpenseCategory = $state<ExpenseCategory>('fee');
@@ -71,12 +73,7 @@
 
 	/** Open the market-day edit dialog. */
 	function openEditDialog(): void {
-		editDialog?.showModal();
-	}
-
-	/** Close the market-day edit dialog. */
-	function closeEditDialog(): void {
-		editDialog?.close();
+		editShell?.open();
 	}
 
 	/**
@@ -90,12 +87,7 @@
 		editExpenseCategory = expense.category;
 		editExpenseAmount = formatPrice(expense.amountCents);
 		editExpenseDate = expense.expenseDate;
-		expenseDialog?.showModal();
-	}
-
-	/** Close the expense edit dialog. */
-	function closeExpenseDialog(): void {
-		expenseDialog?.close();
+		expenseShell?.open();
 	}
 </script>
 
@@ -104,7 +96,7 @@
 </svelte:head>
 
 <main class="market-day-detail-page">
-	<a class="back-link" href="/market-days">← {t('marketDays.back')}</a>
+	<a class="back-link" href="/market-days"><Icon name="arrow-left" />{t('marketDays.back')}</a>
 
 	<section class="panel detail-header" data-testid="market-day-detail-header">
 		<div class="detail-header-main">
@@ -132,21 +124,25 @@
 			</div>
 			<div class="headline-totals">
 				<strong>{t('settlement.net', { net: formatPrice(data.settlement.netResultCents) })}</strong>
-				<span>{t('settlement.soldCount', { count: data.settlement.soldItemCount })}</span>
+				<span class="headline-meta"
+					><Icon name="package" size="sm" tone="muted" />{t('settlement.soldCount', {
+						count: data.settlement.soldItemCount
+					})}</span
+				>
 			</div>
 		</div>
 		<div class="actions day-actions">
 			<form method="POST" action="?/deleteMarketDay">
 				<input type="hidden" name="marketDayId" value={data.marketDay.id} />
 				<button type="submit" class="danger" data-testid="market-days-delete"
-					>{t('marketDays.delete')}</button
+					><Icon name="trash" size="sm" />{t('marketDays.delete')}</button
 				>
 			</form>
 			<button
 				type="button"
 				class="secondary"
 				data-testid="market-days-edit-trigger"
-				onclick={openEditDialog}>{t('marketDays.edit')}</button
+				onclick={openEditDialog}><Icon name="edit" size="sm" />{t('marketDays.edit')}</button
 			>
 			<form
 				method="POST"
@@ -156,11 +152,11 @@
 				<input type="hidden" name="returnTo" value={returnTo} />
 				{#if data.marketDay.closedAt}
 					<button type="submit" class="secondary" data-testid="market-days-reopen"
-						>{t('marketDays.reopen')}</button
+						><Icon name="rotate" size="sm" />{t('marketDays.reopen')}</button
 					>
 				{:else}
 					<button type="submit" class="primary" data-testid="market-days-close"
-						>{t('marketDays.close')}</button
+						><Icon name="check" size="sm" />{t('marketDays.close')}</button
 					>
 				{/if}
 			</form>
@@ -170,7 +166,7 @@
 	<section class="panel" aria-labelledby="sales-title" data-testid="market-day-sales">
 		<div class="panel-head">
 			<div>
-				<h2 id="sales-title">{t('marketDays.salesTitle')}</h2>
+				<h2 id="sales-title"><Icon name="euro" />{t('marketDays.salesTitle')}</h2>
 				<p>{t('marketDays.salesSub')}</p>
 			</div>
 		</div>
@@ -178,9 +174,11 @@
 			<div class="sale-list">
 				{#each data.soldItems as item (item.id)}
 					<a class="sale-row" href={`/items/${item.id}`} data-testid="market-day-sale-item">
-						<div>
+						<div class="sale-row-main">
 							<strong>{item.title}</strong>
-							<span>{categoryLabel(item.category)}</span>
+							<span class="sale-row-meta"
+								><Icon name="tag" size="sm" tone="muted" />{categoryLabel(item.category)}</span
+							>
 						</div>
 						<strong>{formatPrice(item.saleProceedsCents ?? 0)} €</strong>
 					</a>
@@ -194,7 +192,7 @@
 	<section class="panel" aria-labelledby="expenses-title" data-testid="market-day-expenses">
 		<div class="panel-head">
 			<div>
-				<h2 id="expenses-title">{t('expenses.title')}</h2>
+				<h2 id="expenses-title"><Icon name="wallet" />{t('expenses.title')}</h2>
 				<p>{t('marketDays.expensesSub')}</p>
 			</div>
 			<button
@@ -202,7 +200,9 @@
 				class="secondary"
 				data-testid="expenses-toggle"
 				onclick={() => (expenseFormOpen = !expenseFormOpen)}
-				>{expenseFormOpen ? t('marketDays.cancel') : t('expenses.toggle')}</button
+				><Icon name={expenseFormOpen ? 'x' : 'plus'} size="sm" />{expenseFormOpen
+					? t('marketDays.cancel')
+					: t('expenses.toggle')}</button
 			>
 		</div>
 		{#if expenseFormOpen}
@@ -241,7 +241,9 @@
 					<input name="expenseDate" type="date" data-testid="expenses-date-input" />
 				</label>
 				<div class="actions form-actions">
-					<button type="submit" data-testid="expenses-create-submit">{t('expenses.create')}</button>
+					<button type="submit" data-testid="expenses-create-submit"
+						><Icon name="plus" size="sm" />{t('expenses.create')}</button
+					>
 				</div>
 			</form>
 		{/if}
@@ -251,8 +253,9 @@
 					<article class="expense-row" data-testid="expense-item">
 						<div>
 							<strong>{expense.label}</strong>
-							<span
-								>{expenseCategoryLabel(expense.category)} · {displayDate(expense.expenseDate)}</span
+							<span class="expense-row-meta"
+								><Icon name="tag" size="sm" tone="muted" />{expenseCategoryLabel(expense.category)} ·
+								{displayDate(expense.expenseDate)}</span
 							>
 						</div>
 						<strong class="negative">-{formatPrice(expense.amountCents)} €</strong>
@@ -261,13 +264,14 @@
 								type="button"
 								class="secondary"
 								data-testid="expenses-edit-trigger"
-								onclick={() => openExpenseDialog(expense)}>{t('expenses.edit')}</button
+								onclick={() => openExpenseDialog(expense)}
+								><Icon name="edit" size="sm" />{t('expenses.edit')}</button
 							>
 							<form method="POST" action="?/deleteExpense">
 								<input type="hidden" name="expenseId" value={expense.id} />
 								<input type="hidden" name="returnTo" value={returnTo} />
 								<button type="submit" class="danger" data-testid="expenses-delete"
-									>{t('expenses.delete')}</button
+									><Icon name="trash" size="sm" />{t('expenses.delete')}</button
 								>
 							</form>
 						</div>
@@ -387,18 +391,16 @@
 	</section>
 </main>
 
-<dialog
+<DialogShell
 	class="edit-dialog"
-	bind:this={editDialog}
-	aria-label={t('marketDays.edit')}
-	data-testid="market-days-edit-dialog"
+	bind:this={editShell}
+	ariaLabel={t('marketDays.edit')}
+	closeLabel={t('marketDays.cancel')}
+	testId="market-days-edit-dialog"
 >
-	<div class="dialog-head">
+	{#snippet header()}
 		<h2>{t('marketDays.editTitle')}</h2>
-		<button type="button" class="secondary" onclick={closeEditDialog}
-			>{t('marketDays.cancel')}</button
-		>
-	</div>
+	{/snippet}
 	<form method="POST" action="?/updateMarketDay" class="form-grid">
 		<input type="hidden" name="marketDayId" value={data.marketDay.id} />
 		<input type="hidden" name="returnTo" value={returnTo} />
@@ -442,22 +444,22 @@
 				value={data.marketDay.notes}
 			/></label
 		>
-		<div class="actions form-actions"><button type="submit">{t('marketDays.save')}</button></div>
+		<div class="actions form-actions">
+			<button type="submit"><Icon name="check" size="sm" />{t('marketDays.save')}</button>
+		</div>
 	</form>
-</dialog>
+</DialogShell>
 
-<dialog
+<DialogShell
 	class="edit-dialog"
-	bind:this={expenseDialog}
-	aria-label={t('expenses.edit')}
-	data-testid="expenses-edit-dialog"
+	bind:this={expenseShell}
+	ariaLabel={t('expenses.edit')}
+	closeLabel={t('marketDays.cancel')}
+	testId="expenses-edit-dialog"
 >
-	<div class="dialog-head">
+	{#snippet header()}
 		<h2>{t('expenses.edit')}</h2>
-		<button type="button" class="secondary" onclick={closeExpenseDialog}
-			>{t('marketDays.cancel')}</button
-		>
-	</div>
+	{/snippet}
 	<form method="POST" action="?/updateExpense" class="form-grid">
 		<input type="hidden" name="expenseId" value={editExpenseId} />
 		<input type="hidden" name="marketDayId" value={data.marketDay.id} />
@@ -495,10 +497,12 @@
 			/></label
 		>
 		<div class="actions form-actions">
-			<button type="submit" data-testid="expenses-save">{t('expenses.save')}</button>
+			<button type="submit" data-testid="expenses-save"
+				><Icon name="check" size="sm" />{t('expenses.save')}</button
+			>
 		</div>
 	</form>
-</dialog>
+</DialogShell>
 
 <style>
 	.market-day-detail-page {
@@ -560,13 +564,22 @@
 		color: var(--color-text-muted);
 		font-size: 0.8rem;
 	}
+	.headline-meta {
+		align-items: center;
+		display: inline-flex;
+		gap: 0.3rem;
+		justify-content: flex-end;
+	}
 	.pill {
+		align-items: center;
 		background: var(--color-ok-soft);
 		border: 1px solid var(--color-ok-border);
 		border-radius: 999px;
 		color: var(--color-ok);
+		display: inline-flex;
 		font-size: 0.68rem;
 		font-weight: 800;
+		gap: 0.25rem;
 		padding: 2px 10px;
 	}
 	.closed-pill {
@@ -590,11 +603,14 @@
 		display: contents;
 	}
 	button {
+		align-items: center;
 		border-radius: var(--radius-control);
 		cursor: pointer;
+		display: inline-flex;
 		font: inherit;
 		font-size: 0.84rem;
 		font-weight: 700;
+		gap: 0.3rem;
 		padding: 0.55rem 0.85rem;
 	}
 	.primary,
@@ -616,8 +632,11 @@
 		color: var(--color-danger);
 	}
 	.panel-head h2 {
+		align-items: center;
 		color: var(--color-accent-strong);
+		display: flex;
 		font-size: 1.1rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 	.panel-head p {
@@ -655,6 +674,12 @@
 		display: block;
 		font-size: 0.78rem;
 		margin-top: 0.15rem;
+	}
+	.sale-row-meta,
+	.expense-row-meta {
+		align-items: center;
+		display: inline-flex !important;
+		gap: 0.3rem;
 	}
 	.sale-row > strong {
 		color: var(--color-accent-strong);
@@ -707,29 +732,21 @@
 		margin: 1rem 0 0;
 		padding: 0.8rem;
 	}
-	.edit-dialog {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
-		color: var(--color-text);
+	:global(.edit-dialog) {
 		max-width: min(38rem, 92vw);
-		padding: 1.25rem;
 		width: 38rem;
 	}
-	.dialog-head {
+	:global(.edit-dialog .dialog-head h2) {
 		align-items: center;
-		display: flex;
-		justify-content: space-between;
-	}
-	.dialog-head h2 {
 		color: var(--color-accent-strong);
+		display: flex;
 		font-size: 1.05rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 	.form-grid {
 		display: grid;
-		gap: 0.8rem;
+		gap: var(--gap-dialog-block);
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		margin-top: 1rem;
 	}
@@ -758,6 +775,15 @@
 		padding: 0.6rem 0.75rem;
 		width: 100%;
 	}
+	.form-grid select {
+		appearance: none;
+		background-image: var(--select-arrow);
+		background-position: right var(--select-arrow-inset) center;
+		background-repeat: no-repeat;
+		background-size: var(--select-arrow-size);
+		padding-right: var(--select-control-end-padding);
+	}
+
 	.form-grid input:focus,
 	.form-grid select:focus {
 		border-color: var(--color-ice);

@@ -43,27 +43,25 @@ All `.env` values are optional. The defaults are suitable for a local install:
 # Host port; default: 4242
 PASSALONG_PORT=4242
 
+# Docker container name; default: passalong.
+# Give a second stack on the same Docker host a distinct name.
+# PASSALONG_CONTAINER_NAME=passalong-staging
+
 # Set this when the app is served through HTTPS and a reverse proxy.
 # Use the public origin without a trailing slash.
 # PASSALONG_ORIGIN=https://passalong.example.com
 ```
 
-### Unattended first setup
+### Accounts
 
-Instead of browser registration, an optional one-line bootstrap manifest can
-provision accounts during startup:
+Accounts are created in the application, never through environment variables.
 
-```dotenv
-PASSALONG_BOOTSTRAP={"accounts":[{"tenantName":"Example household","username":"admin","displayName":"Example admin","password":"replace-with-a-unique-password","instanceAdmin":true}]}
-```
+On an empty database the registration form is open: the first account you
+create becomes the **instance administrator**. Once that account exists the
+registration closes, and the instance administrator adds every further account.
 
-On an empty database, a non-empty manifest must create exactly one instance
-administrator; an empty `accounts` list makes no changes. On an existing
-database, it remains create-only: it can add only non-administrator accounts,
-while configured existing accounts must match their stored tenant, display name,
-role, and password exactly. Later starts never update or delete records.
-**Never commit `.env` or bootstrap credentials.** Keep the manifest private and
-remove it after first setup when it is no longer needed.
+Keep `.env` out of version control. It holds deployment values only — no
+credentials for creating accounts exist there.
 
 ## Deploy behind a reverse proxy
 
@@ -90,6 +88,69 @@ docker compose exec passalong node build/scripts/create-password-reset.js <usern
 
 The command prints a secret only once. Do not write it to persistent shell
 history or logs.
+
+## Taking over an existing instance
+
+A fresh instance can take over a complete data set from an archive in the
+[exchange format](docs/EXCHANGE-FORMAT.md). The takeover runs **on the first-run
+screen, before any account exists**: the dialog appears next to the first-run
+registration form, and you pick one of the imported users as the instance
+administrator, who receives a password you set there.
+
+## Stored media and thumbnails
+
+Uploaded images are stored **exactly as received** under the media root, so a
+storage key always names the bytes that are on disk and an import or restore
+stays byte-true. Rotation for display (the EXIF orientation a camera records)
+is applied once, when a viewer requests the file, together with the removal of
+the metadata block — a photo published on a stand page therefore carries no GPS
+position.
+
+Grids and tiles request a small derivative instead of the original:
+
+```
+/media/<key>          the original, served to detail views and downloads
+/thumb/<key>-<edge>w  a thumbnail of at most <edge> pixels on its longest edge
+```
+
+Thumbnails live in `<media root>/.thumbs/`. They are **derived data**, never
+referenced from the database:
+
+- they are generated on the first request and reused afterwards;
+- the instance backup covers them, because its media walk is recursive, so
+  originals **and** thumbnails survive a restart;
+- an instance restored without them simply rebuilds them on the next request;
+- deleting the `.thumbs` directory is always safe.
+
+The compressed stack ships with `BODY_SIZE_LIMIT: 256M` so an archive that
+contains images fits. If you set that variable yourself, keep it at or above the
+largest archive you intend to import — a smaller value fails the upload with a
+bare "413 Payload Too Large" before the application can show a message. Archives
+up to 256 MB are accepted; the dialog refuses a larger file before uploading it.
+
+**Operator warning — act immediately.** While an instance has no accounts, it is
+uninitialised: whoever reaches it first can either register the first account or
+run a takeover. Start a new instance only on a network you trust, and complete
+either registration or the takeover right away. Provisioning through environment
+variables happens before the HTTP server starts and is not affected by this.
+
+A takeover is a one-time, complete move:
+
+- It is refused once any account exists — start from a fresh instance.
+- It replaces nothing: an empty instance has nothing to preserve, and an
+  uninitialised instance never assigns pre-existing orphaned rows to imported
+  users automatically.
+- There is no delta import and no ongoing synchronisation afterwards.
+
+Check the validation report before activating: it lists every imported user with
+item, image and password status, the media and checksum result, and any warnings.
+Accounts whose stored password cannot be carried over are imported as
+reset-required, and the selected administrator can sign in immediately with the
+newly set password.
+
+Before switching a public hostname over, verify the imported data (portfolio,
+images, stand pages, sales, expenses, statistics, scans) and produce a backup
+from the new instance.
 
 ## Development
 

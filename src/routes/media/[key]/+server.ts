@@ -1,14 +1,12 @@
 import { error } from '@sveltejs/kit';
-import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
+import { readImageForDelivery } from '$lib/server/image-delivery';
 import { getMediaRoot } from '$lib/server/media-root';
 import { getCollectionRepository } from '$lib/server/repository';
 import { hashSessionToken } from '$lib/server/session-token';
 import type { RequestHandler } from './$types';
 
 const sessionCookieName = 'passalong_session';
-const pngFileExtension = '.png';
-const jpegFileExtension = '.jpg';
 const pngMimeType = 'image/png';
 const jpegMimeType = 'image/jpeg';
 const webpMimeType = 'image/webp';
@@ -24,7 +22,7 @@ const webpMimeType = 'image/webp';
  * @returns {Response} The image bytes or a 404 error.
  * @throws {HttpError} When the image is missing, not owned, or the session is invalid.
  */
-export const GET: RequestHandler = ({ cookies, params }) => {
+export const GET: RequestHandler = async ({ cookies, params }) => {
 	const repository = getCollectionRepository();
 	const sessionToken = cookies.get(sessionCookieName) ?? '';
 	const scope = sessionToken ? repository.getSession(hashSessionToken(sessionToken)) : null;
@@ -51,12 +49,15 @@ export const GET: RequestHandler = ({ cookies, params }) => {
 	if (!isPathInsideMediaRoot(storagePath)) {
 		throw error(404, 'image not found');
 	}
-	const filePayload = readFileSync(storagePath);
-	return new Response(new Uint8Array(filePayload), {
+	// The one place where stored bytes become viewer bytes: the EXIF orientation is applied here, so
+	// every channel that wrote a file — upload, transfer, import, restore, and older media — is
+	// covered without repeating the logic anywhere else.
+	const delivered = await readImageForDelivery(storagePath, getContentType(storageKey));
+	return new Response(new Uint8Array(delivered.payload), {
 		headers: {
-			'Content-Type': getContentType(storageKey),
+			'Content-Type': delivered.mimeType,
 			'Cache-Control': isPublic ? 'public, max-age=3600' : 'private, no-store',
-			'Content-Length': String(filePayload.length)
+			'Content-Length': String(delivered.payload.length)
 		}
 	});
 };
@@ -83,10 +84,10 @@ function isPathInsideMediaRoot(storagePath: string): boolean {
  * @returns {string} The verified image MIME type.
  */
 function getContentType(storageKey: string): string {
-	if (storageKey.endsWith(pngFileExtension)) {
+	if (storageKey.endsWith('.png')) {
 		return pngMimeType;
 	}
-	if (storageKey.endsWith(jpegFileExtension)) {
+	if (storageKey.endsWith('.jpg')) {
 		return jpegMimeType;
 	}
 	return webpMimeType;

@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	hashPassword,
-	needsPasswordRehash,
-	validatePassword,
-	verifyPassword,
-	verifyPasswordSync
-} from './password';
+import { hashPassword, needsPasswordRehash, validatePassword, verifyPassword } from './password';
 
 describe('password hashing', () => {
 	it('verifies only the original password', async () => {
@@ -77,12 +71,10 @@ describe('password hashing', () => {
 
 		// act
 		const isLegacyPasswordValid = verifyPassword(password, legacyHash);
-		const isLegacyPasswordSynchronouslyValid = verifyPasswordSync(password, legacyHash);
 		const requiresRehash = needsPasswordRehash(legacyHash);
 
 		// assume
 		await expect(isLegacyPasswordValid).resolves.toBe(true);
-		expect(isLegacyPasswordSynchronouslyValid).toBe(true);
 		expect(requiresRehash).toBe(true);
 	});
 
@@ -93,36 +85,21 @@ describe('password hashing', () => {
 			'scrypt$v1$1048576$8$1$MTIzNDU2Nzg5MDEyMzQ1Ng$UJxyDTFa1s4wRzUMU2Q1Qj_CoTXQjdhiIsfZa32CA8_6pMzwKjZqWTKM36GAEhU2gCTRX70bXUUeJUATz6W8ww',
 			'scrypt$v1$16384$8$1$not_base64!$also-not-base64!',
 			'scrypt$not_base64!$also-not-base64!',
-			'argon2$anything'
+			'argon2$anything',
+			// An invited account carries no password until the code is consumed.
+			''
 		];
 
 		// act
 		const verificationResults = await Promise.all(
 			malformedStoredHashes.map(async (storedHash) => ({
-				asynchronous: await verifyPassword(password, storedHash),
-				synchronous: verifyPasswordSync(password, storedHash)
+				asynchronous: await verifyPassword(password, storedHash)
 			}))
 		);
 
 		// assume
 		for (const verificationResult of verificationResults) {
 			expect(verificationResult.asynchronous).toBe(false);
-			expect(verificationResult.synchronous).toBe(false);
 		}
-	});
-
-	it('synchronously verifies bootstrap passwords against supported hashes', async () => {
-		// arrange
-		const password = 'not-a-real-bootstrap-password';
-		const invalidPassword = 'not-the-bootstrap-password';
-
-		// act
-		const storedHash = await hashPassword(password);
-		const isBootstrapPasswordValid = verifyPasswordSync(password, storedHash);
-		const isInvalidBootstrapPasswordValid = verifyPasswordSync(invalidPassword, storedHash);
-
-		// assume
-		expect(isBootstrapPasswordValid).toBe(true);
-		expect(isInvalidBootstrapPasswordValid).toBe(false);
 	});
 });

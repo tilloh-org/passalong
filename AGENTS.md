@@ -82,11 +82,18 @@ checked in Assume.
 
 - Every visible UI change gets a committed screenshot under
   `docs/feature-development/<branch-slug>/`.
-- Regenerate screenshots whenever the UI changes; the PR description must
-  point at the **latest** screenshots for the **current** commit.
-- Use **commit-pinned raw GitHub URLs**
-  (`https://github.com/tilloh-org/passalong/raw/<sha>/<path>`) so images stay
-  stable after squashes and merges. Remove stale image links.
+- **The branch carries only current screenshots.** The moment a later change
+  makes an existing screenshot stale, regenerate or delete it in that same
+  commit. Never leave a superseded image behind — an outdated screenshot is a
+  wrong claim about the UI.
+- **Screenshots go in the PR description, embedded as images** with
+  commit-pinned raw GitHub URLs
+  (`![alt](https://github.com/tilloh-org/passalong/raw/<sha>/<path>)`) so they
+  stay stable after squashes and merges. Do **not** post screenshots as PR
+  comments — the description is the single source of visual evidence.
+- Regenerate screenshots whenever the UI changes; the description must show
+  the **latest** screenshots for the **current** commit, and stale image
+  references must be replaced, not appended to.
 - Primary/confirm actions sit at the bottom right of their container
   (see `docs/DESIGN.md`).
 

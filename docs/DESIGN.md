@@ -47,8 +47,26 @@ UI; deviations need an explicit decision (e.g. in the PR description).
 ## Modals
 
 - Native `<dialog>` elements with a dimmed backdrop.
+- Every modal is built from the shared `$lib/components/dialog-shell.svelte`, which owns the
+  chrome so no screen re-declares it. It offers two variants:
+  - `variant="modal"` — the standard dialog: card surface, `--radius-card`, `--shadow-card`,
+    `1.25rem` padding, and a top-right close button labelled „Schließen". This is the default.
+  - `variant="fullscreen"` — the immersive viewer: no card surface, no padding, own scrim
+    (`--scrim-viewer`) and its own bar. For a viewer that should **hide** the page rather than
+    dim it (see the photo viewer).
 - Every modal has a header row with a bold title on the left and a light „Schließen" button on
   the right; Escape and the close button dismiss it.
+- **Internal spacing is token-driven.** The gaps inside a dialog use the shared variables
+  (`--gap-dialog-head` between the header and the first block, `--gap-dialog-block` between
+  blocks, `--gap-dialog-field` between a field label and its control) instead of per-screen
+  values, so every dialog keeps the same rhythm.
+- **Actions never span the full width.** A button or link keeps its natural width; only long-form
+  content (inputs, selects, tables) spans the dialog. A full-width bar reads as a block, not as a
+  control, and it competes with the dialog's real primary action.
+- **Adjacent controls form one action row.** When a control is followed by another control, they
+  render side by side in a single row — never stacked as separate full-width bars. The row wraps on
+  a narrow dialog, and within it the primary control keeps the rightmost slot while secondary
+  controls sit to its left (a leading control such as an export link sits first).
 - Form fields inside modals share the page-wide field styling: rounded corners, light border,
   sans-serif inherited font, visible focus ring.
 
@@ -67,6 +85,22 @@ The visual language mirrors the old Marktbude UI (flohmarkt.tilloh.dev), analyze
 Item cards: category pill overlaid top-left on the image, status pill and quick-sale button in
 the tile footer. Detail page: action row (delete/images/edit/reserve) right-aligned below the
 sale panel.
+
+## Icons
+
+- Icons come from the **vendored Tabler sprite**, mirroring the Marktbude approach: symbols are
+  inlined once in `src/app.html` and referenced as `#i-<name>`. Never load an icon from a CDN,
+  and never paste raw SVG paths into a component.
+- The typed registry in `src/lib/icons.ts` is the contract; `scripts/build-icon-sprite.mjs`
+  regenerates `src/app.html` from it. Adding an icon means adding it to the registry and
+  re-running the script (`node scripts/build-icon-sprite.mjs`).
+- Components render icons through `$lib/components/icon.svelte`, which is always `aria-hidden`.
+  The surrounding control carries the accessible name, so an icon never becomes a second name
+  for a button or link.
+- Icons sit left of their label and inherit the label colour; semantic tone comes from the
+  `.icon-ok` / `.icon-danger` / `.icon-warn` / `.icon-muted` modifiers.
+- Navigation pills carry one leading icon each. The label must not repeat the icon's glyph as
+  text (the “Neu” label carries no `+`, because the plus icon renders it).
 
 ## Code language
 

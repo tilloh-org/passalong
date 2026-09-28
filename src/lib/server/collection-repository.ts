@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
-import { verifyPasswordSync } from './password';
 
 export const itemCategories = [
 	'clothing',
@@ -70,6 +69,8 @@ export interface Collection {
 	name: string;
 	ownerName: string;
 	standIntro: string;
+	/** Opaque handle used in public stand URLs; never the internal row id. */
+	publicId: string;
 }
 
 export interface Item {
@@ -258,15 +259,6 @@ export interface CreateInitialAdminInput {
 	passwordHash: string;
 }
 
-export interface BootstrapProvisionAccount {
-	tenantName: string;
-	username: string;
-	displayName: string;
-	password: string;
-	passwordHash: string;
-	instanceAdmin: boolean;
-}
-
 export interface CreateCollectionInput {
 	name: string;
 }
@@ -315,17 +307,23 @@ export interface AdminAccount extends SessionScope {
 	displayName: string;
 }
 
+export interface CreateAccountInvitationInput {
+	username: string;
+	displayName: string;
+}
+
+export interface AdminAccountEntry {
+	userId: string;
+	username: string;
+	displayName: string;
+	createdAt: string;
+	lastSignedInAt: string | null;
+	isInstanceAdmin: boolean;
+}
+
 export interface LoginAccount extends AdminAccount {
 	passwordHash: string;
 	passwordResetRequired?: true;
-}
-
-export interface BootstrapAccountDetails {
-	username: string;
-	displayName: string;
-	passwordHash: string;
-	tenantName: string;
-	instanceAdmin: boolean;
 }
 
 export interface LoginRateLimitStatus {
@@ -337,8 +335,6 @@ export interface CollectionRepository {
 	hasAdminAccount(): boolean;
 	hasAccounts(): boolean;
 	createInitialAdmin(input: CreateInitialAdminInput): AdminAccount;
-	provisionBootstrapAccounts(accounts: BootstrapProvisionAccount[]): void;
-	getBootstrapAccount(username: string): BootstrapAccountDetails | null;
 	getUserForLogin(username: string): LoginAccount | null;
 	createCollection(input: CreateCollectionInput, scope: SessionScope): Collection;
 	getCollectionForOwner(collectionId: string, scope: SessionScope): Collection | null;
@@ -350,6 +346,13 @@ export interface CollectionRepository {
 	revokeSession(tokenHash: string): void;
 	revokeSessionsForUser(scope: SessionScope): void;
 	deleteAccount(scope: SessionScope): DeletedAccountArtifacts;
+	createAccountInvitation(
+		input: CreateAccountInvitationInput,
+		secretHash: string,
+		expiresAt: string
+	): AdminAccount;
+	listAccounts(): AdminAccountEntry[];
+	deleteAccountByAdmin(userId: string): DeletedAccountArtifacts;
 	transaction<T>(callback: () => T): T;
 	getLoginAttemptStatus(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
 	recordLoginFailure(username: string, requestIp: string, now?: Date): LoginRateLimitStatus;
@@ -466,7 +469,7 @@ const userAvatarVersion = '2026090202_user_avatar';
 const collectionStandIntroVersion = '2026090203_collection_stand_intro';
 const marketDaysVersion = '2026090901_market_days';
 const expensesVersion = '2026091001_expenses';
-const requiredInstanceAdministratorCount = 1;
+const collectionPublicIdVersion = '2026091701_collection_public_id';
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
 const initialFailureCount = 1;
@@ -556,133 +559,6 @@ export function createCollectionRepository(
 			return { userId, tenantId, username, displayName };
 		},
 
-		/**
-		 * Create bootstrap accounts once without changing existing records.
-		 *
-		 * Every immutable comparison and insert runs under the same immediate transaction,
-		 * so a conflicting concurrent startup cannot apply a partial manifest.
-		 *
-		 * @param {BootstrapProvisionAccount[]} accounts - Validated bootstrap accounts.
-		 * @returns {void}
-		 * @throws {Error} When the manifest conflicts or would add another instance administrator.
-		 */
-		provisionBootstrapAccounts(accounts) {
-			const normalizedAccounts = accounts.map((account) => ({
-				tenantName: requireText(account.tenantName, 'tenantName'),
-				username: normalizeUsername(account.username),
-				displayName: requireText(account.displayName, 'displayName'),
-				password: requirePassword(account.password),
-				passwordHash: requireText(account.passwordHash, 'passwordHash'),
-				instanceAdmin: account.instanceAdmin
-			}));
-
-			runImmediateTransaction(database, () => {
-				const hasAccounts = Boolean(database.prepare('SELECT 1 FROM users LIMIT 1').get());
-				const existingAdministratorCount = (
-					database
-						.prepare("SELECT COUNT(*) AS count FROM instance_roles WHERE role = 'instance_admin'")
-						.get() as {
-						count: number;
-					}
-				).count;
-				const accountsToCreate = normalizedAccounts.filter((account) => {
-					const existingAccount = readBootstrapAccount(database, account.username);
-					if (!existingAccount) {
-						return true;
-					}
-					if (
-						existingAccount.tenantName !== account.tenantName ||
-						existingAccount.displayName !== account.displayName ||
-						existingAccount.instanceAdmin !== account.instanceAdmin ||
-						!verifyPasswordSync(account.password, existingAccount.passwordHash)
-					) {
-						throw new Error('Bootstrap configuration conflicts with an existing account.');
-					}
-					return false;
-				});
-				const newAdministratorCount = accountsToCreate.filter(
-					({ instanceAdmin }) => instanceAdmin
-				).length;
-
-				if (
-					!hasAccounts &&
-					normalizedAccounts.length > 0 &&
-					normalizedAccounts.filter(({ instanceAdmin }) => instanceAdmin).length !==
-						requiredInstanceAdministratorCount
-				) {
-					throw new Error('bootstrap configuration requires exactly one instance administrator');
-				}
-				if (hasAccounts && newAdministratorCount > 0) {
-					throw new Error('bootstrap configuration cannot create another instance administrator');
-				}
-				if (existingAdministratorCount > requiredInstanceAdministratorCount) {
-					throw new Error('instance administrator role is not unique');
-				}
-
-				for (const account of accountsToCreate) {
-					const tenantId = randomUUID();
-					const userId = randomUUID();
-					const createdAt = new Date().toISOString();
-					database
-						.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
-						.run(tenantId, account.tenantName, createdAt);
-					database
-						.prepare(
-							`INSERT INTO users (id, tenant_id, username, display_name, password_hash, created_at)
-							 VALUES (?, ?, ?, ?, ?, ?)`
-						)
-						.run(
-							userId,
-							tenantId,
-							account.username,
-							account.displayName,
-							account.passwordHash,
-							createdAt
-						);
-					if (account.instanceAdmin) {
-						database
-							.prepare('INSERT INTO instance_roles (user_id, role, created_at) VALUES (?, ?, ?)')
-							.run(userId, 'instance_admin', createdAt);
-					}
-				}
-			});
-		},
-
-		/**
-		 * Read the immutable bootstrap-relevant fields for an existing account.
-		 *
-		 * @param {string} username - Case-insensitive account username.
-		 * @returns {BootstrapAccountDetails | null} Existing bootstrap account details, or null.
-		 */
-		getBootstrapAccount(username) {
-			const row = database
-				.prepare(
-					`SELECT users.username, users.display_name, users.password_hash, tenants.name AS tenant_name,
-					 EXISTS(SELECT 1 FROM instance_roles WHERE instance_roles.user_id = users.id AND instance_roles.role = 'instance_admin') AS instance_admin
-					 FROM users
-					 JOIN tenants ON tenants.id = users.tenant_id
-					 WHERE users.username = ?`
-				)
-				.get(normalizeUsername(username)) as
-				| {
-						username: string;
-						display_name: string;
-						password_hash: string;
-						tenant_name: string;
-						instance_admin: number;
-				  }
-				| undefined;
-			return row
-				? {
-						username: row.username,
-						displayName: row.display_name,
-						passwordHash: row.password_hash,
-						tenantName: row.tenant_name,
-						instanceAdmin: row.instance_admin === sqliteTrue
-					}
-				: null;
-		},
-
 		getUserForLogin(username) {
 			const row = database
 				.prepare(
@@ -715,14 +591,15 @@ export function createCollectionRepository(
 		createCollection(input, scope) {
 			const name = requireText(input.name, 'name');
 			const collectionId = randomUUID();
+			const publicId = newPublicId();
 			const result = database
 				.prepare(
-					`INSERT INTO collections (id, tenant_id, owner_id, name, created_at)
-					 SELECT ?, tenant_id, id, ?, ?
+					`INSERT INTO collections (id, public_id, tenant_id, owner_id, name, created_at)
+					 SELECT ?, ?, tenant_id, id, ?, ?
 					 FROM users
 					 WHERE id = ? AND tenant_id = ?`
 				)
-				.run(collectionId, name, new Date().toISOString(), scope.userId, scope.tenantId);
+				.run(collectionId, publicId, name, new Date().toISOString(), scope.userId, scope.tenantId);
 			if (result.changes !== singleDatabaseRowChange) {
 				throw new Error('authenticated owner was not found');
 			}
@@ -730,22 +607,30 @@ export function createCollectionRepository(
 				id: collectionId,
 				name,
 				ownerName: getOwnerDisplayName(database, scope),
-				standIntro: ''
+				standIntro: '',
+				publicId
 			};
 		},
 
 		getCollectionForOwner(collectionId, scope) {
 			const row = database
 				.prepare(
-					`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
+					`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 				)
 				.get(collectionId, scope.userId, scope.tenantId) as
-				{ id: string; name: string; stand_intro: string; owner_name: string } | undefined;
+				| { id: string; public_id: string; name: string; stand_intro: string; owner_name: string }
+				| undefined;
 			return row
-				? { id: row.id, name: row.name, ownerName: row.owner_name, standIntro: row.stand_intro }
+				? {
+						id: row.id,
+						name: row.name,
+						ownerName: row.owner_name,
+						publicId: row.public_id,
+						standIntro: row.stand_intro
+					}
 				: null;
 		},
 
@@ -759,7 +644,8 @@ export function createCollectionRepository(
 		listCollectionsForOwner(scope) {
 			return database
 				.prepare(
-					`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
+					`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro,
+					        users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.owner_id = ? AND collections.tenant_id = ?
@@ -769,6 +655,7 @@ export function createCollectionRepository(
 				.map((row) => {
 					const collection = row as {
 						id: string;
+						public_id: string;
 						name: string;
 						owner_name: string;
 						stand_intro: string;
@@ -777,7 +664,8 @@ export function createCollectionRepository(
 						id: collection.id,
 						name: collection.name,
 						ownerName: collection.owner_name,
-						standIntro: collection.stand_intro
+						standIntro: collection.stand_intro,
+						publicId: collection.public_id
 					};
 				});
 		},
@@ -856,52 +744,122 @@ export function createCollectionRepository(
 		},
 
 		deleteAccount(scope) {
+			return runImmediateTransaction(database, () => deleteAccountRows(database, scope));
+		},
+
+		/**
+		 * Create an account for an invited member without a password.
+		 *
+		 * The account receives its own household, so it is a data boundary of its own,
+		 * and no instance role. The caller passes the hash of a single-use invitation
+		 * code; the member sets their real password by consuming that code.
+		 *
+		 * @param {CreateAccountInvitationInput} input - Username and display name of the new account.
+		 * @param {string} secretHash - Hash of the single-use invitation code.
+		 * @param {string} expiresAt - ISO timestamp after which the code is rejected.
+		 * @returns {AdminAccount} The created account.
+		 */
+		createAccountInvitation(input, secretHash, expiresAt) {
+			const username = normalizeUsername(input.username);
+			const displayName = requireText(input.displayName, 'displayName');
+			const validatedSecretHash = requireText(secretHash, 'secretHash');
+			const validatedExpiry = requireText(expiresAt, 'expiresAt');
+			const tenantId = randomUUID();
+			const userId = randomUUID();
+			const createdAt = new Date().toISOString();
+
+			runImmediateTransaction(database, () => {
+				database
+					.prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+					.run(tenantId, `${displayName}'s household`, createdAt);
+				database
+					.prepare(
+						`INSERT INTO users (id, tenant_id, username, display_name, password_hash, password_reset_required, created_at)
+						 VALUES (?, ?, ?, ?, NULL, 1, ?)`
+					)
+					.run(userId, tenantId, username, displayName, createdAt);
+				database
+					.prepare(
+						'INSERT INTO password_resets (id, user_id, tenant_id, secret_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+					)
+					.run(randomUUID(), userId, tenantId, validatedSecretHash, validatedExpiry, createdAt);
+			});
+
+			return { userId, tenantId, username, displayName };
+		},
+
+		/**
+		 * List every account for the instance administration.
+		 *
+		 * The sign-in timestamp is the newest session of the account, so the list needs
+		 * no extra column. Several sessions must not duplicate a row, hence the aggregate.
+		 *
+		 * @returns {AdminAccountEntry[]} Accounts ordered by username.
+		 */
+		listAccounts() {
+			const rows = database
+				.prepare(
+					`SELECT users.id AS user_id,
+					        users.username,
+					        users.display_name,
+					        users.created_at,
+					        MAX(sessions.created_at) AS last_signed_in_at,
+					        EXISTS(
+					          SELECT 1 FROM instance_roles
+					          WHERE instance_roles.user_id = users.id AND instance_roles.role = 'instance_admin'
+					        ) AS is_instance_admin
+					 FROM users
+					 LEFT JOIN sessions ON sessions.user_id = users.id AND sessions.tenant_id = users.tenant_id
+					 GROUP BY users.id
+					 ORDER BY users.username COLLATE NOCASE`
+				)
+				.all() as {
+				user_id: string;
+				username: string;
+				display_name: string;
+				created_at: string;
+				last_signed_in_at: string | null;
+				is_instance_admin: number;
+			}[];
+			return rows.map((row) => ({
+				userId: row.user_id,
+				username: row.username,
+				displayName: row.display_name,
+				createdAt: row.created_at,
+				lastSignedInAt: row.last_signed_in_at,
+				isInstanceAdmin: row.is_instance_admin === sqliteTrue
+			}));
+		},
+
+		/**
+		 * Delete an account on behalf of the instance administration.
+		 *
+		 * The instance administrator cannot be a target: removing the only administrative
+		 * account would leave the instance without access. The deletion itself is the same
+		 * routine as self-deletion, so owned data and media artifacts are reported alike.
+		 *
+		 * @param {string} userId - Identifier of the account to remove.
+		 * @returns {DeletedAccountArtifacts} Media keys that the caller must clear from storage.
+		 */
+		deleteAccountByAdmin(userId) {
+			const validatedUserId = requireText(userId, 'userId');
 			return runImmediateTransaction(database, () => {
-				const profile = database
-					.prepare('SELECT username, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?')
-					.get(scope.userId, scope.tenantId) as
-					{ username: string; avatar_storage_key: string | null } | undefined;
-				if (!profile) {
-					throw new Error('authenticated owner was not found');
+				const account = database
+					.prepare('SELECT id, tenant_id FROM users WHERE id = ?')
+					.get(validatedUserId) as { id: string; tenant_id: string } | undefined;
+				if (!account) {
+					throw new Error('account not found');
 				}
-				const itemImageStorageKeys = (
-					database
-						.prepare(
-							`SELECT DISTINCT item_images.storage_key
-							 FROM item_images
-							 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
-							 WHERE items.owner_id = ? AND items.tenant_id = ?`
-						)
-						.all(scope.userId, scope.tenantId) as { storage_key: string }[]
-				).map(({ storage_key }) => storage_key);
-				database
-					.prepare("DELETE FROM login_attempts WHERE scope = 'username' AND subject = ?")
-					.run(profile.username);
-				database
-					.prepare('DELETE FROM items WHERE owner_id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				database
-					.prepare('DELETE FROM market_days WHERE owner_id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				database
-					.prepare('DELETE FROM expenses WHERE owner_id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				database
-					.prepare('DELETE FROM collections WHERE owner_id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				database
-					.prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?')
-					.run(scope.userId, scope.tenantId);
-				const remainingUsers = database
-					.prepare('SELECT 1 FROM users WHERE tenant_id = ? LIMIT 1')
-					.get(scope.tenantId);
-				if (!remainingUsers) {
-					database.prepare('DELETE FROM tenants WHERE id = ?').run(scope.tenantId);
+				const holdsInstanceRole = database
+					.prepare('SELECT 1 FROM instance_roles WHERE user_id = ?')
+					.get(validatedUserId);
+				if (holdsInstanceRole) {
+					throw new Error('the instance administrator cannot be deleted');
 				}
-				return {
-					avatarStorageKey: profile.avatar_storage_key,
-					itemImageStorageKeys
-				};
+				return deleteAccountRows(database, {
+					userId: account.id,
+					tenantId: account.tenant_id
+				});
 			});
 		},
 
@@ -1731,17 +1689,24 @@ export function createCollectionRepository(
 		 */
 		getPublicStandItemRoute(itemId) {
 			const item = database
-				.prepare('SELECT id, collection_id FROM items WHERE id = ? AND sold_at IS NULL')
-				.get(itemId) as { id: string; collection_id: string } | undefined;
-			return item ? { collectionId: item.collection_id, itemId: item.id } : null;
+				.prepare(
+					`SELECT items.id, collections.public_id AS collection_public_id
+					 FROM items
+					 JOIN collections ON collections.id = items.collection_id
+					 WHERE items.id = ? AND items.sold_at IS NULL`
+				)
+				.get(itemId) as { id: string; collection_public_id: string } | undefined;
+			return item ? { collectionId: item.collection_public_id, itemId: item.id } : null;
 		},
 
-		getPublicStandView(collectionId) {
+		getPublicStandView(publicId) {
+			// Public callers hold only the opaque handle: resolve through public_id so the internal
+			// row id is never a working URL.
 			const collection = database
 				.prepare(
-					'SELECT collections.name, collections.stand_intro, users.avatar_storage_key AS owner_avatar_storage_key FROM collections JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id WHERE collections.id = ?'
+					'SELECT collections.name, collections.stand_intro, users.avatar_storage_key AS owner_avatar_storage_key FROM collections JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id WHERE collections.public_id = ?'
 				)
-				.get(collectionId) as
+				.get(publicId) as
 				{ name: string; stand_intro: string; owner_avatar_storage_key: string | null } | undefined;
 			if (!collection) {
 				return null;
@@ -1749,9 +1714,14 @@ export function createCollectionRepository(
 			const items = (
 				database
 					.prepare(
-						'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE collection_id = ? AND sold_at IS NULL ORDER BY created_at DESC, id DESC'
+						`SELECT items.id, items.title, items.price_cents, items.category, items.condition,
+						        items.external_description, items.reserved_at, items.is_complete, items.is_functional
+						 FROM items
+						 JOIN collections ON collections.id = items.collection_id
+						 WHERE collections.public_id = ? AND items.sold_at IS NULL
+						 ORDER BY items.created_at DESC, items.id DESC`
 					)
-					.all(collectionId) as {
+					.all(publicId) as {
 					id: string;
 					title: string;
 					price_cents: number;
@@ -1775,7 +1745,7 @@ export function createCollectionRepository(
 				images: listPublicItemImages(database, row.id)
 			}));
 			return {
-				collectionId,
+				collectionId: publicId,
 				collectionName: collection.name,
 				ownerAvatarStorageKey: collection.owner_avatar_storage_key,
 				intro: collection.stand_intro,
@@ -1783,9 +1753,11 @@ export function createCollectionRepository(
 			};
 		},
 
-		searchPublicStandItems(collectionId, filters) {
-			const clauses = ['items.collection_id = ?', 'items.sold_at IS NULL'];
-			const parameters: (string | number)[] = [collectionId];
+		searchPublicStandItems(publicId, filters) {
+			// `items.collection_id` joins through collections so the caller can only ever search the
+			// stand it holds the public handle for.
+			const clauses = ['collections.public_id = ?', 'items.sold_at IS NULL'];
+			const parameters: (string | number)[] = [publicId];
 			if (filters.query && filters.query.trim().length > 0) {
 				const escapedQuery = filters.query.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
 				const pattern = `%${escapedQuery}%`;
@@ -1812,8 +1784,10 @@ export function createCollectionRepository(
 			}
 			const items = database
 				.prepare(
-					`SELECT id, title, price_cents, category, condition, external_description, reserved_at
+					`SELECT items.id, items.title, items.price_cents, items.category, items.condition,
+					        items.external_description, items.reserved_at
 					 FROM items
+					 JOIN collections ON collections.id = items.collection_id
 					 WHERE ${clauses.join(' AND ')}
 					 ORDER BY items.created_at DESC, items.id DESC`
 				)
@@ -1842,12 +1816,16 @@ export function createCollectionRepository(
 			}));
 		},
 
-		getPublicStandItem(collectionId, itemId) {
+		getPublicStandItem(publicId, itemId) {
 			const item = database
 				.prepare(
-					'SELECT id, title, price_cents, category, condition, external_description, reserved_at, is_complete, is_functional FROM items WHERE id = ? AND collection_id = ? AND sold_at IS NULL'
+					`SELECT items.id, items.title, items.price_cents, items.category, items.condition,
+					        items.external_description, items.reserved_at, items.is_complete, items.is_functional
+					 FROM items
+					 JOIN collections ON collections.id = items.collection_id
+					 WHERE items.id = ? AND collections.public_id = ? AND items.sold_at IS NULL`
 				)
-				.get(itemId, collectionId) as
+				.get(itemId, publicId) as
 				| {
 						id: string;
 						title: string;
@@ -2204,59 +2182,6 @@ export function createCollectionRepository(
 }
 
 /**
- * Read immutable bootstrap attributes for one normalized username.
- *
- * @param {Database.Database} database - The SQLite connection.
- * @param {string} username - Normalized account username.
- * @returns {BootstrapAccountDetails | null} Existing account details or null.
- */
-function readBootstrapAccount(
-	database: Database.Database,
-	username: string
-): BootstrapAccountDetails | null {
-	const row = database
-		.prepare(
-			`SELECT users.username, users.display_name, users.password_hash, tenants.name AS tenant_name,
-			 EXISTS(SELECT 1 FROM instance_roles WHERE instance_roles.user_id = users.id AND instance_roles.role = 'instance_admin') AS instance_admin
-			 FROM users
-			 JOIN tenants ON tenants.id = users.tenant_id
-			 WHERE users.username = ?`
-		)
-		.get(username) as
-		| {
-				username: string;
-				display_name: string;
-				password_hash: string;
-				tenant_name: string;
-				instance_admin: number;
-		  }
-		| undefined;
-	return row
-		? {
-				username: row.username,
-				displayName: row.display_name,
-				passwordHash: row.password_hash,
-				tenantName: row.tenant_name,
-				instanceAdmin: row.instance_admin === sqliteTrue
-			}
-		: null;
-}
-
-/**
- * Require a non-empty password without trimming its secret bytes.
- *
- * @param {string} value - Plaintext password supplied only for bootstrap verification.
- * @returns {string} The unchanged password value.
- * @throws {Error} If the password is empty.
- */
-function requirePassword(value: string): string {
-	if (value.length === 0) {
-		throw new Error('password must not be empty');
-	}
-	return value;
-}
-
-/**
  * Execute a SQLite transaction that serializes writers before checking account state.
  *
  * @template T
@@ -2318,13 +2243,14 @@ function getCollectionForOwnerRow(
 ): Collection {
 	const row = database
 		.prepare(
-			`SELECT collections.id, collections.name, collections.stand_intro, users.display_name AS owner_name
+			`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro, users.display_name AS owner_name
 			 FROM collections
 			 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 			 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 		)
 		.get(collectionId, scope.userId, scope.tenantId) as
-		{ id: string; name: string; stand_intro: string; owner_name: string } | undefined;
+		| { id: string; public_id: string; name: string; stand_intro: string; owner_name: string }
+		| undefined;
 	if (!row) {
 		throw new Error('collection was not found');
 	}
@@ -2332,6 +2258,7 @@ function getCollectionForOwnerRow(
 		id: row.id,
 		name: row.name,
 		ownerName: row.owner_name,
+		publicId: row.public_id,
 		standIntro: row.stand_intro
 	};
 }
@@ -2613,7 +2540,7 @@ function initializeSchema(database: Database.Database): void {
 			const appliedAt = new Date().toISOString();
 			database
 				.prepare(
-					'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)'
+					'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)'
 				)
 				.run(
 					tenantSchemaFoundationVersion,
@@ -2635,6 +2562,8 @@ function initializeSchema(database: Database.Database): void {
 					marketDaysVersion,
 					appliedAt,
 					expensesVersion,
+					appliedAt,
+					collectionPublicIdVersion,
 					appliedAt
 				);
 		})();
@@ -2664,6 +2593,60 @@ function isEmptyDatabase(database: Database.Database): boolean {
  * @param {Database.Database} database - The SQLite connection to initialize.
  * @returns {void}
  */
+/**
+ * Remove one account with everything it owns, inside a caller-held transaction.
+ *
+ * Self-deletion and administrator deletion must not drift apart, so both paths run
+ * this routine. Empty households are removed as well: a tenant without users is
+ * unreachable and would only linger. Storage keys are returned rather than deleted,
+ * because media lives outside the database.
+ *
+ * @param {Database.Database} database - The open SQLite connection.
+ * @param {SessionScope} scope - The account and household to remove.
+ * @returns {DeletedAccountArtifacts} Media keys the caller must clear from storage.
+ * @throws {Error} When the account does not exist.
+ */
+function deleteAccountRows(
+	database: Database.Database,
+	scope: SessionScope
+): DeletedAccountArtifacts {
+	const profile = database
+		.prepare('SELECT username, avatar_storage_key FROM users WHERE id = ? AND tenant_id = ?')
+		.get(scope.userId, scope.tenantId) as
+		{ username: string; avatar_storage_key: string | null } | undefined;
+	if (!profile) {
+		throw new Error('authenticated owner was not found');
+	}
+	const itemImageStorageKeys = (
+		database
+			.prepare(
+				`SELECT DISTINCT item_images.storage_key
+				 FROM item_images
+				 JOIN items ON items.id = item_images.item_id AND items.tenant_id = item_images.tenant_id
+				 WHERE items.owner_id = ? AND items.tenant_id = ?`
+			)
+			.all(scope.userId, scope.tenantId) as { storage_key: string }[]
+	).map(({ storage_key }) => storage_key);
+	database
+		.prepare("DELETE FROM login_attempts WHERE scope = 'username' AND subject = ?")
+		.run(profile.username);
+	for (const table of ['items', 'market_days', 'expenses', 'collections'] as const) {
+		database
+			.prepare(`DELETE FROM ${table} WHERE owner_id = ? AND tenant_id = ?`)
+			.run(scope.userId, scope.tenantId);
+	}
+	database
+		.prepare('DELETE FROM users WHERE id = ? AND tenant_id = ?')
+		.run(scope.userId, scope.tenantId);
+	const remainingUsers = database
+		.prepare('SELECT 1 FROM users WHERE tenant_id = ? LIMIT 1')
+		.get(scope.tenantId);
+	if (!remainingUsers) {
+		database.prepare('DELETE FROM tenants WHERE id = ?').run(scope.tenantId);
+	}
+	return { avatarStorageKey: profile.avatar_storage_key, itemImageStorageKeys };
+}
+
 function createSchema(database: Database.Database): void {
 	database.exec(`
 		CREATE TABLE IF NOT EXISTS tenants (
@@ -2718,6 +2701,7 @@ function createSchema(database: Database.Database): void {
 		);
 		CREATE TABLE IF NOT EXISTS collections (
 			id TEXT PRIMARY KEY,
+			public_id TEXT NOT NULL UNIQUE,
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
@@ -2870,6 +2854,7 @@ function migrateSchema(database: Database.Database): void {
 	migrateCollectionStandIntro(database);
 	migrateMarketDays(database);
 	migrateExpenses(database);
+	migrateCollectionPublicId(database);
 }
 
 /**
@@ -2878,6 +2863,52 @@ function migrateSchema(database: Database.Database): void {
  * @param {Database.Database} database - The SQLite connection to migrate.
  * @returns {void}
  */
+/**
+ * Generate an opaque public handle for a stand page.
+ *
+ * A stand URL must not carry the internal row id: the identifier is the only thing a buyer holds,
+ * so it has to be unguessable and independent of every internal key. 128 random bits rendered as
+ * lowercase hex carry the same entropy as the session tokens used elsewhere.
+ *
+ * @returns {string} A 32-character lowercase hex identifier.
+ */
+function newPublicId(): string {
+	return randomBytes(16).toString('hex');
+}
+
+/**
+ * Add the public stand identifier to collections once, backfilling every existing row.
+ *
+ * Runs additively: the column is added when missing, existing rows keep their internal id and gain
+ * a generated handle, and the unique index makes a collision impossible at the database level.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateCollectionPublicId(database: Database.Database): void {
+	if (hasMigrationVersion(database, collectionPublicIdVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'collections', 'public_id')) {
+			// SQLite cannot add a UNIQUE column directly; add it nullable, backfill, then index.
+			database.exec('ALTER TABLE collections ADD COLUMN public_id TEXT');
+			const rows = database.prepare('SELECT id FROM collections').all() as { id: string }[];
+			const update = database.prepare('UPDATE collections SET public_id = ? WHERE id = ?');
+			for (const row of rows) {
+				update.run(newPublicId(), row.id);
+			}
+			database.exec(
+				'CREATE UNIQUE INDEX IF NOT EXISTS collections_public_id_unique_idx ON collections(public_id)'
+			);
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(collectionPublicIdVersion, new Date().toISOString());
+	})();
+}
+
 function migrateCollectionStandIntro(database: Database.Database): void {
 	if (hasMigrationVersion(database, collectionStandIntroVersion)) {
 		return;
@@ -3292,6 +3323,7 @@ function rebuildCollections(database: Database.Database): void {
 	database.exec(`
 		CREATE TABLE collections_next (
 			id TEXT PRIMARY KEY,
+			public_id TEXT NOT NULL UNIQUE,
 			tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
@@ -3300,8 +3332,8 @@ function rebuildCollections(database: Database.Database): void {
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
 		);
-		INSERT INTO collections_next (id, tenant_id, owner_id, name, created_at)
-		SELECT id, tenant_id, owner_id, name, created_at FROM collections;
+		INSERT INTO collections_next (id, public_id, tenant_id, owner_id, name, created_at)
+		SELECT id, lower(hex(randomblob(16))), tenant_id, owner_id, name, created_at FROM collections;
 	`);
 	assertCopiedRowCount(database, 'collections', 'collections_next');
 }
@@ -3683,6 +3715,28 @@ function normalizeUsername(value: string): string {
 		);
 	}
 	return normalized;
+}
+
+/**
+ * Validate a username against the instance's username policy.
+ *
+ * Exported so the instance import can apply exactly the same rule: an imported account whose name
+ * this instance would never accept must be refused, because that user could never sign in.
+ *
+ * @param {string} value - The untrusted username to normalize.
+ * @returns {{ ok: true; username: string } | { ok: false; reason: string }} Result.
+ */
+export function normalizeUsernameResult(
+	value: string
+): { ok: true; username: string } | { ok: false; reason: string } {
+	const normalized = value.trim().toLowerCase();
+	if (!usernamePattern.test(normalized)) {
+		return {
+			ok: false,
+			reason: `The username must contain ${minimumUsernameLength} to ${maximumUsernameLength} lowercase letters, numbers, periods, underscores, plus signs, or hyphens.`
+		};
+	}
+	return { ok: true, username: normalized };
 }
 
 /**

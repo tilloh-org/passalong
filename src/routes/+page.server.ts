@@ -18,8 +18,13 @@ import {
 	validatePassword,
 	verifyPassword
 } from '$lib/server/password';
-import { getCollectionRepository } from '$lib/server/repository';
+import { getCollectionRepository, getDatabasePath } from '$lib/server/repository';
+import { getMediaRoot } from '$lib/server/media-root';
+import { importInstanceArchive, validateInstanceArchive } from '$lib/server/instance-import';
+import { stageArchive, takeStagedArchive } from '$lib/server/import-staging';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
+import { dirname } from 'node:path';
+import { join } from 'node:path';
 import type { Actions, PageServerLoad } from './$types';
 
 const sessionCookieName = 'passalong_session';
@@ -36,10 +41,27 @@ const httpStatus = {
 	forbidden: 403,
 	notFound: 404,
 	conflict: 409,
-	tooManyRequests: 429
+	payloadTooLarge: 413,
+	tooManyRequests: 429,
+	serviceUnavailable: 503
 } as const;
 const sessionMaxAgeSeconds = sessionLifetimeDays * hoursPerDay * minutesPerHour * secondsPerMinute;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
+const bytesPerMegabyte = 1024 * 1024;
+// Bounded so the pre-account takeover surface cannot be used to buffer unbounded input. Real
+// archives carry images, so this is far larger than the generic request limit; the deployment body
+// limit has to be raised alongside it (documented in README.md).
+const MAXIMUM_IMPORT_UPLOAD_BYTES = 256 * bytesPerMegabyte;
+
+/**
+ * Render a byte count as whole megabytes.
+ *
+ * @param {number} bytes - Byte count.
+ * @returns {number} Whole megabytes.
+ */
+function formatMegabytes(bytes: number): number {
+	return Math.round(bytes / bytesPerMegabyte);
+}
 const invalidCredentialsError = 'Benutzername oder Passwort ist nicht korrekt.';
 
 interface ItemWithImages extends Item {
@@ -154,6 +176,97 @@ export const actions: Actions = {
 			setSessionCookie(cookies, admin, url);
 		} catch (error) {
 			return fail(httpStatus.badRequest, { registerError: getErrorMessage(error) });
+		}
+
+		redirect(httpStatus.seeOther, '/');
+	},
+
+	stageInstanceImport: async ({ request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { importError: csrfError });
+		}
+		const repository = getCollectionRepository();
+		// The takeover contract runs this dialog on an instance that has no accounts yet; once any
+		// account exists the regular admin surface is responsible for instance data.
+		if (repository.hasAccounts()) {
+			return fail(httpStatus.conflict, {
+				importError:
+					'Diese Instanz enthält bereits Konten. Der Import ist nur vor der ersten Anmeldung möglich.'
+			});
+		}
+
+		// Reject an oversized upload from its declared length, before the body is buffered into
+		// memory: this surface has no session, so it must not accept unbounded input.
+		const declaredLength = Number(request.headers.get('content-length') ?? '0');
+		if (declaredLength > MAXIMUM_IMPORT_UPLOAD_BYTES) {
+			return fail(httpStatus.payloadTooLarge, {
+				importError: `Das Archiv ist zu groß. Erlaubt sind bis zu ${formatMegabytes(MAXIMUM_IMPORT_UPLOAD_BYTES)} MB.`
+			});
+		}
+		const formData = await request.formData();
+		const upload = formData.get('importArchive');
+		if (!(upload instanceof File) || upload.size === 0) {
+			return fail(httpStatus.badRequest, { importError: 'Bitte wähle eine Archivdatei aus.' });
+		}
+		if (upload.size > MAXIMUM_IMPORT_UPLOAD_BYTES) {
+			return fail(httpStatus.payloadTooLarge, {
+				importError: `Das Archiv ist zu groß. Erlaubt sind bis zu ${formatMegabytes(MAXIMUM_IMPORT_UPLOAD_BYTES)} MB.`
+			});
+		}
+		const archive = Buffer.from(await upload.arrayBuffer());
+		const report = validateInstanceArchive(archive);
+		if (report.errors.length > 0) {
+			return fail(httpStatus.badRequest, {
+				importError: report.errors[0],
+				importReport: report
+			});
+		}
+
+		// The archive is held on disk and referenced by a single-use token, so the activation step
+		// never re-uploads it and a staged archive can never be activated twice.
+		const stagingToken = stageArchive(archive, join(dirname(getDatabasePath()), 'import-staging'));
+		if (!stagingToken) {
+			return fail(httpStatus.serviceUnavailable, {
+				importError:
+					'Der Import kann gerade nicht vorbereitet werden. Bitte versuche es gleich noch einmal.'
+			});
+		}
+		return { importReport: report, importStagingToken: stagingToken };
+	},
+
+	activateInstanceImport: async ({ request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { importError: csrfError });
+		}
+		const repository = getCollectionRepository();
+		if (repository.hasAccounts()) {
+			return fail(httpStatus.conflict, {
+				importError:
+					'Diese Instanz enthält bereits Konten. Der Import ist nur vor der ersten Anmeldung möglich.'
+			});
+		}
+
+		const formData = await request.formData();
+		const stagingToken = getFormText(formData, 'stagingToken');
+		const archive = takeStagedArchive(stagingToken);
+		if (!archive) {
+			return fail(httpStatus.badRequest, {
+				importError: 'Der vorbereitete Import ist abgelaufen. Bitte lade das Archiv erneut.'
+			});
+		}
+
+		const outcome = await importInstanceArchive({
+			archive,
+			databasePath: getDatabasePath(),
+			mediaRoot: getMediaRoot(),
+			instanceAdminUsername: getFormText(formData, 'adminUsername'),
+			adminPassword: getFormText(formData, 'adminPassword')
+		});
+		if (!outcome.imported) {
+			return fail(httpStatus.badRequest, {
+				importError: outcome.report.errors[0] ?? 'Der Import konnte nicht aktiviert werden.',
+				importReport: outcome.report
+			});
 		}
 
 		redirect(httpStatus.seeOther, '/');

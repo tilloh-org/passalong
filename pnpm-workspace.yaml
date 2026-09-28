@@ -1,4 +1,9 @@
 allowBuilds:
   better-sqlite3: true
+  # libvips-backed image processing; its install script fetches the platform binary.
+  sharp: true
 overrides:
   cookie: 0.7.2
+  # DoS via malformed input. Transitive through SvelteKit and Svelte, both of which allow ^5.8.1,
+  # so the patched release is inside their declared range.
+  devalue: ^5.9.1

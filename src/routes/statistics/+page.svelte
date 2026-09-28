@@ -1,6 +1,7 @@
 <script lang="ts">
 	import BarList from '$lib/components/statistics/bar-list.svelte';
 	import ChartToggle from '$lib/components/statistics/chart-toggle.svelte';
+	import Icon from '$lib/components/icon.svelte';
 	import PieChart from '$lib/components/statistics/pie-chart.svelte';
 	import SummaryCards from '$lib/components/statistics/summary-cards.svelte';
 	import TrendChart from '$lib/components/statistics/trend-chart.svelte';
@@ -91,12 +92,12 @@
 <main class="statistics-page">
 	<section class="head">
 		<p class="eyebrow">{t('portfolio.saleStatisticsEyebrow')}</p>
-		<h1 data-testid="statistics-title">{t('statistics.title')}</h1>
+		<h1 data-testid="statistics-title"><Icon name="chart-bar" />{t('statistics.title')}</h1>
 		<p class="sub">{t('statistics.sub')}</p>
 	</section>
 
 	<section class="chart-card period-card" aria-labelledby="period-title">
-		<h2 id="period-title">{t('saleHistory.byPeriod')}</h2>
+		<h2 id="period-title"><Icon name="calendar" />{t('saleHistory.byPeriod')}</h2>
 		<form method="GET" class="period-form" data-testid="statistics-period">
 			<label>
 				<span>{t('saleHistory.periodFrom')}</span>
@@ -107,8 +108,12 @@
 				<input name="to" type="date" value={data.period.toInclusive ?? ''} />
 			</label>
 			<div class="period-actions">
-				<a class="secondary-link" href="/statistics">{t('saleHistory.resetFilters')}</a>
-				<button class="filter-submit" type="submit">{t('saleHistory.applyFilters')}</button>
+				<a class="secondary-link" href="/statistics"
+					><Icon name="rotate" size="sm" />{t('saleHistory.resetFilters')}</a
+				>
+				<button class="filter-submit" type="submit"
+					><Icon name="filter" size="sm" />{t('saleHistory.applyFilters')}</button
+				>
 			</div>
 		</form>
 	</section>
@@ -147,7 +152,7 @@
 
 	{#if hasActivity}
 		<section class="chart-card" aria-labelledby="trend-title">
-			<h2 id="trend-title">{t('statistics.byDay')}</h2>
+			<h2 id="trend-title"><Icon name="chart-bar" />{t('statistics.byDay')}</h2>
 			<TrendChart
 				entries={data.proceedsByDay}
 				testId="statistics-trend"
@@ -157,7 +162,7 @@
 
 		<div class="chart-grid">
 			<section class="chart-card" aria-labelledby="channel-title">
-				<h2 id="channel-title">{t('portfolio.byChannel')}</h2>
+				<h2 id="channel-title"><Icon name="chart-pie" />{t('portfolio.byChannel')}</h2>
 				<PieChart
 					slices={data.statistics.proceedsByChannel.map((entry) => ({
 						label: saleChannelLabel(entry.channel),
@@ -171,7 +176,7 @@
 			</section>
 
 			<section class="chart-card" aria-labelledby="category-money-title">
-				<h2 id="category-money-title">{t('statistics.proceedsPerCategory')}</h2>
+				<h2 id="category-money-title"><Icon name="euro" />{t('statistics.proceedsPerCategory')}</h2>
 				<ChartToggle
 					testId="statistics-categories-money-toggle"
 					value={categoryMoneyChart}
@@ -201,7 +206,7 @@
 			</section>
 
 			<section class="chart-card" aria-labelledby="category-count-title">
-				<h2 id="category-count-title">{t('statistics.salesPerCategory')}</h2>
+				<h2 id="category-count-title"><Icon name="package" />{t('statistics.salesPerCategory')}</h2>
 				<ChartToggle
 					testId="statistics-categories-count-toggle"
 					value={categoryCountChart}
@@ -233,7 +238,7 @@
 			</section>
 
 			<section class="chart-card" aria-labelledby="market-day-title">
-				<h2 id="market-day-title">{t('saleHistory.byMarketDay')}</h2>
+				<h2 id="market-day-title"><Icon name="calendar" />{t('saleHistory.byMarketDay')}</h2>
 				<BarList
 					entries={data.statistics.proceedsByMarketDay.map((entry) => ({
 						label: marketDayLabel(entry.marketDayName),
@@ -245,7 +250,7 @@
 			</section>
 
 			<section class="chart-card" aria-labelledby="expense-title">
-				<h2 id="expense-title">{t('statistics.expensesByCategory')}</h2>
+				<h2 id="expense-title"><Icon name="wallet" />{t('statistics.expensesByCategory')}</h2>
 				<BarList
 					accent="expenses"
 					entries={data.statistics.expensesByCategory.map((entry) => ({
@@ -258,7 +263,7 @@
 			</section>
 
 			<section class="chart-card" aria-labelledby="month-title">
-				<h2 id="month-title">{t('portfolio.byMonth')}</h2>
+				<h2 id="month-title"><Icon name="chart-bar" />{t('portfolio.byMonth')}</h2>
 				<BarList
 					entries={data.statistics.proceedsByMonth.map((entry) => ({
 						label: monthLabel(entry.month),
@@ -296,8 +301,12 @@
 	}
 
 	.head h1 {
+		align-items: center;
 		color: var(--color-accent-strong);
+		display: flex;
 		font-size: 1.8rem;
+		gap: 0.45rem;
+		justify-content: center;
 		margin: 0;
 	}
 
@@ -317,7 +326,10 @@
 	}
 
 	.chart-card h2 {
+		align-items: center;
+		display: flex;
 		font-size: 1rem;
+		gap: 0.4rem;
 		margin: 0 0 0.8rem;
 	}
 
@@ -371,26 +383,32 @@
 	}
 
 	.secondary-link {
+		align-items: center;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-control);
 		color: var(--color-accent);
 		cursor: pointer;
+		display: inline-flex;
 		font-size: 0.82rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.5rem 0.85rem;
 		text-decoration: none;
 	}
 
 	.filter-submit {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-cta);
 		color: #fff;
 		cursor: pointer;
+		display: inline-flex;
 		font-size: 0.82rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.5rem 0.85rem;
 	}
 
