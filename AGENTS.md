@@ -112,6 +112,17 @@ checked in Assume.
 - Primary/confirm actions sit at the bottom right of their container
   (see `docs/DESIGN.md`).
 
+## Deliberate deviations
+
+Decisions that deliberately deviate from the process, one line each with the
+reason. The tide bootstrap leaves these items alone.
+
+- **Docs, commits and PR text in English.** tide's language rule (D-044) wants
+  `README.md`, everything under `docs/` and `AGENTS.md` in German and already
+  names an open-source project as the case for a project-level exception.
+  Everything in this repository stays English; the only German content is the
+  visitor-facing UI copy that the i18n layer serves (`src/lib/i18n/`).
+
 ## When stuck or unsure
 
 - Missing product decision → ask Tim, do not invent one.
