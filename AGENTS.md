@@ -16,8 +16,9 @@ When instructions conflict, this order wins:
 
 1. **AFFiNE "Hermes Gehirn"** — architecture, data model, security and
    release decisions (private knowledge base, read-only for agents).
-2. **This repository's docs** — `docs/DESIGN.md` (UI rules), `docs/release-process.md`,
-   `CONTRIBUTING.md`, `SECURITY.md`.
+2. **This repository's docs** — `docs/roadmap.md` (the working plan to v1.0.0),
+   `docs/DESIGN.md` (UI rules), `docs/release-process.md`, `CONTRIBUTING.md`,
+   `SECURITY.md`.
 3. **Hermes skills** — project skills (`sveltekit-app-development`,
    `passalong-ui-patterns`, `test-code-conventions`, `ui-screenshot-pr-hygiene`).
 4. **Memory / session history** — context only, never proof of current state.
@@ -25,6 +26,20 @@ When instructions conflict, this order wins:
 `docs/DESIGN.md` wins over the Marktbude reference UI. Historical plans under
 `.hermes/plans/` are **not normative** — they record decisions at a point in
 time; current rules in the docs above win.
+
+## Plan and work items
+
+`docs/roadmap.md` is the plan of record for implementation work here: phases,
+exit gates and the verified status, derived from the private AFFiNE plan. A
+phase ends only when its exit gates are proven in this repository — a test, an
+E2E spec or a documented check; a gate without a proof stays open even when the
+code exists. Keep the status lines dated.
+
+A slice that changes behaviour is described in an F-document under
+`docs/requirements/` before it is implemented (template: `F-000-template.md`),
+using the next free number. That document is the contract for the slice and is
+frozen once its PR is merged, carrying the `Implemented: PR #<nr>` line. Work on
+one slice at a time.
 
 ## Non-negotiable rules
 
