@@ -245,9 +245,14 @@ are partly implemented but not proven.
 - [x] a sale updates stock and evaluation consistently
 - [x] duplicate scan or sale requests do not produce a double sale (two parallel
       requests for one item, E2E, verified 2026-10-17)
-- [ ] corrections restore the previous state traceably
+- [x] corrections restore the previous state traceably (the undo clears the four sale fields and
+      leaves every other item field as it was; the sale leaves the history, the statistics, the
+      market-day detail and the label sheet — unit and E2E proof, verified 2026-10-17; no separate
+      correction log, see the open product questions)
 - [x] money values stay exact without floating-point errors
-- [ ] statistics match the underlying sales and expenses
+- [x] statistics match the underlying sales and expenses (totals move by exactly the recorded sale
+      and expense, every breakdown moves with them — repository invariants plus E2E deltas,
+      verified 2026-10-17)
 - [x] CSV export is tenant-bound and guarded against formula injection (owner-scoped
       endpoint plus unit and E2E proof, verified 2026-10-17)
 - [x] the print layout is verified with 16 labels on A4 (real A4 PDF: sixteen labels
@@ -275,8 +280,20 @@ are partly implemented but not proven.
 - for duplicate scan/sale requests the repository serialises the write and rejects
   the second one (`item is already sold`); two parallel requests for one item are
   proven by E2E, so the exit gate is closed (verified 2026-10-17).
-- a complete daily reconciliation and statistics proofs by category/day/period
-  are not verified as standalone exit-gate evidence.
+- the statistics are proven to match the underlying rows
+  (`docs/requirements/F-002-statistics-consistency-and-corrections.md`): repository invariants show
+  that the channel, month, category and day buckets sum to the totals, and the E2E proof shows that
+  the totals and every breakdown move by exactly the recorded sale and expense and shrink again by
+  exactly the corrected one (verified 2026-10-17). The period filters by sale date and expense date
+  with both bounds included and shows the empty state for a period without activity.
+- corrections are proven to restore the previous state: the undo puts the item back to what it was
+  before the sale (including its reservation) and takes the sale out of the sale history, the
+  statistics and the market-day detail, so the item is for sale and printed again
+  (unit and E2E proof, verified 2026-10-17).
+- two defects the proofs surfaced are fixed: the shared column list of the item queries missed
+  `items.reserved_at`, so listed items reported `reservedAt: undefined` instead of `null` or a
+  timestamp, and the day breakdown of the statistics dropped every sale without a market day even
+  though the page carries a label for them ("Ohne Markttag").
 
 ## Phase 5 — Generic import and export
 
@@ -463,7 +480,7 @@ time. The list below is the order from the plan, with what is done marked.
 - market days — done
 - sales — done
 - expenses — done
-- reconciliation and statistics — implemented, proofs open
+- reconciliation and statistics — implemented, proofs closed (2026-10-17)
 - QR, scan and print features — done
 - QR tokens — done
 - camera and photo fallback — done
@@ -528,3 +545,7 @@ Open follow-up work:
 - **Location release.** The phase-3 and phase-4 gates for location and map need
   `latitude`/`longitude` fields, which do not exist. Whether the fields belong
   in this release at all is a product decision.
+- **A correction log.** Correcting a sale restores the previous state and is followable in every
+  view, but nothing records who corrected what and when. Should later releases keep a log of
+  corrections (which would need its own table), or is the restored state enough? F-002 leaves this
+  out.
