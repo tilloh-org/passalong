@@ -7,6 +7,8 @@ import { defineConfig, devices } from '@playwright/test';
  * runs in its own project against its own freshly seeded instance. Every other spec registers its
  * own account on the shared instance. The A4 label proof is the exception: it seeds a whole sheet
  * of items, so it runs on its own instance and leaves the item counts of the shared instance alone.
+ * The CSV reconciliation proof does the same: it creates its own market day and sells items there,
+ * which would move the market-day and statistics assertions of the shared instance.
  */
 export default defineConfig({
 	testDir: 'e2e',
@@ -24,7 +26,7 @@ export default defineConfig({
 		{
 			name: 'chromium',
 			testIgnore:
-				/instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts|price-labels\.spec\.ts/,
+				/instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts|price-labels\.spec\.ts|reconciliation-csv\.spec\.ts/,
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4173',
@@ -49,6 +51,14 @@ export default defineConfig({
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4176'
+			}
+		},
+		{
+			name: 'csv-export',
+			testMatch: /reconciliation-csv\.spec\.ts/,
+			use: {
+				...devices['Desktop Chrome'],
+				baseURL: 'http://localhost:4178'
 			}
 		},
 		{
@@ -104,6 +114,14 @@ export default defineConfig({
 			command:
 				'rm -rf /tmp/passalong-e2e-labels.sqlite* /tmp/passalong-e2e-labels-media && ORIGIN=http://localhost:4177 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-labels.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-labels-media BODY_SIZE_LIMIT=256M PORT=4177 node build/index.js',
 			url: 'http://localhost:4177',
+			reuseExistingServer: !process.env.CI,
+			timeout: 120_000
+		},
+		{
+			// The reconciliation proof creates market days and sales, so it gets its own database too.
+			command:
+				'rm -rf /tmp/passalong-e2e-csv.sqlite* /tmp/passalong-e2e-csv-media && ORIGIN=http://localhost:4178 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-csv.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-csv-media BODY_SIZE_LIMIT=256M PORT=4178 node build/index.js',
+			url: 'http://localhost:4178',
 			reuseExistingServer: !process.env.CI,
 			timeout: 120_000
 		}

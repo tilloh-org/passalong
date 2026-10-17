@@ -132,6 +132,15 @@
 			</div>
 		</div>
 		<div class="actions day-actions">
+			{#if data.settlement.soldItemCount > 0}
+				<a
+					class="secondary"
+					href={`/market-days/${data.marketDay.id}/reconciliation.csv`}
+					download
+					data-testid="market-day-csv-download"
+					><Icon name="download" size="sm" />{t('marketDays.exportCsv')}</a
+				>
+			{/if}
 			<form method="POST" action="?/deleteMarketDay">
 				<input type="hidden" name="marketDayId" value={data.marketDay.id} />
 				<button type="submit" class="danger" data-testid="market-days-delete"
