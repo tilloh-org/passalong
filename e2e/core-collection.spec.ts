@@ -458,6 +458,57 @@ test.describe('Core collection', () => {
 		await expect(page).toHaveURL(/category=home/);
 		await expect(page.getByTestId('sale-history-item')).toHaveCount(1);
 
+		// act — undo the sale and race two identical sale requests for the same item; a
+		// double tap on the scanner or a retried request must not produce a second sale
+		await page.goto(protectedUrl);
+		await page.getByTestId('unmark-item-sold').click();
+		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+		await page.getByTestId('item-proceeds').fill('9,50');
+		await page.getByTestId('item-market-day').selectOption({ label: marketDayName });
+		const saleRequest = await page.evaluate(() => {
+			const saleForm = document.querySelector<HTMLFormElement>('form[action="?/markItemSold"]');
+			if (!saleForm) {
+				throw new Error('sale form not found');
+			}
+			const parameters = new URLSearchParams();
+			new FormData(saleForm).forEach((value, key) => parameters.append(key, String(value)));
+			return { url: `${window.location.pathname}?/markItemSold`, body: parameters.toString() };
+		});
+		const saleRequestHeaders = {
+			Origin: 'http://localhost:4173',
+			'Content-Type': 'application/x-www-form-urlencoded'
+		};
+		const [firstSaleResponse, secondSaleResponse] = await Promise.all([
+			page.request.post(saleRequest.url, { data: saleRequest.body, headers: saleRequestHeaders }),
+			page.request.post(saleRequest.url, { data: saleRequest.body, headers: saleRequestHeaders })
+		]);
+
+		// assume — one request sells the item, the other is rejected with the guard message.
+		// The action endpoint answers this fetch-style POST with JSON wrapping the real
+		// outcome: a 303 redirect for the sale, a 400 failure carrying the guard message.
+		const saleOutcomes: { type: string; status: number; location?: string; data?: unknown }[] = [];
+		for (const response of [firstSaleResponse, secondSaleResponse]) {
+			saleOutcomes.push(JSON.parse(await response.text()));
+		}
+		const acceptedOutcomes = saleOutcomes.filter((outcome) => outcome.type === 'redirect');
+		const rejectedOutcomes = saleOutcomes.filter((outcome) => outcome.type === 'failure');
+		expect(acceptedOutcomes).toHaveLength(1);
+		expect(acceptedOutcomes[0].status).toBe(303);
+		expect(acceptedOutcomes[0].location).toMatch(/\/items\//);
+		expect(rejectedOutcomes).toHaveLength(1);
+		expect(rejectedOutcomes[0].status).toBe(400);
+		expect(JSON.stringify(rejectedOutcomes[0].data)).toContain(
+			'Der Artikel wurde bereits als verkauft erfasst.'
+		);
+
+		// assume — the item carries exactly one sale, not two
+		await page.reload();
+		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
+		await page.goto('/sales');
+		await expect(
+			page.getByTestId('sale-history-item').filter({ hasText: 'Leselampe' })
+		).toHaveCount(1);
+
 		// act — filter by an proceeds range that excludes the sale
 		await page.getByTestId('sale-history-filters').getByLabel('Erlös von (€)').fill('20');
 		await page.getByTestId('sale-history-filters').getByRole('button', { name: 'Filtern' }).click();
