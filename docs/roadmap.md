@@ -104,7 +104,7 @@ are partly implemented but not proven.
 - dropped: environment provisioning is atomic and create-only — no longer valid
   after the env bootstrap was removed (PR #69, merge `d24d358`)
 - [x] the instance admin creates new users on the admin page (PR #70, merge
-  `b05eba9f`)
+      `b05eba9f`)
 - [x] new users get their own tenant and see no foreign data
 - [x] the instance admin cannot delete themselves
 - [x] the invitation uses the existing login/reset path (no second auth path)
@@ -290,7 +290,7 @@ are partly implemented but not proven.
 
 - [ ] an archive with several users creates exactly one isolated tenant per user
 - [ ] all items, images, market days, sales, expenses, profiles and stand pages
-  are assigned
+      are assigned
 - [ ] record counts before and after the import match
 - [ ] all media checksums match
 - [ ] no cross-tenant relation exists
@@ -498,14 +498,14 @@ reserved badges, favourites with entry point, public buyer detail page).
 Open follow-up work:
 
 - [ ] navigation icons — once further pages become their own views (for example
-  statistics as its own page, price labels), the navigation entries get icon
-  SVGs in the original app's style (Tabler paths, `svg.icon` 16 px,
-  `stroke currentColor`).
+      statistics as its own page, price labels), the navigation entries get icon
+      SVGs in the original app's style (Tabler paths, `svg.icon` 16 px,
+      `stroke currentColor`).
 - [ ] standalone "new item" page (optional) — if passalong grows more form logic
-  (for example photo upload while creating), the "+ New" CTA should become its
-  own route.
+      (for example photo upload while creating), the "+ New" CTA should become its
+      own route.
 - [x] lightbox/gallery view on the public detail page implemented (PR #66;
-  thumbnails and click-to-zoom, mobile E2E check).
+      thumbnails and click-to-zoom, mobile E2E check).
 
 ## Open product questions
 
