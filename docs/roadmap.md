@@ -249,7 +249,8 @@ are partly implemented but not proven.
 - [x] money values stay exact without floating-point errors
 - [ ] statistics match the underlying sales and expenses
 - [ ] CSV export is tenant-bound and guarded against formula injection
-- [ ] the print layout is verified with 16 labels on A4
+- [x] the print layout is verified with 16 labels on A4 (real A4 PDF: sixteen labels
+      are one page, the next label opens a second page, verified 2026-10-17)
 - [ ] the camera and file fallback are covered by an E2E test
 
 ### Status
@@ -263,7 +264,9 @@ are partly implemented but not proven.
 - closing a market day runs through `closeMarketDay`; undoing a sale runs
   through `undoSale` on the item detail page.
 - expenses/stand fees implemented; the statistics page `/statistics` exists.
-- price labels implemented under `/price-labels` with a 4×4 grid.
+- price labels implemented under `/price-labels` with a 4×4 grid; the A4 print proof
+  runs as E2E against its own instance and asserts the generated PDF (16 labels =
+  one page, 17 = two pages) and the 194mm × 281mm print area (verified 2026-10-17).
 - CSV export is not implemented; location release and map are not implemented
   (no `latitude`/`longitude` fields).
 - for duplicate scan/sale requests the repository serialises the write and rejects
@@ -463,7 +466,7 @@ time. The list below is the order from the plan, with what is done marked.
 - camera and photo fallback — done
 - [x] idempotent sale capture — guard in the repository, two parallel requests for
       one item proven by E2E (2026-10-17)
-- price labels — implemented, A4 print proof open
+- [x] price labels — implemented, printed to a real A4 PDF by the E2E proof (2026-10-17)
 - exchange format first with fixtures — done
 - schema — done
 - manifest — done

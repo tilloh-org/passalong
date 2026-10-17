@@ -5,7 +5,8 @@ import { defineConfig, devices } from '@playwright/test';
  * account exists, and only once per instance: the instance-takeover smoke test, and the two-tenant
  * privacy spec, which imports two users through the takeover and then signs both of them in. Each
  * runs in its own project against its own freshly seeded instance. Every other spec registers its
- * own account on the shared instance.
+ * own account on the shared instance. The A4 label proof is the exception: it seeds a whole sheet
+ * of items, so it runs on its own instance and leaves the item counts of the shared instance alone.
  */
 export default defineConfig({
 	testDir: 'e2e',
@@ -22,7 +23,8 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'chromium',
-			testIgnore: /instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts/,
+			testIgnore:
+				/instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts|price-labels\.spec\.ts/,
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4173',
@@ -47,6 +49,14 @@ export default defineConfig({
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4176'
+			}
+		},
+		{
+			name: 'price-labels',
+			testMatch: /price-labels\.spec\.ts/,
+			use: {
+				...devices['Desktop Chrome'],
+				baseURL: 'http://localhost:4177'
 			}
 		},
 		{
@@ -86,6 +96,14 @@ export default defineConfig({
 			command:
 				'rm -rf /tmp/passalong-e2e-accounts.sqlite* /tmp/passalong-e2e-accounts-media && ORIGIN=http://localhost:4176 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-accounts.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-accounts-media BODY_SIZE_LIMIT=256M PORT=4176 node build/index.js',
 			url: 'http://localhost:4176',
+			reuseExistingServer: !process.env.CI,
+			timeout: 120_000
+		},
+		{
+			// The label proof seeds a sheet of items, so it gets a database of its own.
+			command:
+				'rm -rf /tmp/passalong-e2e-labels.sqlite* /tmp/passalong-e2e-labels-media && ORIGIN=http://localhost:4177 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-labels.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-labels-media BODY_SIZE_LIMIT=256M PORT=4177 node build/index.js',
+			url: 'http://localhost:4177',
 			reuseExistingServer: !process.env.CI,
 			timeout: 120_000
 		}
