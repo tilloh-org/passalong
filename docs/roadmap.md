@@ -243,7 +243,8 @@ are partly implemented but not proven.
 
 - [ ] the complete flea-market flow works on mobile
 - [x] a sale updates stock and evaluation consistently
-- [ ] duplicate scan or sale requests do not produce a double sale
+- [x] duplicate scan or sale requests do not produce a double sale (two parallel
+      requests for one item, E2E, verified 2026-10-17)
 - [ ] corrections restore the previous state traceably
 - [x] money values stay exact without floating-point errors
 - [ ] statistics match the underlying sales and expenses
@@ -265,8 +266,9 @@ are partly implemented but not proven.
 - price labels implemented under `/price-labels` with a 4×4 grid.
 - CSV export is not implemented; location release and map are not implemented
   (no `latitude`/`longitude` fields).
-- for duplicate scan/sale requests there is a guard with the error text
-  `item is already sold`, but no E2E proof, so the exit gate stays open.
+- for duplicate scan/sale requests the repository serialises the write and rejects
+  the second one (`item is already sold`); two parallel requests for one item are
+  proven by E2E, so the exit gate is closed (verified 2026-10-17).
 - a complete daily reconciliation and statistics proofs by category/day/period
   are not verified as standalone exit-gate evidence.
 
@@ -459,7 +461,8 @@ time. The list below is the order from the plan, with what is done marked.
 - QR, scan and print features — done
 - QR tokens — done
 - camera and photo fallback — done
-- idempotent sale capture — guard present, E2E proof open
+- [x] idempotent sale capture — guard in the repository, two parallel requests for
+      one item proven by E2E (2026-10-17)
 - price labels — implemented, A4 print proof open
 - exchange format first with fixtures — done
 - schema — done
