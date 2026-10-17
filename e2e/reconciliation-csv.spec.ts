@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { salesAccount } from './sales-instance-account';
+
 test.setTimeout(120_000);
 
 const marketDayNamePrefix = 'Flohmarkt am See';
@@ -19,11 +21,7 @@ const saleTimePattern = '\\d{2}\\.\\d{2}\\.\\d{4} \\d{2}:\\d{2}';
  * @returns {Promise<void>} Resolves once the owner is signed in.
  */
 async function signInOnFreshInstance(page) {
-	const account = {
-		username: 'csvexport',
-		displayName: 'CSV Export',
-		password: 'correct-horse-battery-staple'
-	};
+	const account = salesAccount;
 	await page.goto('/');
 	const onboardingVisible = await page
 		.getByRole('heading', { name: 'Ersten Zugang erstellen' })
