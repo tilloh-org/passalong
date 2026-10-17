@@ -7,7 +7,7 @@
 # F-002 — Statistics consistency and corrected sales
 
 Replaces: nothing
-Implemented: <!-- PR #<nr> (2026-10-17), filled in before review -->
+Implemented: PR #75 (2026-10-17)
 
 ## Goal
 
