@@ -196,6 +196,31 @@ test('downloads the reconciliation of one market day as CSV', async ({ page }) =
 	// act — open the day and download its reconciliation
 	await page.goto(`/market-days/${marketDayId}`);
 	await expect(page.getByTestId('market-day-csv-download')).toBeVisible();
+
+	// assume — the download is styled like the other secondary controls, not a bare link
+	const downloadStyle = await page.getByTestId('market-day-csv-download').evaluate((element) => {
+		const style = getComputedStyle(element);
+		return {
+			alignItems: style.alignItems,
+			textDecorationLine: style.textDecorationLine,
+			borderTopWidth: style.borderTopWidth,
+			paddingInlineStart: style.paddingInlineStart,
+			borderRadius: style.borderRadius
+		};
+	});
+	expect(downloadStyle.alignItems).toBe('center');
+	expect(downloadStyle.textDecorationLine).toBe('none');
+	expect(Number.parseFloat(downloadStyle.borderTopWidth)).toBeGreaterThan(0);
+	expect(Number.parseFloat(downloadStyle.paddingInlineStart)).toBeGreaterThan(0);
+	expect(Number.parseFloat(downloadStyle.borderRadius)).toBeGreaterThan(0);
+
+	// assume — it matches the height of the button next to it in the action row
+	const downloadBox = await page.getByTestId('market-day-csv-download').boundingBox();
+	const editButtonBox = await page.getByTestId('market-days-edit-trigger').boundingBox();
+	expect(downloadBox).not.toBeNull();
+	expect(editButtonBox).not.toBeNull();
+	expect(Math.abs((downloadBox?.height ?? 0) - (editButtonBox?.height ?? 0))).toBeLessThan(3);
+
 	const download = await page.request.get(`/market-days/${marketDayId}/reconciliation.csv`);
 
 	// assume — the file is a CSV attachment named after the day

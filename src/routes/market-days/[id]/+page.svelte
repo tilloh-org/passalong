@@ -134,7 +134,7 @@
 		<div class="actions day-actions">
 			{#if data.settlement.soldItemCount > 0}
 				<a
-					class="secondary"
+					class="secondary-link"
 					href={`/market-days/${data.marketDay.id}/reconciliation.csv`}
 					download
 					data-testid="market-day-csv-download"
@@ -639,6 +639,24 @@
 		background: var(--color-danger-soft);
 		border: 1px solid var(--color-danger);
 		color: var(--color-danger);
+	}
+	.secondary-link {
+		align-items: center;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-flex;
+		font-size: 0.82rem;
+		font-weight: 700;
+		gap: 0.35rem;
+		padding: 0.5rem 0.85rem;
+		text-decoration: none;
+	}
+	.secondary-link:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
 	}
 	.panel-head h2 {
 		align-items: center;
