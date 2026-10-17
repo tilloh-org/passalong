@@ -248,7 +248,8 @@ are partly implemented but not proven.
 - [ ] corrections restore the previous state traceably
 - [x] money values stay exact without floating-point errors
 - [ ] statistics match the underlying sales and expenses
-- [ ] CSV export is tenant-bound and guarded against formula injection
+- [x] CSV export is tenant-bound and guarded against formula injection (owner-scoped
+      endpoint plus unit and E2E proof, verified 2026-10-17)
 - [x] the print layout is verified with 16 labels on A4 (real A4 PDF: sixteen labels
       are one page, the next label opens a second page, verified 2026-10-17)
 - [ ] the camera and file fallback are covered by an E2E test
@@ -267,8 +268,10 @@ are partly implemented but not proven.
 - price labels implemented under `/price-labels` with a 4×4 grid; the A4 print proof
   runs as E2E against its own instance and asserts the generated PDF (16 labels =
   one page, 17 = two pages) and the 194mm × 281mm print area (verified 2026-10-17).
-- CSV export is not implemented; location release and map are not implemented
-  (no `latitude`/`longitude` fields).
+- the market-day reconciliation is downloadable as CSV (`docs/requirements/F-001-market-day-reconciliation-csv.md`):
+  the detail page links it for days with sales, the endpoint reads the day through the owner scope and
+  neutralises titles that a spreadsheet would read as a formula (verified 2026-10-17).
+- location release and the map are not implemented (no `latitude`/`longitude` fields).
 - for duplicate scan/sale requests the repository serialises the write and rejects
   the second one (`item is already sold`); two parallel requests for one item are
   proven by E2E, so the exit gate is closed (verified 2026-10-17).
