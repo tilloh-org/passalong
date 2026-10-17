@@ -155,7 +155,8 @@ const ITEM_SELECT_COLUMNS = [
 	'items.sale_channel',
 	'items.sold_at',
 	'items.sale_proceeds_cents',
-	'items.market_day_id'
+	'items.market_day_id',
+	'items.reserved_at'
 ].join(', ');
 
 export interface SaleMonthProceeds {
@@ -1619,13 +1620,11 @@ export function createCollectionRepository(
 					sold_item_count: number;
 					total_proceeds_cents: number;
 				}[]
-			)
-				.filter((row) => row.market_day_name !== null)
-				.map((row) => ({
-					marketDayName: row.market_day_name,
-					soldItemCount: row.sold_item_count,
-					totalProceedsCents: row.total_proceeds_cents
-				}));
+			).map((row) => ({
+				marketDayName: row.market_day_name,
+				soldItemCount: row.sold_item_count,
+				totalProceedsCents: row.total_proceeds_cents
+			}));
 			const expensesByCategory = (
 				database
 					.prepare(

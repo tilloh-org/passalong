@@ -1671,6 +1671,7 @@ describe('collection repository', () => {
 			{ category: 'books', soldItemCount: 1, totalProceedsCents: 250 }
 		]);
 		expect(allTime.proceedsByMarketDay).toEqual([
+			{ marketDayName: null, soldItemCount: 2, totalProceedsCents: 1650 },
 			{ marketDayName: 'May market', soldItemCount: 1, totalProceedsCents: 750 }
 		]);
 		expect(allTime.expensesByCategory).toEqual([
@@ -1684,7 +1685,10 @@ describe('collection repository', () => {
 		expect(mayOnly.soldItemCount).toBe(2);
 		expect(mayOnly.totalProceedsCents).toBe(1000);
 		expect(mayOnly.totalExpensesCents).toBe(700);
-		expect(mayOnly.proceedsByMarketDay).toHaveLength(1);
+		expect(mayOnly.proceedsByMarketDay).toEqual([
+			{ marketDayName: 'May market', soldItemCount: 1, totalProceedsCents: 750 },
+			{ marketDayName: null, soldItemCount: 1, totalProceedsCents: 250 }
+		]);
 		expect(juneOnly).toMatchObject({
 			soldItemCount: 1,
 			totalProceedsCents: 1400,
@@ -2362,7 +2366,7 @@ describe('collection repository', () => {
 				{ category: 'decor', soldItemCount: 2, totalProceedsCents: 2100 },
 				{ category: 'books', soldItemCount: 1, totalProceedsCents: 250 }
 			],
-			proceedsByMarketDay: [],
+			proceedsByMarketDay: [{ marketDayName: null, soldItemCount: 3, totalProceedsCents: 2350 }],
 			expensesByCategory: []
 		});
 		expect(foreignStatistics).toMatchObject({
@@ -3480,5 +3484,348 @@ describe('instance account administration', () => {
 
 		// assume
 		expect(refusal).toBeInstanceOf(Error);
+	});
+
+	describe('statistics consistency and corrected sales', () => {
+		/**
+		 * Create a repository with an owner, a collection and a market day.
+		 *
+		 * @returns The repository, the owner scope, the collection and the market day.
+		 */
+		function createMarketRepository() {
+			const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+			const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+			const marketDay = repository.createMarketDay(
+				{
+					name: 'Maifeiertag',
+					date: '2026-05-16',
+					startTime: null,
+					endTime: null,
+					location: '',
+					notes: ''
+				},
+				owner
+			);
+			return { repository, owner, collection, marketDay };
+		}
+
+		/**
+		 * Sum one statistics dimension into the totals it must add up to.
+		 *
+		 * @param buckets - Buckets carrying a sold count and a proceeds total.
+		 * @returns The summed count and proceeds of the dimension.
+		 */
+		function sumBuckets(buckets: { soldItemCount: number; totalProceedsCents: number }[]) {
+			return buckets.reduce(
+				(total, bucket) => ({
+					soldItemCount: total.soldItemCount + bucket.soldItemCount,
+					totalProceedsCents: total.totalProceedsCents + bucket.totalProceedsCents
+				}),
+				{ soldItemCount: 0, totalProceedsCents: 0 }
+			);
+		}
+
+		it('keeps every statistics dimension in step with the underlying sales and expenses', () => {
+			// arrange — three sales across two months, three channels and three categories
+			const { repository, owner, collection, marketDay } = createMarketRepository();
+			const vase = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Vase',
+					priceCents: 800,
+					category: 'decor',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			const book = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Buch',
+					priceCents: 300,
+					category: 'books',
+					condition: 'fair',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			const lamp = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Lampe',
+					priceCents: 1500,
+					category: 'home',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			repository.markItemSold(
+				vase.id,
+				{
+					channel: 'flea-market',
+					soldAt: '2026-05-16T09:00:00.000Z',
+					proceedsCents: 750,
+					marketDayId: marketDay.id
+				},
+				owner
+			);
+			repository.markItemSold(
+				book.id,
+				{ channel: 'private-sale', soldAt: '2026-05-20T09:00:00.000Z', proceedsCents: 250 },
+				owner
+			);
+			repository.markItemSold(
+				lamp.id,
+				{ channel: 'shop', soldAt: '2026-06-05T09:00:00.000Z', proceedsCents: 1400 },
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Standgebühr',
+					category: 'fee',
+					amountCents: 500,
+					expenseDate: '2026-05-16',
+					marketDayId: marketDay.id
+				},
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Kaffee',
+					category: 'supplies',
+					amountCents: 200,
+					expenseDate: '2026-05-20',
+					marketDayId: null
+				},
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Benzin',
+					category: 'transport',
+					amountCents: 300,
+					expenseDate: '2026-06-05',
+					marketDayId: null
+				},
+				owner
+			);
+
+			// act
+			const statistics = repository.getSaleStatistics(owner);
+
+			// assume — the totals equal the rows behind them
+			expect(statistics.soldItemCount).toBe(3);
+			expect(statistics.totalProceedsCents).toBe(2400);
+			expect(statistics.totalExpensesCents).toBe(1000);
+			expect(statistics.netResultCents).toBe(1400);
+
+			// assume — every dimension adds up to those same totals
+			const totals = { soldItemCount: 3, totalProceedsCents: 2400 };
+			expect(sumBuckets(statistics.proceedsByChannel)).toEqual(totals);
+			expect(sumBuckets(statistics.proceedsByMonth)).toEqual(totals);
+			expect(sumBuckets(statistics.proceedsByCategory)).toEqual(totals);
+			expect(sumBuckets(statistics.proceedsByMarketDay)).toEqual(totals);
+			expect(
+				statistics.expensesByCategory.reduce(
+					(total, bucket) => total + bucket.totalExpensesCents,
+					0
+				)
+			).toBe(statistics.totalExpensesCents);
+
+			// assume — the month buckets carry the two May sales and the June sale
+			expect(statistics.proceedsByMonth).toEqual([
+				{ month: '2026-05', soldItemCount: 2, totalProceedsCents: 1000 },
+				{ month: '2026-06', soldItemCount: 1, totalProceedsCents: 1400 }
+			]);
+
+			// assume — the day buckets name the market day and keep the sales without one apart
+			expect(statistics.proceedsByMarketDay).toEqual([
+				{ marketDayName: null, soldItemCount: 2, totalProceedsCents: 1650 },
+				{ marketDayName: 'Maifeiertag', soldItemCount: 1, totalProceedsCents: 750 }
+			]);
+		});
+
+		it('counts both period bounds for sales and for expenses', () => {
+			// arrange — one row on each bound of May and one just outside it
+			const { repository, owner, collection } = createMarketRepository();
+			const firstItem = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Erster',
+					priceCents: 500,
+					category: 'home',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			const lastItem = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Letzter',
+					priceCents: 200,
+					category: 'home',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			const juneItem = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Juni',
+					priceCents: 300,
+					category: 'home',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			repository.markItemSold(
+				firstItem.id,
+				{ channel: 'shop', soldAt: '2026-05-01T09:00:00.000Z', proceedsCents: 500 },
+				owner
+			);
+			repository.markItemSold(
+				lastItem.id,
+				{ channel: 'shop', soldAt: '2026-05-31T09:00:00.000Z', proceedsCents: 200 },
+				owner
+			);
+			repository.markItemSold(
+				juneItem.id,
+				{ channel: 'shop', soldAt: '2026-06-01T09:00:00.000Z', proceedsCents: 300 },
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Erste',
+					category: 'fee',
+					amountCents: 100,
+					expenseDate: '2026-05-01',
+					marketDayId: null
+				},
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Letzte',
+					category: 'fee',
+					amountCents: 50,
+					expenseDate: '2026-05-31',
+					marketDayId: null
+				},
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Juni',
+					category: 'fee',
+					amountCents: 25,
+					expenseDate: '2026-06-01',
+					marketDayId: null
+				},
+				owner
+			);
+
+			// act
+			const may = repository.getSaleStatistics(owner, {
+				fromInclusive: '2026-05-01',
+				toInclusive: '2026-05-31'
+			});
+
+			// assume — both bounds count, the June row stays out
+			expect(may.soldItemCount).toBe(2);
+			expect(may.totalProceedsCents).toBe(700);
+			expect(may.totalExpensesCents).toBe(150);
+			expect(may.netResultCents).toBe(550);
+		});
+
+		it('restores the complete item state when a sale is corrected', () => {
+			// arrange — a reserved item that carries every field, sold at a market day
+			const { repository, owner, collection, marketDay } = createMarketRepository();
+			const item = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Nähmaschine',
+					priceCents: 4500,
+					category: 'decor',
+					condition: 'good',
+					internalNotes: 'Kratzer an der Unterseite',
+					externalDescription: 'Läuft ruhig, Zubehör dabei.',
+					isComplete: true,
+					isFunctional: true
+				},
+				owner
+			);
+			repository.setItemReservation(item.id, true, owner);
+			const itemBeforeSale = repository.listItemsForOwner(collection.id, owner)[0];
+			repository.markItemSold(
+				item.id,
+				{
+					channel: 'flea-market',
+					soldAt: '2026-05-16T09:00:00.000Z',
+					proceedsCents: 4200,
+					marketDayId: marketDay.id
+				},
+				owner
+			);
+			const statisticsWhileSold = repository.getSaleStatistics(owner);
+
+			// act
+			const correctedItem = repository.unmarkItemSold(item.id, owner);
+
+			// assume — every field is back to what it was before the sale
+			expect(correctedItem).toEqual(itemBeforeSale);
+			expect(correctedItem.reservedAt).not.toBeNull();
+			expect(correctedItem.marketDayId).toBeNull();
+
+			// assume — the correction takes the sale out of history, statistics and the day
+			expect(
+				repository.getSaleHistory(owner, {
+					channel: null,
+					category: null,
+					proceedsMinCents: null,
+					proceedsMaxCents: null
+				})
+			).toEqual([]);
+			expect(statisticsWhileSold.soldItemCount).toBe(1);
+			expect(statisticsWhileSold.totalProceedsCents).toBe(4200);
+			const statisticsAfterCorrection = repository.getSaleStatistics(owner);
+			expect(statisticsAfterCorrection.soldItemCount).toBe(0);
+			expect(statisticsAfterCorrection.totalProceedsCents).toBe(0);
+			expect(statisticsAfterCorrection.proceedsByMarketDay).toEqual([]);
+			expect(repository.getProceedsByDay(owner, null)).toEqual([]);
+			expect(repository.getMarketDaySettlement(marketDay.id, owner)?.soldItemCount).toBe(0);
+
+			// assume — the item is sellable again and back on the label sheet
+			expect(repository.listItemsForPriceLabels(owner).map((labelItem) => labelItem.id)).toEqual([
+				item.id
+			]);
+		});
 	});
 });
