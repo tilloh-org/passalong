@@ -1,7 +1,7 @@
 # F-001 — Market-day reconciliation as CSV
 
 Replaces: nothing
-Implemented: <!-- PR #<nr>, filled in before review -->
+Implemented: PR #74 (2026-10-17)
 
 ## Goal
 
