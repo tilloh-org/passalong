@@ -1,6 +1,13 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
 
+import {
+	latitudeRange,
+	longitudeRange,
+	parseCoordinateValue,
+	roundCoordinate
+} from '$lib/utils/market-day-geo';
+
 export const itemCategories = [
 	'clothing',
 	'books',
@@ -129,9 +136,26 @@ export interface MarketDay {
 	startTime: string | null;
 	endTime: string | null;
 	location: string;
+	/** WGS84 latitude of the stand, or null while the owner has not set a position. */
+	latitude: number | null;
+	/** WGS84 longitude of the stand, or null while the owner has not set a position. */
+	longitude: number | null;
+	/** Whether the position may appear on the public stand page. */
+	locationReleased: boolean;
 	notes: string;
 	closedAt: string | null;
 	createdAt: string;
+}
+
+/** The released stand position a buyer sees on a public stand page. */
+export interface PublicStandLocation {
+	marketDayName: string;
+	date: string;
+	startTime: string | null;
+	endTime: string | null;
+	location: string;
+	latitude: number;
+	longitude: number;
 }
 
 export interface CreateMarketDayInput {
@@ -140,6 +164,25 @@ export interface CreateMarketDayInput {
 	startTime: string | null;
 	endTime: string | null;
 	location: string;
+	notes: string;
+	/** Optional: a market day without a position stays a plain market day. Form values arrive as strings. */
+	latitude?: number | string | null;
+	/** Optional: see latitude. */
+	longitude?: number | string | null;
+	/** Optional: defaults to not released. */
+	locationReleased?: boolean;
+}
+
+/** Market-day values after validation: the optional position fields are parsed and filled in. */
+export interface ValidatedMarketDayInput {
+	name: string;
+	date: string | null;
+	startTime: string | null;
+	endTime: string | null;
+	location: string;
+	latitude: number | null;
+	longitude: number | null;
+	locationReleased: boolean;
 	notes: string;
 }
 
@@ -401,6 +444,7 @@ export interface CollectionRepository {
 	getProceedsByDay(scope: SessionScope, period: SaleStatisticsPeriod | null): SaleDayProceeds[];
 	getPublicStandView(collectionId: string): PublicStandView | null;
 	getPublicStandItemRoute(itemId: string): PublicStandItemRoute | null;
+	getPublicStandLocation(collectionPublicId: string, today: string): PublicStandLocation | null;
 	getPublicStandItem(collectionId: string, itemId: string): PublicStandItem | null;
 	searchPublicStandItems(collectionId: string, filters: ItemFilters): PublicStandItem[];
 	addItemImage(itemId: string, storageKey: string, scope: SessionScope): ItemImage;
@@ -463,10 +507,18 @@ interface MarketDayRow {
 	start_time: string | null;
 	end_time: string | null;
 	location: string;
+	latitude: number | null;
+	longitude: number | null;
+	location_released: number;
 	notes: string;
 	closed_at: string | null;
 	created_at: string;
 }
+
+// One shared column list for every market-day read; a forgotten column here is how the reserved
+// field of an item went missing once.
+const MARKET_DAY_SELECT_COLUMNS =
+	'id, name, date, start_time, end_time, location, latitude, longitude, location_released, notes, closed_at, created_at';
 
 const tenantSchemaFoundationVersion = '2026082601_tenant_schema_foundation';
 const authHardeningVersion = '2026083001_auth_hardening';
@@ -480,6 +532,7 @@ const marketDaysVersion = '2026090901_market_days';
 const expensesVersion = '2026091001_expenses';
 const collectionPublicIdVersion = '2026091701_collection_public_id';
 const collectionPublicationVersion = '2026101801_collection_publication_status';
+const marketDayLocationVersion = '2026101901_market_day_location';
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
 const initialFailureCount = 1;
@@ -1177,7 +1230,7 @@ export function createCollectionRepository(
 		listMarketDays(scope) {
 			return database
 				.prepare(
-					'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE owner_id = ? AND tenant_id = ? ORDER BY closed_at IS NULL DESC, COALESCE(date, created_at) DESC, id DESC'
+					`SELECT ${MARKET_DAY_SELECT_COLUMNS} FROM market_days WHERE owner_id = ? AND tenant_id = ? ORDER BY closed_at IS NULL DESC, COALESCE(date, created_at) DESC, id DESC`
 				)
 				.all(scope.userId, scope.tenantId)
 				.map((row) => mapMarketDayRow(row as MarketDayRow));
@@ -1189,7 +1242,8 @@ export function createCollectionRepository(
 			const createdAt = new Date().toISOString();
 			database
 				.prepare(
-					'INSERT INTO market_days (id, tenant_id, owner_id, name, date, start_time, end_time, location, notes, closed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)'
+					`INSERT INTO market_days (id, tenant_id, owner_id, name, date, start_time, end_time, location, latitude, longitude, location_released, notes, closed_at, created_at)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`
 				)
 				.run(
 					marketDayId,
@@ -1200,6 +1254,9 @@ export function createCollectionRepository(
 					marketDay.startTime,
 					marketDay.endTime,
 					marketDay.location,
+					marketDay.latitude,
+					marketDay.longitude,
+					marketDay.locationReleased ? sqliteTrue : 0,
 					marketDay.notes,
 					createdAt
 				);
@@ -1210,6 +1267,9 @@ export function createCollectionRepository(
 				startTime: marketDay.startTime,
 				endTime: marketDay.endTime,
 				location: marketDay.location,
+				latitude: marketDay.latitude,
+				longitude: marketDay.longitude,
+				locationReleased: marketDay.locationReleased,
 				notes: marketDay.notes,
 				closedAt: null,
 				createdAt
@@ -1220,7 +1280,8 @@ export function createCollectionRepository(
 			const marketDay = validateMarketDayInput(input);
 			const result = database
 				.prepare(
-					'UPDATE market_days SET name = ?, date = ?, start_time = ?, end_time = ?, location = ?, notes = ? WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+					`UPDATE market_days SET name = ?, date = ?, start_time = ?, end_time = ?, location = ?, latitude = ?, longitude = ?, location_released = ?, notes = ?
+					 WHERE id = ? AND owner_id = ? AND tenant_id = ?`
 				)
 				.run(
 					marketDay.name,
@@ -1228,6 +1289,9 @@ export function createCollectionRepository(
 					marketDay.startTime,
 					marketDay.endTime,
 					marketDay.location,
+					marketDay.latitude,
+					marketDay.longitude,
+					marketDay.locationReleased ? sqliteTrue : 0,
 					marketDay.notes,
 					marketDayId,
 					scope.userId,
@@ -1239,7 +1303,7 @@ export function createCollectionRepository(
 			return mapMarketDayRow(
 				database
 					.prepare(
-						'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?'
+						`SELECT ${MARKET_DAY_SELECT_COLUMNS} FROM market_days WHERE id = ? AND tenant_id = ?`
 					)
 					.get(marketDayId, scope.tenantId) as MarketDayRow
 			);
@@ -1267,7 +1331,7 @@ export function createCollectionRepository(
 			return mapMarketDayRow(
 				database
 					.prepare(
-						'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?'
+						`SELECT ${MARKET_DAY_SELECT_COLUMNS} FROM market_days WHERE id = ? AND tenant_id = ?`
 					)
 					.get(marketDayId, scope.tenantId) as MarketDayRow
 			);
@@ -1285,7 +1349,7 @@ export function createCollectionRepository(
 			return mapMarketDayRow(
 				database
 					.prepare(
-						'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND tenant_id = ?'
+						`SELECT ${MARKET_DAY_SELECT_COLUMNS} FROM market_days WHERE id = ? AND tenant_id = ?`
 					)
 					.get(marketDayId, scope.tenantId) as MarketDayRow
 			);
@@ -1294,7 +1358,7 @@ export function createCollectionRepository(
 		getMarketDay(marketDayId, scope) {
 			const row = database
 				.prepare(
-					'SELECT id, name, date, start_time, end_time, location, notes, closed_at, created_at FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?'
+					`SELECT ${MARKET_DAY_SELECT_COLUMNS} FROM market_days WHERE id = ? AND owner_id = ? AND tenant_id = ?`
 				)
 				.get(marketDayId, scope.userId, scope.tenantId) as MarketDayRow | undefined;
 			return row ? mapMarketDayRow(row) : null;
@@ -1733,6 +1797,57 @@ export function createCollectionRepository(
 				)
 				.get(itemId) as { id: string; collection_public_id: string } | undefined;
 			return item ? { collectionId: item.collection_public_id, itemId: item.id } : null;
+		},
+
+		/**
+		 * Resolve the released stand position a buyer sees on a public stand page.
+		 *
+		 * Market days belong to the owner, not to one collection, so this asks for the next
+		 * released market day of the collection's owner. A day without a date never counts: the
+		 * position of "someday" would be a standing invitation to a place nobody is at.
+		 *
+		 * @param {string} collectionPublicId - Public collection handle from the stand URL.
+		 * @param {string} today - Current date as `YYYY-MM-DD`.
+		 * @returns {PublicStandLocation | null} The next released position, or null.
+		 */
+		getPublicStandLocation(collectionPublicId, today) {
+			const row = database
+				.prepare(
+					`SELECT market_days.name AS market_day_name, market_days.date, market_days.start_time,
+					        market_days.end_time, market_days.location, market_days.latitude, market_days.longitude
+					 FROM market_days
+					 JOIN collections
+					   ON collections.owner_id = market_days.owner_id
+					  AND collections.tenant_id = market_days.tenant_id
+					 WHERE collections.public_id = ? AND collections.is_published = 1
+					   AND market_days.location_released = 1
+					   AND market_days.latitude IS NOT NULL AND market_days.longitude IS NOT NULL
+					   AND market_days.date IS NOT NULL AND market_days.date >= ?
+					 ORDER BY market_days.date ASC, market_days.start_time ASC, market_days.id ASC
+					 LIMIT 1`
+				)
+				.get(collectionPublicId, today) as
+				| {
+						market_day_name: string;
+						date: string;
+						start_time: string | null;
+						end_time: string | null;
+						location: string;
+						latitude: number;
+						longitude: number;
+				  }
+				| undefined;
+			return row
+				? {
+						marketDayName: row.market_day_name,
+						date: row.date,
+						startTime: row.start_time,
+						endTime: row.end_time,
+						location: row.location,
+						latitude: row.latitude,
+						longitude: row.longitude
+					}
+				: null;
 		},
 
 		getPublicStandView(publicId) {
@@ -2374,6 +2489,9 @@ function mapMarketDayRow(row: MarketDayRow): MarketDay {
 		startTime: row.start_time,
 		endTime: row.end_time,
 		location: row.location,
+		latitude: row.latitude,
+		longitude: row.longitude,
+		locationReleased: row.location_released === sqliteTrue,
 		notes: row.notes,
 		closedAt: row.closed_at,
 		createdAt: row.created_at
@@ -2384,9 +2502,9 @@ function mapMarketDayRow(row: MarketDayRow): MarketDay {
  * Validate and normalize market-day input before persistence.
  *
  * @param {CreateMarketDayInput} input - Raw market day values.
- * @returns {CreateMarketDayInput} Normalized values (trimmed text, optional date/times).
+ * @returns {ValidatedMarketDayInput} Normalized values (trimmed text, optional date/times).
  */
-function validateMarketDayInput(input: CreateMarketDayInput): CreateMarketDayInput {
+function validateMarketDayInput(input: CreateMarketDayInput): ValidatedMarketDayInput {
 	const name = requireText(input.name, 'name');
 	const date = input.date === null ? null : requireIsoDate(input.date, 'date');
 	const startTime =
@@ -2398,14 +2516,51 @@ function validateMarketDayInput(input: CreateMarketDayInput): CreateMarketDayInp
 	if (startTime && endTime && endTime <= startTime) {
 		throw new Error('endTime must be after startTime');
 	}
+	const location = (input.location ?? '').trim();
+	const latitude = requireCoordinate(input.latitude, 'latitude', latitudeRange);
+	const longitude = requireCoordinate(input.longitude, 'longitude', longitudeRange);
+	const locationReleased = input.locationReleased === true;
+	if (locationReleased && (latitude === null || longitude === null)) {
+		throw new Error('a released location needs both coordinates');
+	}
 	return {
 		name,
 		date,
 		startTime,
 		endTime,
-		location: (input.location ?? '').trim(),
+		location,
+		latitude,
+		longitude,
+		locationReleased,
 		notes: (input.notes ?? '').trim()
 	};
+}
+
+/**
+ * Parse an optional coordinate from a form value and check its range.
+ *
+ * @param {number | string | null | undefined} value - Raw coordinate from the form.
+ * @param {string} field - Field name for the error message.
+ * @param {{ minimum: number, maximum: number }} range - Accepted range in degrees.
+ * @returns {number | null} The rounded coordinate, or null when the field is empty.
+ * @throws When the value is not a number or outside the accepted range.
+ */
+function requireCoordinate(
+	value: number | string | null | undefined,
+	field: string,
+	range: { minimum: number; maximum: number }
+): number | null {
+	if (value === null || value === undefined || value === '' || value === '   ') {
+		return null;
+	}
+	const parsed = parseCoordinateValue(value);
+	if (parsed === null) {
+		throw new Error(`${field} must be a number`);
+	}
+	if (parsed < range.minimum || parsed > range.maximum) {
+		throw new Error(`${field} is out of range`);
+	}
+	return roundCoordinate(parsed);
 }
 
 /**
@@ -2588,7 +2743,7 @@ function initializeSchema(database: Database.Database): void {
 			const appliedAt = new Date().toISOString();
 			database
 				.prepare(
-					'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)'
+					'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)'
 				)
 				.run(
 					tenantSchemaFoundationVersion,
@@ -2614,6 +2769,8 @@ function initializeSchema(database: Database.Database): void {
 					collectionPublicIdVersion,
 					appliedAt,
 					collectionPublicationVersion,
+					appliedAt,
+					marketDayLocationVersion,
 					appliedAt
 				);
 		})();
@@ -2805,6 +2962,9 @@ function createSchema(database: Database.Database): void {
 			start_time TEXT,
 			end_time TEXT,
 			location TEXT NOT NULL DEFAULT '',
+			latitude REAL,
+			longitude REAL,
+			location_released INTEGER NOT NULL DEFAULT 0,
 			notes TEXT NOT NULL DEFAULT '',
 			closed_at TEXT,
 			created_at TEXT NOT NULL,
@@ -2907,6 +3067,7 @@ function migrateSchema(database: Database.Database): void {
 	migrateExpenses(database);
 	migrateCollectionPublicId(database);
 	migrateCollectionPublication(database);
+	migrateMarketDayLocation(database);
 }
 
 /**
@@ -2958,6 +3119,35 @@ function migrateCollectionPublicId(database: Database.Database): void {
 		database
 			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
 			.run(collectionPublicIdVersion, new Date().toISOString());
+	})();
+}
+
+/**
+ * Add the stand position and its release flag to the market days once.
+ *
+ * Both columns start empty: a market day without a position keeps working exactly as before.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateMarketDayLocation(database: Database.Database): void {
+	if (hasMigrationVersion(database, marketDayLocationVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'market_days', 'latitude')) {
+			database.exec('ALTER TABLE market_days ADD COLUMN latitude REAL');
+			database.exec('ALTER TABLE market_days ADD COLUMN longitude REAL');
+		}
+		if (!hasColumn(database, 'market_days', 'location_released')) {
+			database.exec(
+				'ALTER TABLE market_days ADD COLUMN location_released INTEGER NOT NULL DEFAULT 0'
+			);
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(marketDayLocationVersion, new Date().toISOString());
 	})();
 }
 

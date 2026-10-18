@@ -22,7 +22,7 @@ const httpStatus = {
 } as const;
 const csrfError = 'Diese Anfrage konnte nicht sicher verarbeitet werden.';
 const sessionExpiredError = 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.';
-const marketDayInputError = 'Bitte prüfe Name, Datum und Zeiten.';
+const marketDayInputError = 'Bitte prüfe Name, Datum, Zeiten und Standort.';
 const expenseCategories: ExpenseCategory[] = ['fee', 'supplies', 'transport', 'purchase', 'other'];
 const maximumExpenseCents = 10_000_000;
 const expenseError = {
@@ -125,6 +125,9 @@ function parseMarketDayInput(formData: FormData): CreateMarketDayInput {
 		startTime: getOptionalFormText(formData, 'startTime'),
 		endTime: getOptionalFormText(formData, 'endTime'),
 		location: getFormText(formData, 'location'),
+		latitude: getOptionalFormText(formData, 'latitude'),
+		longitude: getOptionalFormText(formData, 'longitude'),
+		locationReleased: getFormText(formData, 'locationReleased') === '1',
 		notes: getFormText(formData, 'notes')
 	};
 }

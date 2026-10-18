@@ -20,6 +20,7 @@ export const iconNames = [
 	'chart-bar',
 	'chart-pie',
 	'building-store',
+	'map-pin',
 	'user-circle',
 	'logout',
 	'key',

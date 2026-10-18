@@ -44,6 +44,7 @@ interface ActionFixture {
 	loadActions: () => Promise<PageServerActions>;
 	loadDetailActions: () => Promise<PageServerActions>;
 	loadProfileActions: () => Promise<PageServerActions>;
+	loadMarketDayActions: () => Promise<PageServerActions>;
 	loadInstanceAdminActions: () => Promise<PageServerActions>;
 	loadPage: () => Promise<(input: unknown) => unknown>;
 }
@@ -82,6 +83,9 @@ function createActionFixtureWithOwner(): ActionFixture {
 				.actions as unknown as PageServerActions,
 		loadProfileActions: async () =>
 			(await import('../../routes/profile/+page.server')).actions as unknown as PageServerActions,
+		loadMarketDayActions: async () =>
+			(await import('../../routes/market-days/[id]/+page.server'))
+				.actions as unknown as PageServerActions,
 		loadInstanceAdminActions: async () =>
 			(await import('../../routes/admin/+page.server')).actions as unknown as PageServerActions,
 		loadPage: async () =>
@@ -839,5 +843,92 @@ describe('instance-admin actions', () => {
 
 		// assume
 		expect(redirectOutcome).toMatchObject({ status: 303, location: '/profile' });
+	});
+
+	it('stores the stand position of a market day through the detail action and rejects a release without coordinates', async () => {
+		// arrange
+		const { repository, loadMarketDayActions, scope, rawSessionToken } =
+			createActionFixtureWithOwner();
+		const marketDay = repository.createMarketDay(
+			{
+				name: 'Samstag',
+				date: '2026-11-07',
+				startTime: null,
+				endTime: null,
+				location: 'Moorweg 7',
+				notes: ''
+			},
+			scope
+		);
+		const actions = await loadMarketDayActions();
+		const url = new URL(`http://localhost/market-days/${marketDay.id}`);
+		const positionForm = new URLSearchParams({
+			marketDayId: marketDay.id,
+			returnTo: `/market-days/${marketDay.id}`,
+			name: 'Samstag',
+			date: '2026-11-07',
+			startTime: '',
+			endTime: '',
+			location: 'Moorweg 7',
+			latitude: '52,5145',
+			longitude: '13,3501',
+			locationReleased: '1',
+			notes: ''
+		});
+
+		// act — position with a comma separator, then a release without any coordinates
+		let redirectOutcome: unknown;
+		try {
+			await actions.updateMarketDay({
+				cookies: {
+					get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+				},
+				params: { id: marketDay.id },
+				request: new Request(url, {
+					body: positionForm,
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
+					method: 'POST'
+				}),
+				url
+			} as never);
+		} catch (error) {
+			redirectOutcome = error;
+		}
+		const storedDay = repository.getMarketDay(marketDay.id, scope);
+		positionForm.delete('latitude');
+		positionForm.delete('longitude');
+		const invalidOutcome = await actions.updateMarketDay({
+			cookies: {
+				get: (name: string) => (name === sessionCookieName ? rawSessionToken : undefined)
+			},
+			params: { id: marketDay.id },
+			request: new Request(url, {
+				body: positionForm,
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: url.origin },
+				method: 'POST'
+			}),
+			url
+		} as never);
+		const dayAfterRejectedUpdate = repository.getMarketDay(marketDay.id, scope);
+
+		// assume
+		expect(redirectOutcome).toMatchObject({
+			status: 303,
+			location: `/market-days/${marketDay.id}`
+		});
+		expect(storedDay).toMatchObject({
+			latitude: 52.5145,
+			longitude: 13.3501,
+			locationReleased: true
+		});
+		expect(invalidOutcome).toMatchObject({
+			status: 400,
+			data: { marketDayError: 'Bitte prüfe Name, Datum, Zeiten und Standort.' }
+		});
+		expect(dayAfterRejectedUpdate).toMatchObject({
+			latitude: 52.5145,
+			longitude: 13.3501,
+			locationReleased: true
+		});
 	});
 });

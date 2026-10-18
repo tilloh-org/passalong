@@ -999,7 +999,8 @@ describe('collection repository', () => {
 			{ version: '2026090901_market_days' },
 			{ version: '2026091001_expenses' },
 			{ version: '2026091701_collection_public_id' },
-			{ version: '2026101801_collection_publication_status' }
+			{ version: '2026101801_collection_publication_status' },
+			{ version: '2026101901_market_day_location' }
 		]);
 		expect(
 			migratedDatabase
@@ -1051,7 +1052,8 @@ describe('collection repository', () => {
 			{ version: '2026090901_market_days' },
 			{ version: '2026091001_expenses' },
 			{ version: '2026091701_collection_public_id' },
-			{ version: '2026101801_collection_publication_status' }
+			{ version: '2026101801_collection_publication_status' },
+			{ version: '2026101901_market_day_location' }
 		]);
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({
 			count: 2
@@ -3918,6 +3920,246 @@ describe('instance account administration', () => {
 			expect(repository.listItemsForPriceLabels(owner).map((labelItem) => labelItem.id)).toEqual([
 				item.id
 			]);
+		});
+	});
+
+	describe('public stand location', () => {
+		it('returns the position of the next released market day of the stand owner', () => {
+			// arrange
+			const databasePath = createDatabasePath();
+			const repository = createCollectionRepository({ databasePath });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+			const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+			repository.setCollectionPublication(standCollection.id, true, owner);
+			repository.createMarketDay(
+				{
+					name: 'Letzter Samstag',
+					date: '2026-10-03',
+					startTime: '10:00',
+					endTime: '16:00',
+					location: 'Alter Platz',
+					latitude: 52.51,
+					longitude: 13.35,
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+			repository.createMarketDay(
+				{
+					name: 'Nächster Samstag',
+					date: '2026-11-07',
+					startTime: '09:00',
+					endTime: '15:00',
+					location: 'Moorweg 7',
+					latitude: '52,514500',
+					longitude: '13,350100',
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+			repository.createMarketDay(
+				{
+					name: 'Nicht freigegeben',
+					date: '2026-10-25',
+					startTime: null,
+					endTime: null,
+					location: 'Geheimplatz',
+					latitude: 52.6,
+					longitude: 13.4,
+					locationReleased: false,
+					notes: ''
+				},
+				owner
+			);
+			const dayWithoutPosition = repository.createMarketDay(
+				{
+					name: 'Ohne Position',
+					date: '2026-10-20',
+					startTime: null,
+					endTime: null,
+					location: 'Marktplatz',
+					latitude: 52.5,
+					longitude: 13.3,
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+			repository.createMarketDay(
+				{
+					name: 'Ohne Datum',
+					date: null,
+					startTime: null,
+					endTime: null,
+					location: 'Irgendwo',
+					latitude: 52.7,
+					longitude: 13.5,
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+
+			// act — a released day whose coordinates went missing is skipped defensively
+			const rawDatabase = new Database(databasePath);
+			rawDatabase
+				.prepare('UPDATE market_days SET latitude = NULL, longitude = NULL WHERE id = ?')
+				.run(dayWithoutPosition.id);
+			rawDatabase.close();
+			const location = repository.getPublicStandLocation(standCollection.publicId, '2026-10-18');
+
+			// assume
+			expect(location).toEqual({
+				marketDayName: 'Nächster Samstag',
+				date: '2026-11-07',
+				startTime: '09:00',
+				endTime: '15:00',
+				location: 'Moorweg 7',
+				latitude: 52.5145,
+				longitude: 13.3501
+			});
+		});
+
+		it('hides the location of an unpublished collection, of another owner and of past days', () => {
+			// arrange
+			const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+			const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+			// Market days belong to the owner, not to one collection: a second stand page of the
+			// same owner therefore shows the same position.
+			const secondCollection = repository.createCollection({ name: 'Zweiter Stand' }, owner);
+			const releasedDay = {
+				name: 'Nächster Samstag',
+				date: '2026-11-07',
+				startTime: null,
+				endTime: null,
+				location: 'Moorweg 7',
+				latitude: 52.5145,
+				longitude: 13.3501,
+				locationReleased: true,
+				notes: ''
+			};
+			repository.createMarketDay(releasedDay, owner);
+
+			// act — the collection is not published yet
+			const unpublishedLocation = repository.getPublicStandLocation(
+				standCollection.publicId,
+				'2026-10-18'
+			);
+			repository.setCollectionPublication(standCollection.id, true, owner);
+			repository.setCollectionPublication(secondCollection.id, true, owner);
+			const publishedLocation = repository.getPublicStandLocation(
+				standCollection.publicId,
+				'2026-10-18'
+			);
+			const secondStandLocation = repository.getPublicStandLocation(
+				secondCollection.publicId,
+				'2026-10-18'
+			);
+			const outOfSeasonLocation = repository.getPublicStandLocation(
+				standCollection.publicId,
+				'2026-12-01'
+			);
+			const unknownLocation = repository.getPublicStandLocation('unbekannt', '2026-10-18');
+
+			// assume
+			expect(unpublishedLocation).toBeNull();
+			expect(publishedLocation?.marketDayName).toBe('Nächster Samstag');
+			expect(secondStandLocation).toEqual(publishedLocation);
+			expect(outOfSeasonLocation).toBeNull();
+			expect(unknownLocation).toBeNull();
+		});
+
+		it('keeps the stand position optional and stores it with the market day', () => {
+			// arrange
+			const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+
+			// act — a plain market day without a position
+			const plainDay = repository.createMarketDay(
+				{
+					name: 'Samstag',
+					date: '2026-11-07',
+					startTime: null,
+					endTime: null,
+					location: 'Moorweg 7',
+					notes: ''
+				},
+				owner
+			);
+			const updatedDay = repository.updateMarketDay(
+				plainDay.id,
+				{
+					name: 'Samstag',
+					date: '2026-11-07',
+					startTime: null,
+					endTime: null,
+					location: 'Moorweg 7',
+					latitude: '52,5145',
+					longitude: '13,3501',
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+			const storedDay = repository.getMarketDay(plainDay.id, owner);
+
+			// assume
+			expect(plainDay.latitude).toBeNull();
+			expect(plainDay.longitude).toBeNull();
+			expect(plainDay.locationReleased).toBe(false);
+			expect(updatedDay.latitude).toBe(52.5145);
+			expect(updatedDay.longitude).toBe(13.3501);
+			expect(updatedDay.locationReleased).toBe(true);
+			expect(storedDay).toMatchObject({ latitude: 52.5145, longitude: 13.3501 });
+		});
+
+		it('refuses a released stand position without usable coordinates', () => {
+			// arrange
+			const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+			const marketDayInput = {
+				name: 'Samstag',
+				date: '2026-11-07',
+				startTime: null,
+				endTime: null,
+				location: 'Moorweg 7',
+				notes: ''
+			};
+
+			// act — release without coordinates, and coordinates outside the valid ranges
+			const releaseWithoutCoordinates = () =>
+				repository.createMarketDay({ ...marketDayInput, locationReleased: true }, owner);
+			const latitudeOutOfRange = () =>
+				repository.createMarketDay({ ...marketDayInput, latitude: 91, longitude: 13.35 }, owner);
+			const longitudeNotANumber = () =>
+				repository.createMarketDay(
+					{ ...marketDayInput, latitude: 52.51, longitude: 'östlich' },
+					owner
+				);
+
+			// assume
+			expect(releaseWithoutCoordinates).toThrow('a released location needs both coordinates');
+			expect(latitudeOutOfRange).toThrow('latitude is out of range');
+			expect(longitudeNotANumber).toThrow('longitude must be a number');
 		});
 	});
 });
