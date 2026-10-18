@@ -655,6 +655,15 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('save-stand-intro')).toBeEnabled();
 		await page.getByTestId('save-stand-intro').click();
 		await expect(page).toHaveURL(/\/profile/);
+
+		// act — the stand page opens for buyers only after the owner published it; a retry
+		// against the reused database finds it already published.
+		const publicationStatus = page.getByTestId('stand-publication-status');
+		await expect(publicationStatus).toBeVisible();
+		if (!(await publicationStatus.textContent())?.includes('ist veröffentlicht')) {
+			await page.getByTestId('toggle-stand-publication').click();
+			await expect(publicationStatus).toContainText('ist veröffentlicht');
+		}
 		const standHref = await page.getByTestId('open-stand-link').getAttribute('href');
 		const standPage = await page.context().newPage();
 		await standPage.goto(`http://localhost:4173${standHref}`);

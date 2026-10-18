@@ -205,6 +205,49 @@
 						<p class="stand-hint">
 							{t('profile.standHint')}
 						</p>
+						<form
+							method="POST"
+							action="?/setCollectionPublication"
+							data-testid="stand-publication-form"
+						>
+							<input name="collectionId" type="hidden" value={data.activeCollection.id} />
+							<input
+								name="published"
+								type="hidden"
+								value={data.activeCollection.isPublished ? 'false' : 'true'}
+							/>
+							<p
+								class="stand-status"
+								class:published={data.activeCollection.isPublished}
+								data-testid="stand-publication-status"
+							>
+								<Icon name={data.activeCollection.isPublished ? 'world' : 'x'} size="sm" />
+								{data.activeCollection.isPublished
+									? t('profile.standPublished')
+									: t('profile.standUnpublished')}
+							</p>
+							<p class="stand-hint">
+								{data.activeCollection.isPublished
+									? t('profile.standPublishedHint')
+									: t('profile.standUnpublishedHint')}
+							</p>
+							{#if form?.standPublicationError}
+								<p class="form-error" role="alert">{form.standPublicationError}</p>
+							{/if}
+							<button
+								type="submit"
+								class={data.activeCollection.isPublished ? 'secondary' : ''}
+								data-testid="toggle-stand-publication"
+							>
+								<Icon name={data.activeCollection.isPublished ? 'x' : 'world'} size="sm" />{data
+									.activeCollection.isPublished
+									? t('profile.unpublishStand')
+									: t('profile.publishStand')}
+							</button>
+						</form>
+
+						<hr class="stand-divider" />
+
 						<form method="POST" action="?/saveStandIntro" data-testid="stand-intro-form">
 							<input name="collectionId" type="hidden" value={data.activeCollection.id} />
 							<label>
@@ -878,6 +921,19 @@
 	.stand-panel form {
 		display: grid;
 		gap: var(--gap-action-row);
+	}
+
+	.stand-status {
+		align-items: center;
+		display: flex;
+		font-size: 0.88rem;
+		font-weight: 700;
+		gap: 0.4rem;
+		margin: 0 0 0.25rem;
+	}
+
+	.stand-status.published {
+		color: var(--color-accent);
 	}
 
 	.stand-hint {

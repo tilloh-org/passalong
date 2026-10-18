@@ -34,7 +34,11 @@ export const load: LayoutServerLoad = async ({ cookies, url }) => {
 			isAuthenticated: Boolean(scope),
 			isInstanceAdmin: scope ? getCollectionRepository().isInstanceAdmin(scope) : false,
 			profile: scope ? getCollectionRepository().getProfile(scope) : null,
-			standPath: activeCollection ? `/stand/${encodeURIComponent(activeCollection.publicId)}` : null
+			// The header links to the public stand page; an unpublished collection has none.
+			standPath:
+				activeCollection?.isPublished === true
+					? `/stand/${encodeURIComponent(activeCollection.publicId)}`
+					: null
 		}
 	};
 };

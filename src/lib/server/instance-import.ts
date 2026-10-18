@@ -387,11 +387,12 @@ function writeCollection(
 ): void {
 	const collectionId = randomUUID();
 	// The public handle is generated per imported stand, exactly as for a natively created one:
-	// the imported internal ids stay internal and never become a working public URL.
+	// the imported internal ids stay internal and never become a working public URL. The imported
+	// publication status decides whether the stand page is reachable right away.
 	database
 		.prepare(
-			`INSERT INTO collections (id, public_id, tenant_id, owner_id, name, stand_intro, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`
+			`INSERT INTO collections (id, public_id, tenant_id, owner_id, name, stand_intro, is_published, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 		.run(
 			collectionId,
@@ -400,6 +401,7 @@ function writeCollection(
 			scope.userId,
 			collection.name,
 			collection.standIntro ?? '',
+			collection.isPublished === true ? 1 : 0,
 			now
 		);
 
