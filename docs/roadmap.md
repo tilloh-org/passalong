@@ -225,7 +225,7 @@ are partly implemented but not proven.
 - publication status implemented (F-004, PR #77): a collection is published by its
   owner, imported collections carry the status of the archive, and every public
   surface resolves published collections only.
-- server-rendered pages carry an explicit cache policy (F-006, PR #<nr>): they answer
+- server-rendered pages carry an explicit cache policy (F-006, PR #79): they answer
   `cache-control: private, no-store`, so a browser cannot reuse a stale page — found while
   capturing evidence (a registration fetch followed by a navigation to the same URL).
 

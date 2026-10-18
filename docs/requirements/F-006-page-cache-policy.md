@@ -3,7 +3,7 @@
 # F-006 — Cache policy of server-rendered pages
 
 Replaces: nothing
-Implemented: PR #TBD
+Implemented: PR #79 (2026-10-18)
 
 ## Goal
 
