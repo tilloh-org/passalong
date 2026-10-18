@@ -30,7 +30,7 @@ export default defineConfig({
 		{
 			name: 'chromium',
 			testIgnore:
-				/instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts|price-labels\.spec\.ts|reconciliation-csv\.spec\.ts|statistics-correction\.spec\.ts|restore-proof\.spec\.ts|stand-location\.spec\.ts/,
+				/instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts|price-labels\.spec\.ts|reconciliation-csv\.spec\.ts|statistics-correction\.spec\.ts|restore-proof\.spec\.ts|stand-location\.spec\.ts|mobile-flea-market\.spec\.ts/,
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4173',
@@ -81,6 +81,16 @@ export default defineConfig({
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4177'
+			}
+		},
+		{
+			// The mobile proof walks the whole flow on a phone viewport, so it needs an instance of
+			// its own: it registers the first account, creates a collection and records a sale.
+			name: 'mobile-flow',
+			testMatch: /mobile-flea-market\.spec\.ts/,
+			use: {
+				...devices['Pixel 7'],
+				baseURL: 'http://localhost:4182'
 			}
 		},
 		{
@@ -136,6 +146,15 @@ export default defineConfig({
 			command:
 				'rm -rf /tmp/passalong-e2e-sales.sqlite* /tmp/passalong-e2e-sales-media && ORIGIN=http://localhost:4178 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-sales.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-sales-media BODY_SIZE_LIMIT=256M PORT=4178 node build/index.js',
 			url: 'http://localhost:4178',
+			reuseExistingServer: !process.env.CI,
+			timeout: 120_000
+		},
+		{
+			// The mobile proof registers the first account and records a sale, so it keeps its own
+			// database instead of moving the shared instance.
+			command:
+				'rm -rf /tmp/passalong-e2e-mobile.sqlite* /tmp/passalong-e2e-mobile-media && ORIGIN=http://localhost:4182 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-mobile.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-mobile-media BODY_SIZE_LIMIT=256M PORT=4182 node build/index.js',
+			url: 'http://localhost:4182',
 			reuseExistingServer: !process.env.CI,
 			timeout: 120_000
 		},

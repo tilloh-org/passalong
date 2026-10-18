@@ -218,6 +218,9 @@ are partly implemented but not proven.
   owner avatars, sold → 404 (PR #51).
 - public search/filter (only title/external description, status open/reserved)
   (PR #51).
+- the neutral QR route resolves the owner first (F-007, PR #<nr>): an unsold article of the session's
+  own tenant opens in the internal view, also when the collection is not published; sold and unknown
+  identifiers keep answering 404 to everyone, every other visitor keeps the public view.
 - location release and map implemented (F-005, PR #78): the owner takes the position of a
   market day with one tap or types it in, decides per day whether buyers may see it, and the
   public stand page shows the place of the next released market day with a map the visitor
@@ -248,7 +251,10 @@ are partly implemented but not proven.
 
 ### Exit gates
 
-- [ ] the complete flea-market flow works on mobile
+- [x] the complete flea-market flow works on mobile (E2E on a phone viewport, 412 × 915 css
+      pixels, on an instance of its own: registration, collection, article, market day, sale, day
+      detail, closing the day, sales history, statistics and the label sheet; every step also
+      proves that no element reaches past the viewport — verified 2026-10-18)
 - [x] a sale updates stock and evaluation consistently
 - [x] duplicate scan or sale requests do not produce a double sale (two parallel
       requests for one item, E2E, verified 2026-10-17)
@@ -264,7 +270,10 @@ are partly implemented but not proven.
       endpoint plus unit and E2E proof, verified 2026-10-17)
 - [x] the print layout is verified with 16 labels on A4 (real A4 PDF: sixteen labels
       are one page, the next label opens a second page, verified 2026-10-17)
-- [ ] the camera and file fallback are covered by an E2E test
+- [x] the camera and file fallback are covered by an E2E test (`e2e/core-collection.spec.ts`: the
+      camera starts, its stream is live, stopping ends the tracks and a granted-but-delayed
+      permission still ends in a usable state; the photo fallback decodes a generated QR code and
+      opens the article it points to — verified 2026-10-18)
 
 ### Status
 
@@ -298,6 +307,16 @@ are partly implemented but not proven.
   before the sale (including its reservation) and takes the sale out of the sale history, the
   statistics and the market-day detail, so the item is for sale and printed again
   (unit and E2E proof, verified 2026-10-17).
+- the printed label of an article stays usable for its owner while the collection is not published
+  (F-007, PR #<nr>): the neutral QR route resolves the session's own tenant first and sends the owner
+  to the internal view of an unsold article; sold and unknown identifiers keep answering a data-free
+  404 to everyone, and every other visitor keeps the reduced public view. The mobile proof surfaced
+  this: the route answered 404 for the owner as soon as the collection was not published.
+- the whole flow is proven to work on a phone (exit gate "the complete flea-market flow works on
+  mobile"): `e2e/mobile-flea-market.spec.ts` runs the journey from the first account to the label
+  sheet on a 412 × 915 viewport on an instance of its own and checks after every step that no
+  element reaches past the viewport — the layout clips with `overflow-x: hidden`, so the document
+  width alone would not notice a cut-off control (verified 2026-10-18).
 - two defects the proofs surfaced are fixed: the shared column list of the item queries missed
   `items.reserved_at`, so listed items reported `reservedAt: undefined` instead of `null` or a
   timestamp, and the day breakdown of the statistics dropped every sale without a market day even

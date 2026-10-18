@@ -20,9 +20,14 @@ function getSessionScope(token: string | undefined) {
 /**
  * Resolve a neutral QR-code route to the internal owner detail or public buyer detail.
  *
- * An authenticated owner can open the complete workflow for an unsold item.
- * Every other visitor is only redirected to that item's reduced public stand view.
- * Sold and unknown identifiers return a data-free 404 before owner lookup.
+ * An authenticated owner reaches the complete workflow of an unsold item of their own tenant, also
+ * when its collection is not published yet: the label printed at the stall must stay usable. The
+ * owner lookup only ever searches the data of the session's own tenant, so it cannot expose
+ * anything to anybody else.
+ *
+ * Every other visitor is only redirected to that item's reduced public stand view, which exists for
+ * published and unsold items. Sold and unknown identifiers therefore answer a data-free 404 — for
+ * the owner as well, so a label that is already sold reveals no detail to anyone.
  *
  * @param {Parameters<PageServerLoad>[0]} event - Current route request event.
  * @throws {import('@sveltejs/kit').Redirect} To the applicable owner or public item page.
@@ -30,15 +35,15 @@ function getSessionScope(token: string | undefined) {
  */
 export const load: PageServerLoad = ({ cookies, params }) => {
 	const repository = getCollectionRepository();
+	const scope = getSessionScope(cookies.get(sessionCookieName));
+	const ownerItem = scope ? repository.getItemForOwner(params.id, scope) : null;
+	if (ownerItem && !ownerItem.soldAt) {
+		redirect(seeOtherStatus, `/items/${encodeURIComponent(ownerItem.id)}`);
+	}
+
 	const publicRoute = repository.getPublicStandItemRoute(params.id);
 	if (!publicRoute) {
 		throw error(notFoundStatus, 'Artikel nicht gefunden');
-	}
-
-	const scope = getSessionScope(cookies.get(sessionCookieName));
-	const ownerItem = scope ? repository.getItemForOwner(params.id, scope) : null;
-	if (ownerItem) {
-		redirect(seeOtherStatus, `/items/${encodeURIComponent(ownerItem.id)}`);
 	}
 
 	redirect(
