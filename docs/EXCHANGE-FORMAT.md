@@ -157,11 +157,21 @@ supports; an unsupported value blocks activation rather than being silently coer
 - The selected administrator always receives a new password before activation, so an incompatible
   admin hash cannot lock the operator out of the instance.
 
+## Reference archive
+
+`fixtures/exchange/reference-archive.zip` is a complete, committed example of this format: three
+users with their own tenants, a published and an unpublished stand, sold, reserved and open articles,
+several images, an avatar, market days, expenses and both password-hash cases. It is the archive the
+import proofs process, so a producer can compare its own output against it.
+
+- Content and checksums: `src/lib/server/exchange-reference-archive.test-helper.ts`
+- Regenerate it with `REFERENCE_ARCHIVE_WRITE=1 npx vitest run src/lib/server/reference-archive.test.ts`
+- Path and account names: `src/lib/exchange-reference.ts`
+
 ## Deliberate limits of this version
 
-- **No publication flag.** Neither passalong nor the products it replaced track a per-stand
-  visibility switch: a stand page is public exactly when its identifier is known. `isPublished` is
-  carried in the format so nothing is lost, and the import reports which stand pages were public.
+- **Publication status.** `isPublished` is part of the format and is written onto the imported
+  collection, so a stand page that was public in the source stays public after the takeover.
 - **No delta import.** A takeover is a one-time, complete move. There is no incremental
   synchronisation.
 - **One takeover per empty instance.** Activation refuses to run once any account exists; the
