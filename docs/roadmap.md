@@ -203,6 +203,7 @@ are partly implemented but not proven.
 - [x] public media is reachable only through published relations
 - [x] tenant enumeration is not possible
 - [x] imported public stand pages are published automatically (F-004, PR #77)
+- [x] the public stand page shows the released location of the next market day (F-005, PR #78)
 - [x] privacy E2E tests cover at least two tenants and the instance admin
 
 ### Status
@@ -217,7 +218,10 @@ are partly implemented but not proven.
   owner avatars, sold → 404 (PR #51).
 - public search/filter (only title/external description, status open/reserved)
   (PR #51).
-- open: location release and map (own slice, product decision taken 2026-10-18).
+- location release and map implemented (F-005, PR #78): the owner takes the position of a
+  market day with one tap or types it in, decides per day whether buyers may see it, and the
+  public stand page shows the place of the next released market day with a map the visitor
+  loads on an explicit click.
 - publication status implemented (F-004, PR #77): a collection is published by its
   owner, imported collections carry the status of the archive, and every public
   surface resolves published collections only.
@@ -280,7 +284,8 @@ are partly implemented but not proven.
 - the market-day reconciliation is downloadable as CSV (`docs/requirements/F-001-market-day-reconciliation-csv.md`):
   the detail page links it for days with sales, the endpoint reads the day through the owner scope and
   neutralises titles that a spreadsheet would read as a formula (verified 2026-10-17).
-- location release and the map are not implemented (no `latitude`/`longitude` fields).
+- the geolocation of a market day is implemented (F-005, PR #78): `market_days.latitude` and
+  `market_days.longitude` plus the release flag, taken on site through the device position.
 - for duplicate scan/sale requests the repository serialises the write and rejects
   the second one (`item is already sold`); two parallel requests for one item are
   proven by E2E, so the exit gate is closed (verified 2026-10-17).
@@ -498,7 +503,7 @@ time. The list below is the order from the plan, with what is done marked.
 - public DTOs — done
 - stand page — done
 - favourites — done
-- **location release — open (next slice)**
+- location release — done (F-005, PR #78)
 - privacy tests — done
 - flea-market domain — done
 - market days — done
@@ -564,7 +569,8 @@ Open follow-up work:
   status that the owner switches, an imported collection carries the status of the archive,
   and a collection that existed before the status was introduced stays reachable.
 - ~~Location release.~~ Decided 2026-10-18: the location release belongs in this release.
-  `latitude`/`longitude` and the map on the stand page follow as their own slice (F-005).
+  Implemented as F-005 (PR #78): `latitude`/`longitude` per market day, the release flag, and
+  the map on the public stand page, loaded on an explicit click.
 - **A correction log.** Correcting a sale restores the previous state and is followable in every
   view, but nothing records who corrected what and when. Should later releases keep a log of
   corrections (which would need its own table), or is the restored state enough? F-002 leaves this

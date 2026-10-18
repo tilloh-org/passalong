@@ -30,7 +30,7 @@ export default defineConfig({
 		{
 			name: 'chromium',
 			testIgnore:
-				/instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts|price-labels\.spec\.ts|reconciliation-csv\.spec\.ts|statistics-correction\.spec\.ts|restore-proof\.spec\.ts/,
+				/instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts|price-labels\.spec\.ts|reconciliation-csv\.spec\.ts|statistics-correction\.spec\.ts|restore-proof\.spec\.ts|stand-location\.spec\.ts/,
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4173',
@@ -59,7 +59,8 @@ export default defineConfig({
 		},
 		{
 			name: 'sales-proofs',
-			testMatch: /reconciliation-csv\.spec\.ts|statistics-correction\.spec\.ts/,
+			testMatch:
+				/reconciliation-csv\.spec\.ts|statistics-correction\.spec\.ts|stand-location\.spec\.ts/,
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4178'

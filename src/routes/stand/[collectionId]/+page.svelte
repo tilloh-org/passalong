@@ -1,13 +1,30 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
-	import { t } from '$lib/i18n/index.svelte';
+	import { getLocale, t } from '$lib/i18n/index.svelte';
 	import DialogShell from '$lib/components/dialog-shell.svelte';
 	import Icon from '$lib/components/icon.svelte';
 	import TileImage from '$lib/components/tile-image.svelte';
 	import { getFavorites, pruneFavorites, toggleFavorite } from '$lib/stand-favorites.svelte';
 	import ItemFilterForm from '$lib/components/item-filter-form.svelte';
+	import { openStreetMapEmbedUrl, openStreetMapLink } from '$lib/utils/market-day-geo';
 
 	let { data } = $props();
+
+	/** The visitor decides whether the map of a third-party service is loaded. */
+	let mapVisible = $state(false);
+
+	/**
+	 * Format a stored calendar date for buyers.
+	 *
+	 * @param {string} date - The stored `YYYY-MM-DD` date.
+	 * @returns {string} Localized short date.
+	 */
+	function locationDate(date: string): string {
+		const parsed = new Date(`${date}T00:00:00.000Z`);
+		return Number.isNaN(parsed.getTime())
+			? date
+			: parsed.toLocaleDateString(getLocale(), { dateStyle: 'medium', timeZone: 'UTC' });
+	}
 
 	/**
 	 * Translate a category key in the active locale.
@@ -93,6 +110,49 @@
 		{/if}
 		<p class="sub">{t('stand.sub')}</p>
 	</section>
+
+	{#if data.location}
+		{@const position = { latitude: data.location.latitude, longitude: data.location.longitude }}
+		<section class="location-panel" data-testid="stand-location">
+			<h2><Icon name="map-pin" />{t('stand.locationTitle')}</h2>
+			<p class="location-when" data-testid="stand-location-when">
+				{data.location.location}
+				· {data.location.marketDayName}
+				· {locationDate(data.location.date)}
+				{#if data.location.startTime}
+					· {data.location.startTime}{data.location.endTime ? `–${data.location.endTime}` : ''}
+				{/if}
+			</p>
+			{#if mapVisible}
+				<iframe
+					class="location-map"
+					title={t('stand.locationTitle')}
+					src={openStreetMapEmbedUrl(position)}
+					loading="lazy"
+					data-testid="stand-location-map"
+				></iframe>
+			{:else}
+				<button
+					type="button"
+					class="secondary"
+					data-testid="stand-location-load-map"
+					onclick={() => (mapVisible = true)}
+				>
+					<Icon name="map-pin" size="sm" />{t('stand.locationLoadMap')}
+				</button>
+			{/if}
+			<p class="location-hint">{t('stand.locationPrivacy')}</p>
+			<a
+				class="location-open"
+				href={openStreetMapLink(position)}
+				target="_blank"
+				rel="noopener"
+				data-testid="stand-location-open-map"
+			>
+				<Icon name="external-link" size="sm" />{t('stand.locationOpenMap')}
+			</a>
+		</section>
+	{/if}
 
 	{#if data.stand.items.length || data.hasActiveFilters}
 		<ItemFilterForm
@@ -245,6 +305,58 @@
 		margin: 0 auto;
 		max-width: 64rem;
 		padding: 0 1.25rem 2rem;
+	}
+
+	.location-panel {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--r);
+		box-shadow: var(--shadow);
+		display: grid;
+		gap: 0.5rem;
+		margin: 0 auto 1.25rem;
+		max-width: 620px;
+		padding: 1rem 1.1rem;
+	}
+
+	.location-panel h2 {
+		align-items: center;
+		display: flex;
+		font-size: 1rem;
+		gap: 0.5rem;
+		margin: 0;
+	}
+
+	.location-when {
+		color: var(--color-text-muted);
+		font-size: 0.85rem;
+		margin: 0;
+	}
+
+	.location-map {
+		border: 1px solid var(--color-border);
+		border-radius: var(--r);
+		height: 220px;
+		width: 100%;
+	}
+
+	.location-hint {
+		color: var(--color-text-faint);
+		font-size: 0.72rem;
+		margin: 0;
+	}
+
+	.location-open {
+		align-items: center;
+		color: var(--color-accent);
+		display: inline-flex;
+		font-size: 0.8rem;
+		gap: 0.35rem;
+		text-decoration: none;
+	}
+
+	.location-open:hover {
+		text-decoration: underline;
 	}
 
 	.hero {
