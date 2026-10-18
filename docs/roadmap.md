@@ -369,14 +369,24 @@ are partly implemented but not proven.
 
 ### Exit gates
 
-- [ ] a complete backup can be restored on an empty test instance
-- [ ] database, media and public stand pages are complete after restore
+- [ ] a complete backup can be restored on an empty test instance (the round trip runs on the
+      instance the backup came from; a fresh instance is not part of the proof)
+- [x] database, media and public stand pages are complete after restore (the round trip proves the
+      database and the public stand end to end, the media check of the smoke test proves the media;
+      verified 2026-10-17)
 - [ ] a backup of an older supported version can be restored into the current one
-- [ ] a manipulated or incomplete backup is rejected before activation
-- [ ] a simulated failure during restore leaves the previous instance usable
-- [ ] all old sessions are invalid after restore
-- [ ] the instance admin can sign in after restore
-- [ ] backup and restore are not reachable for normal users
+- [x] a manipulated or incomplete backup is rejected before activation (a tampered archive is
+      refused, and an archive without the media its database needs fails the smoke test and is
+      rolled back — unit proof, verified 2026-10-17)
+- [x] a simulated failure during restore leaves the previous instance usable (the failing smoke
+      test puts the previous database and media back; unit proof, verified 2026-10-17)
+- [x] all old sessions are invalid after restore (every session of the backup is revoked before the
+      instance serves again — unit and end-to-end proof, verified 2026-10-17)
+- [x] the instance admin can sign in after restore (end-to-end proof: the administrator is signed
+      out by the restore and signs in again, verified 2026-10-17)
+- [x] backup and restore are not reachable for normal users (the restore stays with the instance
+      administration, and during a restore the instance answers everyone else with the maintenance
+      page — end-to-end proof, verified 2026-10-17)
 
 ### Status
 
@@ -385,9 +395,17 @@ are partly implemented but not proven.
   backup download.
 - pre-restore backup implemented: `${livePath}.pre-restore` is created before
   the restore (`src/lib/server/backup.ts`).
-- not implemented: restore in maintenance mode, session invalidation after
-  restore and an automatic smoke test after restore.
-- further restore, migration and generation-switch proofs stay open.
+- restore in a maintenance window, session invalidation after restore and the automatic smoke test
+  after restore are implemented (`docs/requirements/F-003-restore-maintenance-and-smoke-test.md`):
+  the restore action opens a marker next to the database, every request but sign-in, administration
+  and static files answers with the maintenance page (503), the sessions of the backup are revoked,
+  and the restored instance has to pass a smoke test (database intact, schema complete, an account
+  for sign-in, no active session, every media key present) before it goes live — otherwise the
+  previous database and media come back (verified 2026-10-17).
+- a successful restore replaces the database the running process had open: the repository is closed
+  and re-created, so the next request already serves the restored data (verified 2026-10-17).
+- open: restoring a backup into a fresh instance, migrating a backup of an older schema, and a
+  versioned generation switch that swaps a whole instance directory at once.
 
 ## Phase 7 — Release hardening and 1.0.0
 
