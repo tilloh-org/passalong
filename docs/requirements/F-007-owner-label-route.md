@@ -3,7 +3,7 @@
 # F-007 — The printed label stays usable for its owner
 
 Replaces: nothing
-Implemented: PR #TBD
+Implemented: PR #80 (2026-10-18)
 
 ## Goal
 
