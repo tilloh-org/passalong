@@ -33,3 +33,20 @@ export function getDatabasePath(): string {
 	}
 	return databasePath;
 }
+
+/**
+ * Drop the process-wide repository so the next request opens the database file again.
+ *
+ * A restore replaces the database file while the process keeps a handle on the previous one; the
+ * running instance would keep serving the old data. Closing the handle and re-creating the
+ * repository on the next call is what makes the restored database the live one.
+ *
+ * @returns {void}
+ */
+export function reloadCollectionRepository(): void {
+	if (!repository) {
+		return;
+	}
+	repository.close();
+	repository = undefined;
+}

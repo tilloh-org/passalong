@@ -333,6 +333,7 @@ export interface LoginRateLimitStatus {
 }
 
 export interface CollectionRepository {
+	close(): void;
 	hasAdminAccount(): boolean;
 	hasAccounts(): boolean;
 	createInitialAdmin(input: CreateInitialAdminInput): AdminAccount;
@@ -518,6 +519,10 @@ export function createCollectionRepository(
 	initializeSchema(database);
 
 	return {
+		close() {
+			database.close();
+		},
+
 		hasAdminAccount() {
 			return Boolean(database.prepare('SELECT 1 FROM users LIMIT 1').get());
 		},

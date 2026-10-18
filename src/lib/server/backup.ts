@@ -5,6 +5,7 @@ import {
 	readFileSync,
 	readdirSync,
 	renameSync,
+	rmSync,
 	statSync,
 	writeFileSync
 } from 'node:fs';
@@ -206,11 +207,22 @@ function readSchemaVersion(databasePath: string): string {
 	return row?.version ?? '';
 }
 /**
+ * One check of the automatic smoke test that runs after a restore.
+ */
+export interface SmokeCheck {
+	name: string;
+	ok: boolean;
+	detail: string;
+}
+
+/**
  * Result of a restore attempt.
  */
 export interface RestoreOutcome {
 	restored: boolean;
 	reason?: string;
+	revokedSessions?: number;
+	smokeChecks?: SmokeCheck[];
 }
 
 interface ZipEntry {
@@ -355,7 +367,227 @@ export async function restoreInstanceBackup({
 	// Atomic swap: move the current artifacts aside, then move the staging copies into place.
 	swapFile(databasePath, stagingDatabasePath);
 	swapDirectory(mediaRoot, stagingMediaRoot);
-	return { restored: true };
+
+	// The restored database is live now: it has to pass the smoke test, otherwise the previous
+	// instance is put back before the instance serves anyone again.
+	let revokedSessions = 0;
+	let sessionInvalidationFailed = false;
+	try {
+		revokedSessions = revokeRestoredSessions(databasePath);
+	} catch {
+		sessionInvalidationFailed = true;
+	}
+	const smokeChecks = runRestoreSmokeTest({
+		databasePath,
+		mediaRoot,
+		revokedSessions,
+		sessionInvalidationFailed
+	});
+	if (smokeChecks.some((check) => !check.ok)) {
+		rollbackRestore({ databasePath, mediaRoot });
+		return {
+			restored: false,
+			reason: 'Die wiederhergestellte Instanz hat den Selbsttest nicht bestanden.',
+			smokeChecks
+		};
+	}
+	return { restored: true, revokedSessions, smokeChecks };
+}
+
+/**
+ * Revoke every session the restored database still knows.
+ *
+ * A backup holds the sessions of the moment it was created, so without this step the tokens of a
+ * previous administrator would work again after a restore.
+ *
+ * @param {string} databasePath - Path of the restored database.
+ * @returns {number} Number of sessions that were revoked.
+ */
+function revokeRestoredSessions(databasePath: string): number {
+	const restored = new Database(databasePath);
+	try {
+		const result = restored
+			.prepare('UPDATE sessions SET revoked_at = ? WHERE revoked_at IS NULL')
+			.run(new Date().toISOString());
+		return result.changes;
+	} finally {
+		restored.close();
+	}
+}
+
+/**
+ * Check that the restored database and its media are complete and usable.
+ *
+ * @param {{ databasePath: string; mediaRoot: string; revokedSessions: number; sessionInvalidationFailed: boolean }} input - Restore artifacts to check.
+ * @returns {SmokeCheck[]} One entry per check.
+ */
+function runRestoreSmokeTest({
+	databasePath,
+	mediaRoot,
+	revokedSessions,
+	sessionInvalidationFailed
+}: {
+	databasePath: string;
+	mediaRoot: string;
+	revokedSessions: number;
+	sessionInvalidationFailed: boolean;
+}): SmokeCheck[] {
+	const checks: SmokeCheck[] = [];
+	let restored: Database.Database | undefined;
+	try {
+		restored = new Database(databasePath, { readonly: true });
+	} catch (error) {
+		return [
+			{
+				name: requiredTablesCheckName,
+				ok: false,
+				detail: error instanceof Error ? error.message : 'unreadable'
+			}
+		];
+	}
+	try {
+		const integrity = restored.pragma('integrity_check') as Array<{ integrity_check: string }>;
+		const integrityResult = integrity[0]?.integrity_check ?? 'missing';
+		checks.push({
+			name: 'Datenbank ist unversehrt',
+			ok: integrityResult === 'ok',
+			detail: integrityResult
+		});
+
+		const tables = new Set(
+			(
+				restored.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
+					name: string;
+				}[]
+			).map((row) => row.name)
+		);
+		const missingTables = requiredTables.filter((table) => !tables.has(table));
+		checks.push({
+			name: requiredTablesCheckName,
+			ok: missingTables.length === 0,
+			detail:
+				missingTables.length === 0 ? `${requiredTables.length} Tabellen` : missingTables.join(', ')
+		});
+
+		const accountCount = missingTables.includes('users')
+			? 0
+			: (restored.prepare('SELECT COUNT(*) AS count FROM users').get() as { count: number }).count;
+		checks.push({
+			name: 'Ein Konto kann sich anmelden',
+			ok: accountCount > 0,
+			detail: `${accountCount} Konten`
+		});
+
+		const activeSessions = missingTables.includes('sessions')
+			? 0
+			: (
+					restored
+						.prepare('SELECT COUNT(*) AS count FROM sessions WHERE revoked_at IS NULL')
+						.get() as { count: number }
+				).count;
+		checks.push({
+			name: 'Alte Sitzungen sind zurückgesetzt',
+			ok: !sessionInvalidationFailed && activeSessions === 0,
+			detail: sessionInvalidationFailed
+				? 'not revocable'
+				: `${revokedSessions} zurückgesetzt, ${activeSessions} aktiv`
+		});
+
+		checks.push(mediaCompletenessCheck(restored, mediaRoot, missingTables));
+	} finally {
+		restored.close();
+	}
+	return checks;
+}
+
+const requiredTables = [
+	'users',
+	'sessions',
+	'collections',
+	'items',
+	'item_images',
+	'market_days',
+	'expenses'
+];
+const requiredTablesCheckName = 'Das Schema ist vollständig';
+
+/**
+ * Check that every stored media key of the restored database exists in the restored media folder.
+ *
+ * @param {Database.Database} restored - Open handle on the restored database.
+ * @param {string} mediaRoot - Root folder of the restored media.
+ * @param {string[]} missingTables - Tables absent from the restored schema.
+ * @returns {SmokeCheck} The media check.
+ */
+function mediaCompletenessCheck(
+	restored: Database.Database,
+	mediaRoot: string,
+	missingTables: string[]
+): SmokeCheck {
+	if (missingTables.includes('items') || missingTables.includes('item_images')) {
+		return { name: mediaCheckName, ok: false, detail: 'items or item_images missing' };
+	}
+	const keys = new Set<string>();
+	for (const row of restored.prepare('SELECT storage_key FROM item_images').all() as {
+		storage_key: string;
+	}[]) {
+		keys.add(row.storage_key);
+	}
+	const hasAvatarColumn = (
+		restored.prepare("PRAGMA table_info('users')").all() as { name: string }[]
+	).some((column) => column.name === 'avatar_storage_key');
+	if (hasAvatarColumn) {
+		for (const row of restored
+			.prepare('SELECT avatar_storage_key FROM users WHERE avatar_storage_key IS NOT NULL')
+			.all() as { avatar_storage_key: string }[]) {
+			keys.add(row.avatar_storage_key);
+		}
+	}
+	const missing = [...keys].filter((key) => !existsSync(join(mediaRoot, key)));
+	return {
+		name: mediaCheckName,
+		ok: missing.length === 0,
+		detail:
+			missing.length === 0 ? `${keys.size} Bilder` : `fehlend: ${missing.slice(0, 3).join(', ')}`
+	};
+}
+
+const mediaCheckName = 'Alle Bilder sind vorhanden';
+
+/**
+ * Put the artifacts of the previous instance back after a failed smoke test.
+ *
+ * The swap keeps the previous database and media as `<path>.pre-restore`; the rejected restore
+ * result is removed so a failed attempt leaves the disk as it was.
+ *
+ * @param {{ databasePath: string; mediaRoot: string }} input - Restore artifacts to roll back.
+ * @returns {void}
+ */
+function rollbackRestore({
+	databasePath,
+	mediaRoot
+}: {
+	databasePath: string;
+	mediaRoot: string;
+}): void {
+	for (const suffix of sqliteNativeFileSuffixes) {
+		renameSyncForce(`${databasePath}${suffix}`, `${databasePath}.rejected-restore${suffix}`);
+	}
+	renameSyncForce(databasePath, `${databasePath}.rejected-restore`);
+	renameSyncForce(`${databasePath}.pre-restore`, databasePath);
+	for (const suffix of sqliteNativeFileSuffixes) {
+		renameSyncForce(`${databasePath}.pre-restore${suffix}`, `${databasePath}${suffix}`);
+	}
+	renameSyncForce(mediaRoot, `${mediaRoot}.rejected-restore`);
+	renameSyncForce(`${mediaRoot}.pre-restore`, mediaRoot);
+	removePathForce(`${databasePath}.rejected-restore`);
+	removePathForce(`${mediaRoot}.rejected-restore`);
+}
+
+function removePathForce(target: string): void {
+	rmSync(target, { force: true, recursive: true });
+	rmSync(`${target}-wal`, { force: true });
+	rmSync(`${target}-shm`, { force: true });
 }
 
 function mediaEntriesOf(manifest: BackupManifest): string[] {
