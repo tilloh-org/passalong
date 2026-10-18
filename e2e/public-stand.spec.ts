@@ -84,11 +84,16 @@ test.describe('Public stand page', () => {
 				.click();
 		}
 
-		// act
+		// act — a retry runs against the same database, so an article that is already there must not
+		// be added a second time: the stand page asserts an exact number of tiles
+		const existingTitles = await page.getByTestId('item-card').allInnerTexts();
 		for (const [title, price, notes, description] of [
 			['Vase', '8,00', 'Nur abends abgeben', 'Handgefertigte Keramikvase in Blau.'],
 			['Buch', '3,00', '', '']
 		] as const) {
+			if (existingTitles.some((existing) => existing.includes(title))) {
+				continue;
+			}
 			await page.getByLabel('Artikelname').fill(title);
 			await page.getByLabel('Preis (€)').fill(price);
 			await page.getByLabel('Externe Beschreibung (für Käufer sichtbar)').fill(description);
