@@ -998,7 +998,8 @@ describe('collection repository', () => {
 			{ version: '2026083101_item_scoped_image_keys' },
 			{ version: '2026090901_market_days' },
 			{ version: '2026091001_expenses' },
-			{ version: '2026091701_collection_public_id' }
+			{ version: '2026091701_collection_public_id' },
+			{ version: '2026101801_collection_publication_status' }
 		]);
 		expect(
 			migratedDatabase
@@ -1049,7 +1050,8 @@ describe('collection repository', () => {
 			{ version: '2026083101_item_scoped_image_keys' },
 			{ version: '2026090901_market_days' },
 			{ version: '2026091001_expenses' },
-			{ version: '2026091701_collection_public_id' }
+			{ version: '2026091701_collection_public_id' },
+			{ version: '2026101801_collection_publication_status' }
 		]);
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({
 			count: 2
@@ -2405,6 +2407,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const availableItem = repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -2505,6 +2508,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const visibleItem = repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -2592,6 +2596,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const item = repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -2663,6 +2668,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const unknownKey = 'unknown-avatar.png';
 
 		// act
@@ -2687,6 +2693,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const titleMatch = repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -3030,6 +3037,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const collection = repository.createCollection({ name: 'Avery collection' }, avery);
+		repository.setCollectionPublication(collection.id, true, avery);
 		const openItem = repository.createItem(
 			{
 				collectionId: collection.id,
@@ -3075,6 +3083,87 @@ describe('collection repository', () => {
 		expect(unknownRoute).toBeNull();
 	});
 
+	it('hides an unpublished collection and everything on it from every public surface', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const avery = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Avery collection' }, avery);
+		const item = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Secret lamp',
+				priceCents: 900,
+				category: 'home',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			avery
+		);
+
+		// assume - a fresh collection starts unpublished and is reachable nowhere
+		expect(collection.isPublished).toBe(false);
+		expect(repository.getPublicStandView(collection.publicId)).toBeNull();
+		expect(repository.getPublicStandItem(collection.publicId, item.id)).toBeNull();
+		expect(repository.getPublicStandItemRoute(item.id)).toBeNull();
+		expect(
+			repository.searchPublicStandItems(collection.publicId, {
+				...emptyItemFilters,
+				query: 'Secret'
+			})
+		).toEqual([]);
+
+		// act - publishing opens every surface
+		const published = repository.setCollectionPublication(collection.id, true, avery);
+
+		// assume
+		expect(published?.isPublished).toBe(true);
+		expect(repository.getPublicStandView(collection.publicId)?.collectionName).toBe(
+			'Avery collection'
+		);
+		expect(repository.getPublicStandItem(collection.publicId, item.id)?.title).toBe('Secret lamp');
+		expect(repository.getPublicStandItemRoute(item.id)).toEqual({
+			collectionId: collection.publicId,
+			itemId: item.id
+		});
+
+		// act - taking the page offline closes every surface again, item images included
+		const unpublished = repository.setCollectionPublication(collection.id, false, avery);
+
+		// assume
+		expect(unpublished?.isPublished).toBe(false);
+		expect(repository.getPublicStandView(collection.publicId)).toBeNull();
+		expect(repository.getPublicStandItem(collection.publicId, item.id)).toBeNull();
+		expect(repository.getPublicStandItemRoute(item.id)).toBeNull();
+	});
+
+	it('keeps the publication status scoped to the owning user and tenant', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const avery = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Avery collection' }, avery);
+
+		// act
+		const foreignAttempt = repository.setCollectionPublication(collection.id, true, {
+			userId: 'foreign-user',
+			tenantId: 'foreign-tenant'
+		});
+
+		// assume
+		expect(foreignAttempt).toBeNull();
+		expect(repository.getPublicStandView(collection.publicId)).toBeNull();
+	});
+
 	it('gives every collection a separate public identifier that never exposes the internal id', () => {
 		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
@@ -3109,6 +3198,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -3145,6 +3235,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const item = repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -3179,6 +3270,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const item = repository.createItem(
 			{
 				collectionId: standCollection.id,

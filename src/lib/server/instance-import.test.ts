@@ -459,6 +459,56 @@ describe('instance import activation', () => {
 		expect(counts.users).toBe(2);
 	});
 
+	it('carries the imported publication status onto the imported stand page', async () => {
+		// arrange
+		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));
+		temporaryDirectories.push(workspace);
+		const databasePath = join(workspace, 'app.sqlite');
+		const mediaRoot = join(workspace, 'media');
+		createCollectionRepository({ databasePath });
+		const archive = fixtureArchive([
+			fixtureUser({ sourceId: 'u1', username: 'avery', items: 2, published: true }),
+			fixtureUser({ sourceId: 'u2', username: 'blake', items: 1, published: false })
+		]);
+
+		// act
+		await importInstanceArchive({
+			archive,
+			databasePath,
+			mediaRoot,
+			instanceAdminUsername: 'avery',
+			adminPassword: 'a-freshly-chosen-passphrase'
+		});
+
+		// assume — the published stand page is reachable right away, the unpublished one is not
+		const database = new Database(databasePath, { readonly: true });
+		const rows = database
+			.prepare(
+				`SELECT collections.public_id AS public_id, collections.is_published AS is_published,
+				        users.username AS owner
+				 FROM collections
+				 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
+				 ORDER BY users.username ASC`
+			)
+			.all() as Array<{ public_id: string; is_published: number; owner: string }>;
+		database.close();
+		expect(rows.map((row) => [row.owner, row.is_published])).toEqual([
+			['avery', 1],
+			['blake', 0]
+		]);
+
+		// act — the public stand page resolves through the freshly generated handle
+		const repository = createCollectionRepository({ databasePath });
+		const publishedStand = rows.find((row) => row.owner === 'avery')!;
+		const unpublishedStand = rows.find((row) => row.owner === 'blake')!;
+
+		// assume
+		expect(repository.getPublicStandView(publishedStand.public_id)?.collectionName).toBe(
+			'Flohmarkt'
+		);
+		expect(repository.getPublicStandView(unpublishedStand.public_id)).toBeNull();
+	});
+
 	it('assigns every imported record to the tenant of its source user', async () => {
 		// arrange
 		const workspace = mkdtempSync(join(tmpdir(), 'passalong-import-'));

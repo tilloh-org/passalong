@@ -477,6 +477,72 @@ describe('instance-admin actions', () => {
 		});
 	});
 
+	it('publishes and unpublishes the stand page through the profile action and rejects foreign collections', async () => {
+		// arrange
+		const { repository, loadProfileActions, scope, rawSessionToken } =
+			createActionFixtureWithOwner();
+		const actions = await loadProfileActions();
+		const url = new URL('http://localhost/');
+		const collection = repository.createCollection({ name: 'Flohmarkt' }, scope);
+
+		const callAction = (collectionId: string, published: string, sessionToken?: string) => {
+			const formData = new FormData();
+			formData.set('collectionId', collectionId);
+			formData.set('published', published);
+			return actions.setCollectionPublication({
+				cookies: { get: (name: string) => (name === sessionCookieName ? sessionToken : undefined) },
+				request: new Request(url, {
+					body: formData,
+					headers: { Origin: url.origin },
+					method: 'POST'
+				}),
+				url
+			} as never);
+		};
+
+		// act
+		let publishOutcome: unknown;
+		try {
+			await callAction(collection.id, 'true', rawSessionToken);
+		} catch (error) {
+			publishOutcome = error;
+		}
+
+		// assume
+		expect(publishOutcome).toMatchObject({ status: 303, location: '/profile' });
+		expect(repository.getCollectionForOwner(collection.id, scope)?.isPublished).toBe(true);
+		expect(repository.getPublicStandView(collection.publicId)).not.toBeNull();
+
+		// act — taking the page offline closes it again
+		let unpublishOutcome: unknown;
+		try {
+			await callAction(collection.id, 'false', rawSessionToken);
+		} catch (error) {
+			unpublishOutcome = error;
+		}
+
+		// assume
+		expect(unpublishOutcome).toMatchObject({ status: 303, location: '/profile' });
+		expect(repository.getCollectionForOwner(collection.id, scope)?.isPublished).toBe(false);
+		expect(repository.getPublicStandView(collection.publicId)).toBeNull();
+
+		// act — a foreign collection and an expired session are refused
+		const foreignOutcome = await callAction(
+			'00000000-0000-0000-0000-000000000000',
+			'true',
+			rawSessionToken
+		);
+		const anonymousOutcome = await callAction(collection.id, 'true');
+
+		// assume
+		expect(foreignOutcome).toMatchObject({
+			status: 404,
+			data: { standPublicationError: 'Die Sammlung wurde nicht gefunden.' }
+		});
+		expect(anonymousOutcome).toMatchObject({ status: 401 });
+		expect(repository.getCollectionForOwner(collection.id, scope)?.isPublished).toBe(false);
+	});
+
 	it('stores and removes the profile avatar with the previous file cleaned up', async () => {
 		// arrange
 		const { repository, loadProfileActions, scope, rawSessionToken, mediaRoot } =

@@ -69,6 +69,8 @@ export interface Collection {
 	name: string;
 	ownerName: string;
 	standIntro: string;
+	/** Whether the public stand page of this collection is reachable for buyers. */
+	isPublished: boolean;
 	/** Opaque handle used in public stand URLs; never the internal row id. */
 	publicId: string;
 }
@@ -339,6 +341,11 @@ export interface CollectionRepository {
 	createInitialAdmin(input: CreateInitialAdminInput): AdminAccount;
 	getUserForLogin(username: string): LoginAccount | null;
 	createCollection(input: CreateCollectionInput, scope: SessionScope): Collection;
+	setCollectionPublication(
+		collectionId: string,
+		isPublished: boolean,
+		scope: SessionScope
+	): Collection | null;
 	getCollectionForOwner(collectionId: string, scope: SessionScope): Collection | null;
 	getItemForOwner(itemId: string, scope: SessionScope): Item | null;
 	listCollectionsForOwner(scope: SessionScope): Collection[];
@@ -472,6 +479,7 @@ const collectionStandIntroVersion = '2026090203_collection_stand_intro';
 const marketDaysVersion = '2026090901_market_days';
 const expensesVersion = '2026091001_expenses';
 const collectionPublicIdVersion = '2026091701_collection_public_id';
+const collectionPublicationVersion = '2026101801_collection_publication_status';
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
 const initialFailureCount = 1;
@@ -600,8 +608,8 @@ export function createCollectionRepository(
 			const publicId = newPublicId();
 			const result = database
 				.prepare(
-					`INSERT INTO collections (id, public_id, tenant_id, owner_id, name, created_at)
-					 SELECT ?, ?, tenant_id, id, ?, ?
+					`INSERT INTO collections (id, public_id, tenant_id, owner_id, name, stand_intro, is_published, created_at)
+					 SELECT ?, ?, tenant_id, id, ?, '', 0, ?
 					 FROM users
 					 WHERE id = ? AND tenant_id = ?`
 				)
@@ -614,6 +622,7 @@ export function createCollectionRepository(
 				name,
 				ownerName: getOwnerDisplayName(database, scope),
 				standIntro: '',
+				isPublished: false,
 				publicId
 			};
 		},
@@ -621,13 +630,20 @@ export function createCollectionRepository(
 		getCollectionForOwner(collectionId, scope) {
 			const row = database
 				.prepare(
-					`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro, users.display_name AS owner_name
+					`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro, collections.is_published, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 				)
 				.get(collectionId, scope.userId, scope.tenantId) as
-				| { id: string; public_id: string; name: string; stand_intro: string; owner_name: string }
+				| {
+						id: string;
+						public_id: string;
+						name: string;
+						stand_intro: string;
+						is_published: number;
+						owner_name: string;
+				  }
 				| undefined;
 			return row
 				? {
@@ -635,9 +651,23 @@ export function createCollectionRepository(
 						name: row.name,
 						ownerName: row.owner_name,
 						publicId: row.public_id,
-						standIntro: row.stand_intro
+						standIntro: row.stand_intro,
+						isPublished: row.is_published === sqliteTrue
 					}
 				: null;
+		},
+
+		setCollectionPublication(collectionId, isPublished, scope) {
+			const result = database
+				.prepare(
+					`UPDATE collections SET is_published = ?
+					 WHERE id = ? AND owner_id = ? AND tenant_id = ?`
+				)
+				.run(isPublished ? sqliteTrue : 0, collectionId, scope.userId, scope.tenantId);
+			if (result.changes !== singleDatabaseRowChange) {
+				return null;
+			}
+			return getCollectionForOwnerRow(database, collectionId, scope);
 		},
 
 		getItemForOwner(itemId, scope) {
@@ -651,7 +681,7 @@ export function createCollectionRepository(
 			return database
 				.prepare(
 					`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro,
-					        users.display_name AS owner_name
+					        collections.is_published, users.display_name AS owner_name
 					 FROM collections
 					 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 					 WHERE collections.owner_id = ? AND collections.tenant_id = ?
@@ -665,12 +695,14 @@ export function createCollectionRepository(
 						name: string;
 						owner_name: string;
 						stand_intro: string;
+						is_published: number;
 					};
 					return {
 						id: collection.id,
 						name: collection.name,
 						ownerName: collection.owner_name,
 						standIntro: collection.stand_intro,
+						isPublished: collection.is_published === sqliteTrue,
 						publicId: collection.public_id
 					};
 				});
@@ -1697,7 +1729,7 @@ export function createCollectionRepository(
 					`SELECT items.id, collections.public_id AS collection_public_id
 					 FROM items
 					 JOIN collections ON collections.id = items.collection_id
-					 WHERE items.id = ? AND items.sold_at IS NULL`
+					 WHERE items.id = ? AND collections.is_published = 1 AND items.sold_at IS NULL`
 				)
 				.get(itemId) as { id: string; collection_public_id: string } | undefined;
 			return item ? { collectionId: item.collection_public_id, itemId: item.id } : null;
@@ -1708,7 +1740,7 @@ export function createCollectionRepository(
 			// row id is never a working URL.
 			const collection = database
 				.prepare(
-					'SELECT collections.name, collections.stand_intro, users.avatar_storage_key AS owner_avatar_storage_key FROM collections JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id WHERE collections.public_id = ?'
+					'SELECT collections.name, collections.stand_intro, users.avatar_storage_key AS owner_avatar_storage_key FROM collections JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id WHERE collections.public_id = ? AND collections.is_published = 1'
 				)
 				.get(publicId) as
 				{ name: string; stand_intro: string; owner_avatar_storage_key: string | null } | undefined;
@@ -1722,7 +1754,7 @@ export function createCollectionRepository(
 						        items.external_description, items.reserved_at, items.is_complete, items.is_functional
 						 FROM items
 						 JOIN collections ON collections.id = items.collection_id
-						 WHERE collections.public_id = ? AND items.sold_at IS NULL
+						 WHERE collections.public_id = ? AND collections.is_published = 1 AND items.sold_at IS NULL
 						 ORDER BY items.created_at DESC, items.id DESC`
 					)
 					.all(publicId) as {
@@ -1760,7 +1792,11 @@ export function createCollectionRepository(
 		searchPublicStandItems(publicId, filters) {
 			// `items.collection_id` joins through collections so the caller can only ever search the
 			// stand it holds the public handle for.
-			const clauses = ['collections.public_id = ?', 'items.sold_at IS NULL'];
+			const clauses = [
+				'collections.public_id = ?',
+				'collections.is_published = 1',
+				'items.sold_at IS NULL'
+			];
 			const parameters: (string | number)[] = [publicId];
 			if (filters.query && filters.query.trim().length > 0) {
 				const escapedQuery = filters.query.trim().replace(/[\\%_]/g, (match) => `\\${match}`);
@@ -1827,7 +1863,7 @@ export function createCollectionRepository(
 					        items.external_description, items.reserved_at, items.is_complete, items.is_functional
 					 FROM items
 					 JOIN collections ON collections.id = items.collection_id
-					 WHERE items.id = ? AND collections.public_id = ? AND items.sold_at IS NULL`
+					 WHERE items.id = ? AND collections.public_id = ? AND collections.is_published = 1 AND items.sold_at IS NULL`
 				)
 				.get(itemId, publicId) as
 				| {
@@ -2247,13 +2283,20 @@ function getCollectionForOwnerRow(
 ): Collection {
 	const row = database
 		.prepare(
-			`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro, users.display_name AS owner_name
+			`SELECT collections.id, collections.public_id, collections.name, collections.stand_intro, collections.is_published, users.display_name AS owner_name
 			 FROM collections
 			 JOIN users ON users.id = collections.owner_id AND users.tenant_id = collections.tenant_id
 			 WHERE collections.id = ? AND collections.owner_id = ? AND collections.tenant_id = ?`
 		)
 		.get(collectionId, scope.userId, scope.tenantId) as
-		| { id: string; public_id: string; name: string; stand_intro: string; owner_name: string }
+		| {
+				id: string;
+				public_id: string;
+				name: string;
+				stand_intro: string;
+				is_published: number;
+				owner_name: string;
+		  }
 		| undefined;
 	if (!row) {
 		throw new Error('collection was not found');
@@ -2263,7 +2306,8 @@ function getCollectionForOwnerRow(
 		name: row.name,
 		ownerName: row.owner_name,
 		publicId: row.public_id,
-		standIntro: row.stand_intro
+		standIntro: row.stand_intro,
+		isPublished: row.is_published === sqliteTrue
 	};
 }
 
@@ -2544,7 +2588,7 @@ function initializeSchema(database: Database.Database): void {
 			const appliedAt = new Date().toISOString();
 			database
 				.prepare(
-					'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)'
+					'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?), (?, ?)'
 				)
 				.run(
 					tenantSchemaFoundationVersion,
@@ -2568,6 +2612,8 @@ function initializeSchema(database: Database.Database): void {
 					expensesVersion,
 					appliedAt,
 					collectionPublicIdVersion,
+					appliedAt,
+					collectionPublicationVersion,
 					appliedAt
 				);
 		})();
@@ -2710,6 +2756,7 @@ function createSchema(database: Database.Database): void {
 			owner_id TEXT NOT NULL,
 			name TEXT NOT NULL CHECK (length(trim(name)) > 0),
 			stand_intro TEXT NOT NULL DEFAULT '',
+			is_published INTEGER NOT NULL DEFAULT 0,
 			created_at TEXT NOT NULL,
 			UNIQUE (id, tenant_id),
 			FOREIGN KEY (owner_id, tenant_id) REFERENCES users(id, tenant_id) ON DELETE RESTRICT
@@ -2859,6 +2906,7 @@ function migrateSchema(database: Database.Database): void {
 	migrateMarketDays(database);
 	migrateExpenses(database);
 	migrateCollectionPublicId(database);
+	migrateCollectionPublication(database);
 }
 
 /**
@@ -2910,6 +2958,31 @@ function migrateCollectionPublicId(database: Database.Database): void {
 		database
 			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
 			.run(collectionPublicIdVersion, new Date().toISOString());
+	})();
+}
+
+/**
+ * Add the publication status of a collection once.
+ *
+ * Collections that were reachable under their public handle before this column existed stay
+ * reachable; a collection created afterwards starts unpublished and the owner publishes it.
+ *
+ * @param {Database.Database} database - The SQLite connection to migrate.
+ * @returns {void}
+ */
+function migrateCollectionPublication(database: Database.Database): void {
+	if (hasMigrationVersion(database, collectionPublicationVersion)) {
+		return;
+	}
+
+	database.transaction(() => {
+		if (!hasColumn(database, 'collections', 'is_published')) {
+			database.exec('ALTER TABLE collections ADD COLUMN is_published INTEGER NOT NULL DEFAULT 0');
+			database.exec('UPDATE collections SET is_published = 1');
+		}
+		database
+			.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)')
+			.run(collectionPublicationVersion, new Date().toISOString());
 	})();
 }
 

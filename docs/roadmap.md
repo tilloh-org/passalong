@@ -202,7 +202,7 @@ are partly implemented but not proven.
 - [x] internal ids and notes appear in no public response
 - [x] public media is reachable only through published relations
 - [x] tenant enumeration is not possible
-- [ ] imported public stand pages are published automatically
+- [x] imported public stand pages are published automatically (F-004, PR #77)
 - [x] privacy E2E tests cover at least two tenants and the instance admin
 
 ### Status
@@ -217,10 +217,14 @@ are partly implemented but not proven.
   owner avatars, sold → 404 (PR #51).
 - public search/filter (only title/external description, status open/reserved)
   (PR #51).
-- open: location release and map.
-- automatic publication of imported stand pages is not verified as effective;
-  the import recognises published stand pages and reports them as
-  `report.publicStandPages`.
+- open: location release and map (own slice, product decision taken 2026-10-18).
+- publication status implemented (F-004, PR #77): a collection is published by its
+  owner, imported collections carry the status of the archive, and every public
+  surface resolves published collections only.
+- open: the app's server-rendered pages carry an `ETag` but no `cache-control`, so a
+  browser may serve a stale page without revalidating — found while capturing evidence
+  (a registration fetch followed by a navigation to the same URL). A candidate for its
+  own slice.
 
 ## Phase 4 — Flea-market, sales and statistics parity
 
@@ -323,7 +327,8 @@ are partly implemented but not proven.
 - [ ] this user can sign in after the import
 - [ ] compatible hashes work and are rehashed afterwards
 - [ ] incompatible hashes are usable through reset only
-- [ ] public stand pages carry the imported publication status after activation
+- [x] public stand pages carry the imported publication status after activation
+      (F-004, PR #77: import unit proof, the rest of the phase-5 gates stay open)
 - [ ] an invalid archive does not change the live instance
 - [ ] product strings and product code contain no source-product identifiers
 
@@ -344,9 +349,10 @@ are partly implemented but not proven.
   in-process in memory; a restart discards the staging step.
 - atomic activation implemented: one transaction can roll back on errors.
 - media takeover implemented through `storeMedia` with new storage keys.
-- the import recognises published stand pages and reports them as
-  `report.publicStandPages`; whether it activates the publication itself is not
-  verified.
+- the import writes the publication status of the archive onto the imported
+  collection (F-004, PR #77): a published stand page is reachable through its
+  newly generated handle right after activation, and it is still reported as
+  `report.publicStandPages`.
 - the phase-5 exit gates stay open as proof gates: record counts before/after
   import, media checksums, freedom from cross-tenant relations, sign-in/hash
   evidence, activation behaviour and a reference archive still have to be
@@ -553,16 +559,12 @@ Open follow-up work:
 
 ## Open product questions
 
-- **Publication status of collections.** How should the publication status for
-  collections be defined from now on? The `collections` table has no
-  publication field (`id`, `tenant_id`, `owner_id`, `name`, `stand_intro`,
-  `created_at`); `isPublished` exists only in the exchange format, and
-  collections are currently reachable anonymously through non-guessable UUIDs.
-  Blocks the phase-3 gate "imported public stand pages are published
-  automatically".
-- **Location release.** The phase-3 and phase-4 gates for location and map need
-  `latitude`/`longitude` fields, which do not exist. Whether the fields belong
-  in this release at all is a product decision.
+- ~~Publication status of collections.~~ Decided 2026-10-18: imported stand pages are
+  published directly. Implemented as F-004 (PR #77) — every collection owns a publication
+  status that the owner switches, an imported collection carries the status of the archive,
+  and a collection that existed before the status was introduced stays reachable.
+- ~~Location release.~~ Decided 2026-10-18: the location release belongs in this release.
+  `latitude`/`longitude` and the map on the stand page follow as their own slice (F-005).
 - **A correction log.** Correcting a sale restores the previous state and is followable in every
   view, but nothing records who corrected what and when. Should later releases keep a log of
   corrections (which would need its own table), or is the restored state enough? F-002 leaves this

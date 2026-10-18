@@ -96,6 +96,17 @@ test.describe('Public stand page', () => {
 			await page.getByRole('button', { name: 'Artikel hinzufügen' }).click();
 		}
 		await page.waitForSelector('[data-testid=item-card]');
+
+		// act — the stand page stays closed for buyers until the owner publishes it; a retry
+		// against the reused database finds it already published and must not flip it back.
+		await page.goto('/profile');
+		const publicationStatus = page.getByTestId('stand-publication-status');
+		await expect(publicationStatus).toBeVisible();
+		if (!(await publicationStatus.textContent())?.includes('ist veröffentlicht')) {
+			await page.getByTestId('toggle-stand-publication').click();
+			await expect(publicationStatus).toContainText('ist veröffentlicht');
+		}
+		await page.goto('/');
 		const standLink = page.getByTestId('nav-stand-link');
 		await expect(standLink).toBeVisible();
 
@@ -405,6 +416,32 @@ test.describe('Public stand page', () => {
 		expect(buyerSoldQrResponse.status()).toBe(404);
 		expect(ownerUnknownQrResponse.status()).toBe(404);
 		expect(buyerUnknownQrResponse.status()).toBe(404);
+
+		// act — taking the stand offline closes it for buyers, publishing it again opens it
+		await page.request.post('/profile?/setCollectionPublication', {
+			form: { collectionId: internalCollectionId, published: 'false' },
+			headers: { Origin: 'http://localhost:4173' }
+		});
+		const offlineResponse = await anonymousPage.request.get(
+			`/stand/${encodeURIComponent(publicHandle)}`,
+			{ maxRedirects: 0 }
+		);
+
+		// assume — an unpublished stand page is as unreachable as an unknown one
+		expect(offlineResponse.status()).toBe(404);
+
+		// act — publishing it again restores the public page
+		await page.request.post('/profile?/setCollectionPublication', {
+			form: { collectionId: internalCollectionId, published: 'true' },
+			headers: { Origin: 'http://localhost:4173' }
+		});
+		const reopenedResponse = await anonymousPage.request.get(
+			`/stand/${encodeURIComponent(publicHandle)}`,
+			{ maxRedirects: 0 }
+		);
+
+		// assume
+		expect(reopenedResponse.status()).toBe(200);
 		anonymousContext.close?.();
 	});
 });

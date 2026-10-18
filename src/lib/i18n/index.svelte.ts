@@ -212,6 +212,14 @@ const de: Record<string, string> = {
 	'profile.saveStandIntro': 'Einleitung speichern',
 	'profile.copyStandLink': 'Link kopieren',
 	'profile.openStand': 'Meine Angebote öffnen',
+	'profile.standPublished': 'Deine Standseite ist veröffentlicht.',
+	'profile.standUnpublished': 'Deine Standseite ist nicht veröffentlicht.',
+	'profile.standPublishedHint':
+		'Käufer erreichen sie über den Link und den QR-Code — auch ohne Konto.',
+	'profile.standUnpublishedHint':
+		'Der Link und der QR-Code führen ins Leere, bis du die Seite veröffentlichst.',
+	'profile.publishStand': 'Standseite veröffentlichen',
+	'profile.unpublishStand': 'Standseite offline nehmen',
 	'profile.changePasswordTitle': 'Passwort ändern',
 	'profile.currentPassword': 'Aktuelles Passwort',
 	'profile.newPassword': 'Neues Passwort',
@@ -678,6 +686,14 @@ const en: Record<string, string> = {
 	'profile.saveStandIntro': 'Save intro',
 	'profile.copyStandLink': 'Copy link',
 	'profile.openStand': 'Open my offers',
+	'profile.standPublished': 'Your stand page is published.',
+	'profile.standUnpublished': 'Your stand page is not published.',
+	'profile.standPublishedHint':
+		'Buyers reach it through the link and the QR code — no account needed.',
+	'profile.standUnpublishedHint':
+		'The link and the QR code lead nowhere until you publish the page.',
+	'profile.publishStand': 'Publish stand page',
+	'profile.unpublishStand': 'Take stand page offline',
 	'profile.changePasswordTitle': 'Change password',
 	'profile.currentPassword': 'Current password',
 	'profile.newPassword': 'New password',

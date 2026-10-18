@@ -16,10 +16,14 @@ test.setTimeout(180_000);
  */
 async function signInOnFreshInstance(page) {
 	await page.goto('/');
-	const onboardingVisible = await page
-		.getByRole('heading', { name: 'Ersten Zugang erstellen' })
-		.isVisible()
-		.catch(() => false);
+	// Wait for whichever state the instance is in: isVisible() alone does not wait, so a check
+	// right after the navigation can pick the login branch on an instance that still needs its
+	// first account.
+	await page
+		.locator('form[action="?/register"], [data-testid="profile-avatar-link"]')
+		.first()
+		.waitFor({ state: 'visible', timeout: 20_000 });
+	const onboardingVisible = (await page.locator('form[action="?/register"]').count()) > 0;
 	if (onboardingVisible) {
 		// The first registration signs the account in, so there is no login form to fill.
 		await page.evaluate(async (registration) => {
@@ -30,7 +34,9 @@ async function signInOnFreshInstance(page) {
 				redirect: 'manual'
 			});
 		}, restoreInstanceAccount);
-		await page.goto('/');
+		// A plain navigation back to "/" can be served from the browser cache (the HTML carries an
+		// ETag but no cache-control), so this waits on the profile page instead.
+		await page.goto('/profile');
 		await page.waitForSelector('[data-testid="profile-avatar-link"]', { timeout: 20_000 });
 		return;
 	}
@@ -135,6 +141,12 @@ test('closes the instance during a restore, drops the old sessions and brings th
 	const laterItemTitle = `Nach der Sicherung ${attemptSuffix}`;
 	const collectionId = await ensureCollection(page);
 	await createItem(page, collectionId, restoredItemTitle);
+	// act — the public stand page of this instance opens only once the collection is published
+	const publicationResponse = await page.request.post('/profile?/setCollectionPublication', {
+		form: { collectionId, published: 'true' },
+		headers: { Origin: 'http://localhost:4179' }
+	});
+	expect(publicationResponse.status()).toBe(200);
 	await page.goto('/');
 	const standPath = await page.getByTestId('nav-stand-link').getAttribute('href');
 
