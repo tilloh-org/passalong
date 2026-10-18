@@ -3,7 +3,7 @@
 # F-004 — Publication status of a collection
 
 Replaces: nothing
-Implemented: <!-- PR #<nr> (<date>), filled in before review -->
+Implemented: PR #77 (2026-10-18)
 
 ## Goal
 
