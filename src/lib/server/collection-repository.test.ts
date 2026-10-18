@@ -3112,7 +3112,12 @@ describe('collection repository', () => {
 		expect(repository.getPublicStandView(collection.publicId)).toBeNull();
 		expect(repository.getPublicStandItem(collection.publicId, item.id)).toBeNull();
 		expect(repository.getPublicStandItemRoute(item.id)).toBeNull();
-		expect(repository.searchPublicStandItems(collection.publicId, { term: 'Secret' })).toEqual([]);
+		expect(
+			repository.searchPublicStandItems(collection.publicId, {
+				...emptyItemFilters,
+				query: 'Secret'
+			})
+		).toEqual([]);
 
 		// act - publishing opens every surface
 		const published = repository.setCollectionPublication(collection.id, true, avery);
