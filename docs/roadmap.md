@@ -218,7 +218,7 @@ are partly implemented but not proven.
   owner avatars, sold → 404 (PR #51).
 - public search/filter (only title/external description, status open/reserved)
   (PR #51).
-- the neutral QR route resolves the owner first (F-007, PR #<nr>): an unsold article of the session's
+- the neutral QR route resolves the owner first (F-007, PR #80): an unsold article of the session's
   own tenant opens in the internal view, also when the collection is not published; sold and unknown
   identifiers keep answering 404 to everyone, every other visitor keeps the public view.
 - location release and map implemented (F-005, PR #78): the owner takes the position of a
@@ -308,7 +308,7 @@ are partly implemented but not proven.
   statistics and the market-day detail, so the item is for sale and printed again
   (unit and E2E proof, verified 2026-10-17).
 - the printed label of an article stays usable for its owner while the collection is not published
-  (F-007, PR #<nr>): the neutral QR route resolves the session's own tenant first and sends the owner
+  (F-007, PR #80): the neutral QR route resolves the session's own tenant first and sends the owner
   to the internal view of an unsold article; sold and unknown identifiers keep answering a data-free
   404 to everyone, and every other visitor keeps the reduced public view. The mobile proof surfaced
   this: the route answered 404 for the owner as soon as the collection was not published.
