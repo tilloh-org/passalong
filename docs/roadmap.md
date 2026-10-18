@@ -31,10 +31,9 @@ repository. Every status line names the date it was last verified.
 
 ## Status
 
-Verified 2026-09-28 against the code (`develop` at `b05eba9f`): 340 unit tests,
-14 E2E specs, lint, typecheck 0/0, build, `pnpm audit` and the release-flow tests
-green. Phases 0 to 2 are complete, phase 3 and 4 carry open gates, phases 5 to 7
-are partly implemented but not proven.
+Verified 2026-10-18 on the F-008 branch: 382 unit tests, 15 E2E specs, lint, typecheck
+0/0 and the production build are green; `pnpm audit` and the release-flow tests run in
+CI. Phases 0 to 5 are complete, phase 6 carries open gates, phase 7 is partly proven.
 
 ## Phase 0 — Contracts and security invariants
 
@@ -337,23 +336,30 @@ are partly implemented but not proven.
 - automatic takeover of public stand pages
 - validation and error report
 - atomic activation
+- a committed reference archive that proves the takeover (F-008)
 
 ### Exit gates
 
-- [ ] an archive with several users creates exactly one isolated tenant per user
-- [ ] all items, images, market days, sales, expenses, profiles and stand pages
-      are assigned
-- [ ] record counts before and after the import match
-- [ ] all media checksums match
-- [ ] no cross-tenant relation exists
-- [ ] exactly one imported user is selected as instance admin
-- [ ] this user can sign in after the import
-- [ ] compatible hashes work and are rehashed afterwards
-- [ ] incompatible hashes are usable through reset only
+- [x] an archive with several users creates exactly one isolated tenant per user (F-008, PR #81)
+- [x] all items, images, market days, sales, expenses, profiles and stand pages
+      are assigned (F-008: every imported row resolves to the tenant of its source user)
+- [x] record counts before and after the import match (F-008: the imported instance
+      reproduces every count the manifest declares)
+- [x] all media checksums match (F-008: every stored file carries the checksum that
+      was verified on the archive)
+- [x] no cross-tenant relation exists (F-008: ten scope checks across all tables)
+- [x] exactly one imported user is selected as instance admin (F-008)
+- [x] this user can sign in after the import (F-008, E2E through the takeover dialog)
+- [x] compatible hashes work and are rehashed afterwards (F-008: the second owner signs
+      in with the password behind the carried-over hash, and the stored value is replaced)
+- [x] incompatible hashes are usable through reset only (F-008: no foreign hash is stored,
+      the account is marked for a reset)
 - [x] public stand pages carry the imported publication status after activation
-      (F-004, PR #77: import unit proof, the rest of the phase-5 gates stay open)
-- [ ] an invalid archive does not change the live instance
-- [ ] product strings and product code contain no source-product identifiers
+      (F-004, PR #77: import unit proof)
+- [x] an invalid archive does not change the live instance (F-008: a damaged media payload
+      is refused before activation)
+- [x] product strings and product code contain no source-product identifiers
+      (F-008: only documented provenance notes name the replaced application)
 
 ### Status
 
@@ -376,10 +382,16 @@ are partly implemented but not proven.
   collection (F-004, PR #77): a published stand page is reachable through its
   newly generated handle right after activation, and it is still reported as
   `report.publicStandPages`.
-- the phase-5 exit gates stay open as proof gates: record counts before/after
-  import, media checksums, freedom from cross-tenant relations, sign-in/hash
-  evidence, activation behaviour and a reference archive still have to be
-  proven.
+- the phase-5 exit gates are proven against the committed reference archive
+  (`fixtures/exchange/reference-archive.zip`, F-008, PR #81): three users become three
+  tenants, the imported instance reproduces every declared count, every stored media file
+  carries the checksum verified on the archive, ten scope checks find no cross-tenant
+  relation, exactly one account holds the instance admin role, the second owner signs in
+  with the password behind the carried-over hash and gets it rehashed, the foreign hash is
+  dropped with a reset requirement, a damaged media payload is refused before activation,
+  and the source product appears only in documented provenance notes (verified 2026-10-18).
+  The takeover is proven end to end by uploading the same committed file through the
+  dialog (`e2e/instance-import.spec.ts`).
 
 ## Phase 6 — Backup and restore
 
@@ -463,7 +475,8 @@ are partly implemented but not proven.
 - [x] tenant isolation tests are green
 - [x] public privacy tests are green
 - [ ] import, backup and restore tests are green
-- [ ] a complete generic reference archive was processed successfully
+- [x] a complete generic reference archive was processed successfully (F-008, PR #81:
+      the committed reference archive passes validation and is imported end to end)
 - [ ] a restore onto a newer schema version was executed successfully
 - [x] all visible UI changes are documented with screenshots
 - [ ] operator and upgrade documentation is complete
@@ -537,10 +550,10 @@ time. The list below is the order from the plan, with what is done marked.
 - exchange format first with fixtures — done
 - schema — done
 - manifest — done
-- sample archives — open
+- sample archives — done (the committed reference archive, F-008, PR #81)
 - format migrations — open
 - import validation — done
-- complete import — implemented, proof gates open
+- complete import — implemented, proof gates closed (F-008, PR #81)
 - staging — implemented in memory only
 - id mapping — done
 - user-to-tenant assignment — done
