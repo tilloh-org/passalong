@@ -25,21 +25,38 @@ const retryAfterSeconds = 60;
  * swapped.
  */
 export const handle: Handle = async ({ event, resolve }) => {
-	if (!readMaintenanceState(getDatabasePath())) {
-		return resolve(event);
+	const maintenance = readMaintenanceState(getDatabasePath());
+	if (maintenance && !staysReachableDuringMaintenance(event.url.pathname)) {
+		return new Response(maintenancePage(event.request.headers.get('accept-language') ?? ''), {
+			status: serviceUnavailableStatus,
+			headers: {
+				'cache-control': 'no-store',
+				'content-type': 'text/html; charset=utf-8',
+				'retry-after': String(retryAfterSeconds)
+			}
+		});
 	}
-	if (staysReachableDuringMaintenance(event.url.pathname)) {
-		return resolve(event);
+	if (acceptsHtmlDocument(event.request)) {
+		// Server-rendered pages carry an ETag but no cache policy, so a browser may serve a stale
+		// page without revalidating — for example the sign-in page right after a registration.
+		// These pages depend on the session and must not land in a shared cache.
+		event.setHeaders({ 'cache-control': 'private, no-store' });
 	}
-	return new Response(maintenancePage(event.request.headers.get('accept-language') ?? ''), {
-		status: serviceUnavailableStatus,
-		headers: {
-			'cache-control': 'no-store',
-			'content-type': 'text/html; charset=utf-8',
-			'retry-after': String(retryAfterSeconds)
-		}
-	});
+	return resolve(event);
 };
+
+/**
+ * Decide whether a request asks for a server-rendered document.
+ *
+ * Only those responses get the cache policy: bundled assets keep the immutable caching that
+ * SvelteKit sets for them, and the JSON answers of form actions keep their own headers.
+ *
+ * @param {Request} request - The incoming request.
+ * @returns {boolean} Whether the response will be an HTML document.
+ */
+function acceptsHtmlDocument(request: Request): boolean {
+	return (request.headers.get('accept') ?? '').includes('text/html');
+}
 
 /**
  * Decide whether a path stays reachable while the instance is in maintenance.
