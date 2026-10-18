@@ -497,43 +497,55 @@
 				value={data.marketDay.location}
 			/></label
 		>
-		<div class="wide position-row">
-			<label
-				><span>{t('marketDays.latitude')}</span><input
-					name="latitude"
-					inputmode="decimal"
-					bind:value={positionLatitude}
-					data-testid="market-day-latitude"
-				/></label
-			>
-			<label
-				><span>{t('marketDays.longitude')}</span><input
-					name="longitude"
-					inputmode="decimal"
-					bind:value={positionLongitude}
-					data-testid="market-day-longitude"
-				/></label
-			>
-			<button
-				type="button"
-				class="secondary"
-				data-testid="market-day-use-position"
-				onclick={useCurrentPosition}
-				><Icon name="map-pin" size="sm" />{t('marketDays.useCurrentPosition')}</button
-			>
+		<div class="wide position-field">
+			<span class="position-label">{t('marketDays.positionTitle')}</span>
+			{#if standPosition}
+				<iframe
+					class="position-preview"
+					title={t('marketDays.positionPreview')}
+					src={openStreetMapEmbedUrl(standPosition)}
+					loading="lazy"
+					data-testid="market-day-position-preview"
+				></iframe>
+			{:else}
+				<p class="position-empty" data-testid="market-day-position-empty">
+					{t('marketDays.positionEmpty')}
+				</p>
+			{/if}
+			<div class="position-actions">
+				<button
+					type="button"
+					class="secondary"
+					data-testid="market-day-use-position"
+					onclick={useCurrentPosition}
+					><Icon name="map-pin" size="sm" />{t('marketDays.useCurrentPosition')}</button
+				>
+				{#if positionHint}
+					<span class="position-hint" data-testid="market-day-position-hint">{positionHint}</span>
+				{/if}
+			</div>
+			<details class="position-manual" data-testid="market-day-position-manual">
+				<summary>{t('marketDays.positionManual')}</summary>
+				<div class="position-coordinates">
+					<label
+						><span>{t('marketDays.latitude')}</span><input
+							name="latitude"
+							inputmode="decimal"
+							bind:value={positionLatitude}
+							data-testid="market-day-latitude"
+						/></label
+					>
+					<label
+						><span>{t('marketDays.longitude')}</span><input
+							name="longitude"
+							inputmode="decimal"
+							bind:value={positionLongitude}
+							data-testid="market-day-longitude"
+						/></label
+					>
+				</div>
+			</details>
 		</div>
-		{#if positionHint}
-			<p class="wide position-hint" data-testid="market-day-position-hint">{positionHint}</p>
-		{/if}
-		{#if standPosition}
-			<iframe
-				class="wide position-preview"
-				title={t('marketDays.positionPreview')}
-				src={openStreetMapEmbedUrl(standPosition)}
-				loading="lazy"
-				data-testid="market-day-position-preview"
-			></iframe>
-		{/if}
 		<div class="wide flag-checkboxes">
 			<label class="checkbox">
 				<input
@@ -859,17 +871,17 @@
 		margin: 1rem 0 0;
 		padding: 0.8rem;
 	}
-	.position-row {
-		align-items: end;
+	.position-field {
 		display: grid;
-		gap: 0.6rem;
-		grid-template-columns: 1fr 1fr auto;
+		gap: 0.5rem;
 	}
 
-	.position-hint {
+	.position-label {
 		color: var(--color-text-muted);
-		font-size: 0.78rem;
-		margin: 0;
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
 	}
 
 	.position-preview {
@@ -877,6 +889,48 @@
 		border-radius: var(--r);
 		height: 180px;
 		width: 100%;
+	}
+
+	.position-empty {
+		align-items: center;
+		background: var(--color-surface-strong);
+		border: 1px dashed var(--color-border);
+		border-radius: var(--r);
+		color: var(--color-text-faint);
+		display: flex;
+		font-size: 0.82rem;
+		justify-content: center;
+		margin: 0;
+		min-height: 72px;
+		padding: 0 0.8rem;
+		text-align: center;
+	}
+
+	.position-actions {
+		align-items: center;
+		display: flex;
+		gap: 0.6rem;
+	}
+
+	.position-hint {
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+	}
+
+	.position-manual {
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+	}
+
+	.position-manual summary {
+		cursor: pointer;
+	}
+
+	.position-coordinates {
+		display: grid;
+		gap: 0.6rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		margin-top: 0.5rem;
 	}
 
 	/* Follows the project's checkbox convention: no native control, explicit theme tokens. The

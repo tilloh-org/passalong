@@ -201,18 +201,24 @@ test('reveals a released stand position on the public stand page and hides it ag
 	await page.getByTestId('market-days-edit-trigger').click();
 	const dialog = page.getByTestId('market-days-edit-dialog');
 	await expect(dialog).toBeVisible();
+	// The coordinates stay out of the visible form: the owner sees the map, not the numbers.
+	await expect(dialog.getByTestId('market-day-latitude')).toBeHidden();
 	await dialog.getByTestId('market-day-use-position').click();
-	await expect(dialog.getByTestId('market-day-latitude')).toHaveValue(
-		String(reportedPosition.latitude)
-	);
-	await expect(dialog.getByTestId('market-day-longitude')).toHaveValue(
-		String(reportedPosition.longitude)
-	);
 	await expect(dialog.getByTestId('market-day-position-hint')).toContainText('Position übernommen');
-	await expect(dialog.getByTestId('market-day-position-preview')).toHaveAttribute(
+	const preview = dialog.getByTestId('market-day-position-preview');
+	await expect(preview).toBeVisible();
+	await expect(preview).toHaveAttribute(
 		'src',
-		/openstreetmap\.org\/export\/embed\.html\?bbox=/
+		new RegExp(`marker=${reportedPosition.latitude},${reportedPosition.longitude}`)
 	);
+
+	// act — the manual fallback keeps the same numbers, behind the disclosure only
+	await dialog.getByTestId('market-day-position-manual').click();
+	const latitudeField = dialog.getByTestId('market-day-latitude');
+	const longitudeField = dialog.getByTestId('market-day-longitude');
+	await expect(latitudeField).toHaveValue(String(reportedPosition.latitude));
+	await expect(longitudeField).toHaveValue(String(reportedPosition.longitude));
+	await dialog.getByTestId('market-day-position-manual').click();
 	await dialog.getByTestId('market-day-location-released').check();
 	await dialog.getByRole('button', { name: 'Änderungen speichern' }).click();
 	await expect(page).toHaveURL(new RegExp(`/market-days/${marketDayId}`));

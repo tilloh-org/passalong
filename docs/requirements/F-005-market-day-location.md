@@ -17,9 +17,11 @@ load.
 
 - FA-1: Every market day stores an optional position (`market_days.latitude`,
   `market_days.longitude`). A market day without a position behaves exactly as before.
-- FA-2: The edit dialog of a market day offers both coordinates, the button "Aktuelle Position"
-  fills them from the device's location service, and the dialog shows a map preview of the
-  entered position as soon as both coordinates are usable.
+- FA-2: The owner sets the position in the edit dialog without dealing with numbers: the button
+  "Aktuelle Position" takes it from the device's location service, and the dialog shows the map of
+  the position — or, while none is set, a short line saying so. The coordinates stay in the data;
+  the two numeric fields are only a fallback behind "Position von Hand eintragen", so a position
+  can still be entered away from the stand.
 - FA-3: A release flag per market day (`market_days.location_released`) decides whether the
   position may appear publicly; it is off by default and only the owner of the day changes it.
 - FA-4: A released position requires both coordinates inside the valid ranges (-90…90,
