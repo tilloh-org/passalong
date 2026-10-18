@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollectionRepository, type SessionScope } from '$lib/server/collection-repository';
@@ -669,11 +670,16 @@ describe('instance-admin actions', () => {
 			adminOutcome = error;
 		}
 
-		// assume — the restore succeeded and swapped the database file (the running connection keeps
-		// serving the pre-restore state until the instance restarts, which the swap ensures via the
-		// rollback copy and session invalidation on next start).
-		expect(adminOutcome).toMatchObject({ status: 303, location: '/admin' });
+		// assume — the restore succeeded, the sessions of the backup are revoked and the
+		// administrator is sent back to the sign-in page; the swap kept the previous database
+		expect(adminOutcome).toMatchObject({ status: 303, location: '/' });
 		expect(existsSync(`${databasePath}.pre-restore`)).toBe(true);
+		const restoredDatabase = new Database(databasePath, { readonly: true });
+		const activeSessions = restoredDatabase
+			.prepare('SELECT COUNT(*) AS count FROM sessions WHERE revoked_at IS NULL')
+			.get() as { count: number };
+		restoredDatabase.close();
+		expect(activeSessions.count).toBe(0);
 	});
 
 	it('rejects a corrupted backup archive with a 400 and an unchanged instance', async () => {

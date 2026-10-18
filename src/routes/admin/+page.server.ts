@@ -3,7 +3,9 @@ import { hasSameOrigin } from '$lib/server/csrf';
 import { getCollectionRepository } from '$lib/server/repository';
 import { getDatabasePath } from '$lib/server/repository';
 import { getMediaRoot } from '$lib/server/media-root';
-import { restoreInstanceBackup } from '$lib/server/backup';
+import { restoreInstanceBackup, type RestoreOutcome } from '$lib/server/backup';
+import { startMaintenance, finishMaintenance } from '$lib/server/maintenance';
+import { reloadCollectionRepository } from '$lib/server/repository';
 import { removeStoredMedia } from '$lib/server/media-storage';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
 import { writeFileSync, rmSync } from 'node:fs';
@@ -186,22 +188,46 @@ export const actions: Actions = {
 
 		const stagingPath = join(getMediaRoot(), '..', `restore-upload-${Date.now()}.zip`);
 		writeFileSync(stagingPath, Buffer.from(await upload.arrayBuffer()));
+		const databasePath = getDatabasePath();
+		// Close the instance for the duration of the restore: a request that arrives while the
+		// database is being swapped must not read or write either file.
+		startMaintenance(databasePath, 'restore');
+		let outcome: RestoreOutcome | undefined;
+		let failureMessage: string | undefined;
 		try {
-			const outcome = await restoreInstanceBackup({
+			outcome = await restoreInstanceBackup({
 				archivePath: stagingPath,
-				databasePath: getDatabasePath(),
+				databasePath,
 				mediaRoot: getMediaRoot()
 			});
-			if (!outcome.restored) {
-				return fail(httpStatus.badRequest, {
-					backupError: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.'
-				});
+			if (outcome.restored) {
+				// The restored file replaced the database the process had open; the next request
+				// has to open the restored one.
+				reloadCollectionRepository();
 			}
+		} catch (error) {
+			failureMessage = getErrorMessage(error);
 		} finally {
+			finishMaintenance(databasePath);
 			rmSync(stagingPath, { force: true });
 		}
 
-		redirect(httpStatus.seeOther, '/admin');
+		if (failureMessage) {
+			return fail(httpStatus.badRequest, { backupError: failureMessage });
+		}
+		if (!outcome?.restored) {
+			const failedChecks = (outcome?.smokeChecks ?? []).filter((check) => !check.ok);
+			return fail(httpStatus.badRequest, {
+				backupError: failedChecks.length
+					? `Der Selbsttest der wiederhergestellten Instanz ist fehlgeschlagen: ${failedChecks
+							.map((check) => `${check.name} (${check.detail})`)
+							.join('; ')}. Die Instanz läuft unverändert weiter.`
+					: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.'
+			});
+		}
+
+		// Every session of the backup is revoked, so the administrator signs in again.
+		redirect(httpStatus.seeOther, '/');
 	}
 };
 
