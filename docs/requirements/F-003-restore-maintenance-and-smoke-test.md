@@ -7,7 +7,7 @@
 # F-003 — Restore in a maintenance window with an automatic smoke test
 
 Replaces: nothing
-Implemented: <!-- PR #<nr> (2026-10-17), filled in before review -->
+Implemented: PR #76 (2026-10-17)
 
 ## Goal
 
