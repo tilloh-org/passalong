@@ -3,7 +3,7 @@
 # F-005 — Released stand location of a market day
 
 Replaces: nothing
-Implemented: PR #TBD
+Implemented: PR #78 (2026-10-18)
 
 ## Goal
 
