@@ -19,10 +19,15 @@ import {
 	verifyPassword
 } from '$lib/server/password';
 import { getCollectionRepository, getDatabasePath } from '$lib/server/repository';
+import { reloadCollectionRepository } from '$lib/server/repository';
 import { getMediaRoot } from '$lib/server/media-root';
 import { importInstanceArchive, validateInstanceArchive } from '$lib/server/instance-import';
+import { restoreInstanceBackup, type RestoreOutcome } from '$lib/server/backup';
+import { finishMaintenance, startMaintenance } from '$lib/server/maintenance';
 import { stageArchive, takeStagedArchive } from '$lib/server/import-staging';
 import { createSessionToken, hashSessionToken } from '$lib/server/session-token';
+import { rmSync, writeFileSync } from 'node:fs';
+import { Buffer } from 'node:buffer';
 import { dirname } from 'node:path';
 import { join } from 'node:path';
 import type { Actions, PageServerLoad } from './$types';
@@ -52,6 +57,9 @@ const bytesPerMegabyte = 1024 * 1024;
 // archives carry images, so this is far larger than the generic request limit; the deployment body
 // limit has to be raised alongside it (documented in README.md).
 const MAXIMUM_IMPORT_UPLOAD_BYTES = 256 * bytesPerMegabyte;
+// A full instance backup carries the database and every image, so it needs the same bound as the
+// takeover import; the deployment body limit has to be raised alongside it (README.md).
+const MAXIMUM_INSTANCE_BACKUP_BYTES = 256 * bytesPerMegabyte;
 
 /**
  * Render a byte count as whole megabytes.
@@ -269,6 +277,80 @@ export const actions: Actions = {
 			});
 		}
 
+		redirect(httpStatus.seeOther, '/');
+	},
+
+	restoreInitialBackup: async ({ request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { restoreError: csrfError });
+		}
+		const repository = getCollectionRepository();
+		// A restore replaces the whole instance, so it belongs to the moment before the first
+		// account exists; afterwards the instance administration owns it.
+		if (repository.hasAccounts()) {
+			return fail(httpStatus.conflict, {
+				restoreError:
+					'Ein Backup lässt sich nur einspielen, solange die Instanz keine Konten enthält. Danach gehört das Zurückspielen in die Instanzverwaltung.'
+			});
+		}
+		const declaredLength = Number(request.headers.get('content-length') ?? '0');
+		if (declaredLength > MAXIMUM_INSTANCE_BACKUP_BYTES) {
+			return fail(httpStatus.payloadTooLarge, {
+				restoreError: `Das Backup ist zu groß. Erlaubt sind bis zu ${formatMegabytes(MAXIMUM_INSTANCE_BACKUP_BYTES)} MB.`
+			});
+		}
+		const formData = await request.formData();
+		const upload = formData.get('backupArchive');
+		if (!(upload instanceof File) || upload.size === 0) {
+			return fail(httpStatus.badRequest, { restoreError: 'Bitte wähle eine Backup-Datei aus.' });
+		}
+		if (upload.size > MAXIMUM_INSTANCE_BACKUP_BYTES) {
+			return fail(httpStatus.payloadTooLarge, {
+				restoreError: `Das Backup ist zu groß. Erlaubt sind bis zu ${formatMegabytes(MAXIMUM_INSTANCE_BACKUP_BYTES)} MB.`
+			});
+		}
+
+		const databasePath = getDatabasePath();
+		// The upload is written next to the database and removed in every outcome, so a refused
+		// archive leaves no file behind.
+		const stagingPath = join(dirname(databasePath), `initial-restore-${Date.now()}.zip`);
+		writeFileSync(stagingPath, Buffer.from(await upload.arrayBuffer()));
+		startMaintenance(databasePath, 'restore');
+		let outcome: RestoreOutcome | undefined;
+		let failureMessage: string | undefined;
+		try {
+			outcome = await restoreInstanceBackup({
+				archivePath: stagingPath,
+				databasePath,
+				mediaRoot: getMediaRoot()
+			});
+			if (outcome.restored) {
+				// The restored file replaced the database the process had open.
+				reloadCollectionRepository();
+			}
+		} catch (error) {
+			failureMessage =
+				error instanceof Error ? error.message : 'Das Backup konnte nicht eingespielt werden.';
+		} finally {
+			finishMaintenance(databasePath);
+			rmSync(stagingPath, { force: true });
+		}
+
+		if (failureMessage) {
+			return fail(httpStatus.badRequest, { restoreError: failureMessage });
+		}
+		if (!outcome?.restored) {
+			const failedChecks = (outcome?.smokeChecks ?? []).filter((check) => !check.ok);
+			return fail(httpStatus.badRequest, {
+				restoreError: failedChecks.length
+					? `Der Selbsttest der wiederhergestellten Instanz ist fehlgeschlagen: ${failedChecks
+							.map((check) => `${check.name} (${check.detail})`)
+							.join('; ')}. Die Instanz läuft unverändert weiter.`
+					: 'Die Backup-Datei ist ungültig. Die Instanz wurde nicht verändert.'
+			});
+		}
+
+		// Every session of the backup is revoked, so the restored accounts sign in again.
 		redirect(httpStatus.seeOther, '/');
 	},
 

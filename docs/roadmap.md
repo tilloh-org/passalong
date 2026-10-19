@@ -4,11 +4,10 @@ passalong is built toward v1.0.0 with full feature parity to the original app
 this project replaces. This file is the **working plan**: the phases, their exit
 gates and the verified status.
 
-It is derived from the private AFFiNE plan `passalong – v1.0.0-Umsetzungsplan`
-(docId `7H6PKxQ2dH`, architecture discussion with Nico, August 2026). AFFiNE keeps
-the architecture, data model, security and release decisions and the history of
-the plan; this file is the plan of record for implementation work in the
-repository. Every status line names the date it was last verified.
+It is derived from the private AFFiNE knowledge base: the project summary with the
+feature list, plus the architecture, data-model and quality pages. The AFFiNE pages
+carry decisions and background; this file is the plan of record for implementation
+work in the repository. Every status line names the date it was last verified.
 
 ## How this plan is used
 
@@ -31,9 +30,9 @@ repository. Every status line names the date it was last verified.
 
 ## Status
 
-Verified 2026-10-18 on the F-008 branch: 382 unit tests, 15 E2E specs, lint, typecheck
+Verified 2026-10-18 on the F-009 branch: 382 unit tests, 16 E2E specs, lint, typecheck
 0/0 and the production build are green; `pnpm audit` and the release-flow tests run in
-CI. Phases 0 to 5 are complete, phase 6 carries open gates, phase 7 is partly proven.
+CI. Phases 0 to 5 are complete, phase 6 carries one open gate, phase 7 is partly proven.
 
 ## Phase 0 — Contracts and security invariants
 
@@ -410,8 +409,9 @@ CI. Phases 0 to 5 are complete, phase 6 carries open gates, phase 7 is partly pr
 
 ### Exit gates
 
-- [ ] a complete backup can be restored on an empty test instance (the round trip runs on the
-      instance the backup came from; a fresh instance is not part of the proof)
+- [x] a complete backup can be restored on an empty test instance (F-009, PR #82: a fresh
+      instance with no account restores a backup of another fresh instance and signs its
+      account in)
 - [x] database, media and public stand pages are complete after restore (the round trip proves the
       database and the public stand end to end, the media check of the smoke test proves the media;
       verified 2026-10-17)
@@ -445,8 +445,14 @@ CI. Phases 0 to 5 are complete, phase 6 carries open gates, phase 7 is partly pr
   previous database and media come back (verified 2026-10-17).
 - a successful restore replaces the database the running process had open: the repository is closed
   and re-created, so the next request already serves the restored data (verified 2026-10-17).
-- open: restoring a backup into a fresh instance, migrating a backup of an older schema, and a
-  versioned generation switch that swaps a whole instance directory at once.
+- a backup comes back on a fresh instance without an account (F-009, PR #82): the first-run page
+  offers "Backup einspielen", the upload is bounded like the exchange takeover, and the restore runs
+  the same validation, maintenance window, session revocation, smoke test and rollback as the
+  administration path. Proven end to end by two fresh Playwright instances: one registers an account,
+  creates an article and downloads its backup, the second starts with no account, restores that
+  backup and signs the restored account in (verified 2026-10-18).
+- open: migrating a backup of an older schema, and a versioned generation switch that swaps a whole
+  instance directory at once.
 
 ## Phase 7 — Release hardening and 1.0.0
 
@@ -568,6 +574,7 @@ time. The list below is the order from the plan, with what is done marked.
 - pre-restore backup — done
 - generation switch — open
 - restore of older versions — open
+- [x] restore on a fresh instance without an account (F-009, PR #82)
 - release hardening — open
 - complete feature matrix — open
 - security review — open

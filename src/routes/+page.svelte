@@ -160,6 +160,40 @@
 					<button type="submit">{t('portfolio.createAccount')}</button>
 				</form>
 
+				<section
+					class="instance-import"
+					aria-labelledby="restore-title"
+					data-testid="restore-panel"
+				>
+					<h2 id="restore-title"><Icon name="package" />{t('restore.initialTitle')}</h2>
+					<p class="import-intro">{t('restore.initialIntro')}</p>
+					<form
+						method="POST"
+						action="?/restoreInitialBackup"
+						enctype="multipart/form-data"
+						data-testid="restore-form"
+					>
+						<input
+							name="backupArchive"
+							id="initial-backup"
+							type="file"
+							accept=".zip,application/zip"
+							data-testid="restore-input"
+							class="visually-hidden-input"
+							required
+						/>
+						<label class="file-button" for="initial-backup"
+							><Icon name="upload" size="sm" />{t('restore.chooseBackup')}</label
+						>
+						{#if form && 'restoreError' in form && form.restoreError}
+							<p class="form-error" role="alert">{form.restoreError}</p>
+						{/if}
+						<button type="submit">
+							<Icon name="upload" size="sm" />{t('restore.submit')}
+						</button>
+					</form>
+				</section>
+
 				<section class="instance-import" aria-labelledby="import-title" data-testid="import-panel">
 					<h2 id="import-title"><Icon name="package" />{t('import.title')}</h2>
 					<p class="import-intro">{t('import.intro')}</p>
