@@ -30,9 +30,9 @@ work in the repository. Every status line names the date it was last verified.
 
 ## Status
 
-Verified 2026-10-18 on the F-009 branch: 382 unit tests, 16 E2E specs, lint, typecheck
+Verified 2026-10-19 on the F-010 branch: 386 unit tests, 16 E2E specs, lint, typecheck
 0/0 and the production build are green; `pnpm audit` and the release-flow tests run in
-CI. Phases 0 to 5 are complete, phase 6 carries one open gate, phase 7 is partly proven.
+CI. Phases 0 to 6 are complete, phase 7 is partly proven.
 
 ## Phase 0 — Contracts and security invariants
 
@@ -415,7 +415,9 @@ CI. Phases 0 to 5 are complete, phase 6 carries one open gate, phase 7 is partly
 - [x] database, media and public stand pages are complete after restore (the round trip proves the
       database and the public stand end to end, the media check of the smoke test proves the media;
       verified 2026-10-17)
-- [ ] a backup of an older supported version can be restored into the current one
+- [x] a backup of an older supported version can be restored into the current one (F-010, PR #83:
+      the restored database is migrated to the current schema before the smoke test, and a newer
+      archive is refused)
 - [x] a manipulated or incomplete backup is rejected before activation (a tampered archive is
       refused, and an archive without the media its database needs fails the smoke test and is
       rolled back — unit proof, verified 2026-10-17)
@@ -451,8 +453,13 @@ CI. Phases 0 to 5 are complete, phase 6 carries one open gate, phase 7 is partly
   administration path. Proven end to end by two fresh Playwright instances: one registers an account,
   creates an article and downloads its backup, the second starts with no account, restores that
   backup and signs the restored account in (verified 2026-10-18).
-- open: migrating a backup of an older schema, and a versioned generation switch that swaps a whole
-  instance directory at once.
+- an older backup becomes a current instance (F-010, PR #83): the restore migrates the swapped
+  database with the same migration path the application uses at startup, before the session
+  revocation and the smoke test read it. A committed legacy backup (the release before the
+  publication status and the market-day location) restores with its accounts, collections, items,
+  images and media intact; sessions are revoked afterwards, and a backup that names a newer schema
+  version is refused before the swap (unit proof, verified 2026-10-19).
+- open: a versioned generation switch that swaps a whole instance directory at once.
 
 ## Phase 7 — Release hardening and 1.0.0
 
@@ -573,7 +580,7 @@ time. The list below is the order from the plan, with what is done marked.
 - media manifest — done
 - pre-restore backup — done
 - generation switch — open
-- restore of older versions — open
+- restore of older versions — done (F-010, PR #83)
 - [x] restore on a fresh instance without an account (F-009, PR #82)
 - release hardening — open
 - complete feature matrix — open

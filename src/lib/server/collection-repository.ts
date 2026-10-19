@@ -533,6 +533,27 @@ const expensesVersion = '2026091001_expenses';
 const collectionPublicIdVersion = '2026091701_collection_public_id';
 const collectionPublicationVersion = '2026101801_collection_publication_status';
 const marketDayLocationVersion = '2026101901_market_day_location';
+
+/**
+ * Schema version this build produces. A backup that names a newer version was written by a newer
+ * passalong and is refused instead of being silently downgraded.
+ */
+export const currentSchemaVersion = marketDayLocationVersion;
+
+/**
+ * Bring a database file onto the current schema and close it again.
+ *
+ * A restore uses this on the freshly swapped database before the smoke test runs: an older backup
+ * carries an older schema, and the checks read the current columns.
+ *
+ * @param {string} databasePath - Database file to migrate.
+ * @returns {void}
+ */
+export function migrateDatabaseFile(databasePath: string): void {
+	const repository = createCollectionRepository({ databasePath });
+	repository.close();
+}
+
 const singleDatabaseRowChange = 1;
 const sqliteTrue = 1;
 const initialFailureCount = 1;
