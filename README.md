@@ -162,6 +162,11 @@ leaves the instance untouched when the file is not a valid backup. Once the
 instance has an account, restoring belongs to the instance administration
 (`/admin`).
 
+A backup written by an older release is migrated to the current schema during the
+restore, so it comes back with its accounts, collections, items and media. A backup
+that names a newer schema version than the running build is refused: downgrading it
+would drop data that release wrote.
+
 ## Development
 
 ```bash

@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import Database from 'better-sqlite3';
+import { currentSchemaVersion, migrateDatabaseFile } from '$lib/server/collection-repository';
 
 const sha256Encoding = 'hex';
 const manifestEntryName = 'manifest.json';
@@ -332,6 +333,15 @@ export async function restoreInstanceBackup({
 	if (!manifest?.files?.[databaseEntryName] || typeof manifest.schemaVersion !== 'string') {
 		return { restored: false, reason: tamperedArchiveMessage };
 	}
+	// A backup of a newer passalong may carry columns and migrations this build does not know.
+	// Refusing is the only safe answer: a downgrade would drop data that a later version wrote.
+	if (manifest.schemaVersion > currentSchemaVersion) {
+		return {
+			restored: false,
+			reason:
+				'Das Backup stammt aus einer neueren Version von passalong und kann von dieser Instanz nicht eingespielt werden.'
+		};
+	}
 
 	// Verify every manifest entry against the archive contents.
 	for (const [name, meta] of Object.entries(manifest.files)) {
@@ -367,6 +377,20 @@ export async function restoreInstanceBackup({
 	// Atomic swap: move the current artifacts aside, then move the staging copies into place.
 	swapFile(databasePath, stagingDatabasePath);
 	swapDirectory(mediaRoot, stagingMediaRoot);
+
+	// An older backup carries an older schema: bring it to the current one before anything reads
+	// it. Without this step the session revocation and the smoke test would query columns that
+	// older versions did not have, and a valid old backup would be rejected.
+	try {
+		migrateDatabaseFile(databasePath);
+	} catch {
+		rollbackRestore({ databasePath, mediaRoot });
+		return {
+			restored: false,
+			reason:
+				'Das Backup stammt aus einer älteren Version, deren Schema sich nicht übernehmen lässt. Die Instanz läuft unverändert weiter.'
+		};
+	}
 
 	// The restored database is live now: it has to pass the smoke test, otherwise the previous
 	// instance is put back before the instance serves anyone again.
