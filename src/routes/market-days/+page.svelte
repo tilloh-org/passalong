@@ -2,6 +2,7 @@
 	import { getLocale, t } from '$lib/i18n/index.svelte';
 	import { formatPrice } from '$lib/utils/format';
 	import type { MarketDay } from '$lib/server/collection-repository';
+	import Icon from '$lib/components/icon.svelte';
 
 	let { data, form } = $props();
 
@@ -50,7 +51,7 @@
 	<section class="panel create-panel" aria-labelledby="create-title">
 		<div class="panel-head">
 			<div>
-				<h2 id="create-title">{t('marketDays.createTitle')}</h2>
+				<h2 id="create-title"><Icon name="plus" />{t('marketDays.createTitle')}</h2>
 				<p>{t('marketDays.createSub')}</p>
 			</div>
 		</div>
@@ -93,7 +94,7 @@
 			</label>
 			<div class="actions">
 				<button type="submit" data-testid="market-days-create-submit"
-					>{t('marketDays.create')}</button
+					><Icon name="plus" size="sm" />{t('marketDays.create')}</button
 				>
 			</div>
 		</form>
@@ -104,7 +105,7 @@
 		aria-labelledby="market-day-list-title"
 		data-testid="market-days-list"
 	>
-		<h2 id="market-day-list-title">{t('marketDays.listTitle')}</h2>
+		<h2 id="market-day-list-title"><Icon name="calendar" />{t('marketDays.listTitle')}</h2>
 		{#if data.marketDays.length}
 			<div class="market-day-list">
 				{#each data.marketDays as marketDay (marketDay.id)}
@@ -127,10 +128,16 @@
 							>
 						</div>
 						<div class="summary">
-							<span>{displayDate(marketDay.date)}</span>
-							<span>{t('settlement.soldCount', { count: settlement?.soldItemCount ?? 0 })}</span>
-							<strong
-								>{t('settlement.proceeds', {
+							<span class="summary-item"
+								><Icon name="calendar" size="sm" tone="muted" />{displayDate(marketDay.date)}</span
+							>
+							<span class="summary-item"
+								><Icon name="package" size="sm" tone="muted" />{t('settlement.soldCount', {
+									count: settlement?.soldItemCount ?? 0
+								})}</span
+							>
+							<strong class="summary-item"
+								><Icon name="euro" size="sm" />{t('settlement.proceeds', {
 									proceeds: formatPrice(settlement?.totalProceedsCents ?? 0)
 								})}</strong
 							>
@@ -180,8 +187,11 @@
 
 	.panel-head h2,
 	.market-day-section > h2 {
+		align-items: center;
 		color: var(--color-accent-strong);
+		display: flex;
 		font-size: 1.1rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 
@@ -237,14 +247,17 @@
 	}
 
 	.actions button {
+		align-items: center;
 		background: linear-gradient(135deg, var(--color-accent-strong), var(--color-accent));
 		border: 0;
 		border-radius: var(--radius-control);
 		box-shadow: var(--shadow-cta);
 		color: #fff;
 		cursor: pointer;
+		display: inline-flex;
 		font-size: 0.9rem;
 		font-weight: 700;
+		gap: 0.35rem;
 		padding: 0.6rem 1.1rem;
 	}
 
@@ -314,6 +327,12 @@
 		color: var(--color-text-muted);
 		font-size: 0.83rem;
 		justify-content: flex-start;
+	}
+
+	.summary-item {
+		align-items: center;
+		display: inline-flex;
+		gap: 0.3rem;
 	}
 
 	.summary strong {

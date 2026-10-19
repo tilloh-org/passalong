@@ -5,9 +5,17 @@
 <script lang="ts">
 	import BarList from '$lib/components/statistics/bar-list.svelte';
 	import ChartToggle from '$lib/components/statistics/chart-toggle.svelte';
+	import DialogShell from '$lib/components/dialog-shell.svelte';
+	import Icon from '$lib/components/icon.svelte';
 	import PieChart from '$lib/components/statistics/pie-chart.svelte';
 	import { getLocale, t } from '$lib/i18n/index.svelte';
 	import { formatPrice } from '$lib/utils/format';
+	import {
+		openStreetMapEmbedUrl,
+		parseStandPosition,
+		roundCoordinate,
+		type StandPosition
+	} from '$lib/utils/market-day-geo';
 	import type { Expense, ExpenseCategory, MarketDay } from '$lib/server/collection-repository';
 
 	type ChartType = 'bars' | 'pie';
@@ -17,13 +25,20 @@
 	let proceedsChartType = $state<ChartType>('bars');
 	let salesChartType = $state<ChartType>('pie');
 	let expenseFormOpen = $state(false);
-	let editDialog: HTMLDialogElement | undefined = $state();
-	let expenseDialog: HTMLDialogElement | undefined = $state();
+	let editShell = $state<ReturnType<typeof DialogShell> | null>(null);
+	let expenseShell = $state<ReturnType<typeof DialogShell> | null>(null);
 	let editExpenseId = $state('');
 	let editExpenseLabel = $state('');
 	let editExpenseCategory = $state<ExpenseCategory>('fee');
 	let editExpenseAmount = $state('');
 	let editExpenseDate = $state('');
+	let positionLatitude = $state('');
+	let positionLongitude = $state('');
+	let locationReleased = $state(false);
+	let positionHint = $state('');
+	const standPosition = $derived(
+		parseStandPosition(positionLatitude, positionLongitude) as StandPosition | null
+	);
 
 	/**
 	 * Format a YYYY-MM-DD date as a localized long date for display.
@@ -69,14 +84,46 @@
 		return t(`expenses.category.${category}`);
 	}
 
-	/** Open the market-day edit dialog. */
+	/**
+	 * Open the market-day edit dialog with the currently stored values.
+	 *
+	 * The form fields are seeded here instead of at component start so that reopening the dialog
+	 * after a save always shows what the server holds.
+	 *
+	 * @returns {void}
+	 */
 	function openEditDialog(): void {
-		editDialog?.showModal();
+		positionLatitude = data.marketDay.latitude === null ? '' : String(data.marketDay.latitude);
+		positionLongitude = data.marketDay.longitude === null ? '' : String(data.marketDay.longitude);
+		locationReleased = data.marketDay.locationReleased;
+		positionHint = '';
+		editShell?.open();
 	}
 
-	/** Close the market-day edit dialog. */
-	function closeEditDialog(): void {
-		editDialog?.close();
+	/**
+	 * Fill both coordinate fields from the device's location service.
+	 *
+	 * Runs only on an explicit tap: the browser asks the visitor for permission and the owner
+	 * decides when a position may be taken. Every outcome is reported next to the fields.
+	 *
+	 * @returns {void}
+	 */
+	function useCurrentPosition(): void {
+		if (!navigator.geolocation) {
+			positionHint = t('marketDays.positionUnsupported');
+			return;
+		}
+		positionHint = t('marketDays.positionLoading');
+		navigator.geolocation.getCurrentPosition(
+			(position) => {
+				positionLatitude = roundCoordinate(position.coords.latitude).toString();
+				positionLongitude = roundCoordinate(position.coords.longitude).toString();
+				positionHint = t('marketDays.positionTaken');
+			},
+			() => {
+				positionHint = t('marketDays.positionFailed');
+			}
+		);
 	}
 
 	/**
@@ -90,12 +137,7 @@
 		editExpenseCategory = expense.category;
 		editExpenseAmount = formatPrice(expense.amountCents);
 		editExpenseDate = expense.expenseDate;
-		expenseDialog?.showModal();
-	}
-
-	/** Close the expense edit dialog. */
-	function closeExpenseDialog(): void {
-		expenseDialog?.close();
+		expenseShell?.open();
 	}
 </script>
 
@@ -104,7 +146,7 @@
 </svelte:head>
 
 <main class="market-day-detail-page">
-	<a class="back-link" href="/market-days">← {t('marketDays.back')}</a>
+	<a class="back-link" href="/market-days"><Icon name="arrow-left" />{t('marketDays.back')}</a>
 
 	<section class="panel detail-header" data-testid="market-day-detail-header">
 		<div class="detail-header-main">
@@ -132,21 +174,34 @@
 			</div>
 			<div class="headline-totals">
 				<strong>{t('settlement.net', { net: formatPrice(data.settlement.netResultCents) })}</strong>
-				<span>{t('settlement.soldCount', { count: data.settlement.soldItemCount })}</span>
+				<span class="headline-meta"
+					><Icon name="package" size="sm" tone="muted" />{t('settlement.soldCount', {
+						count: data.settlement.soldItemCount
+					})}</span
+				>
 			</div>
 		</div>
 		<div class="actions day-actions">
+			{#if data.settlement.soldItemCount > 0}
+				<a
+					class="secondary-link"
+					href={`/market-days/${data.marketDay.id}/reconciliation.csv`}
+					download
+					data-testid="market-day-csv-download"
+					><Icon name="download" size="sm" />{t('marketDays.exportCsv')}</a
+				>
+			{/if}
 			<form method="POST" action="?/deleteMarketDay">
 				<input type="hidden" name="marketDayId" value={data.marketDay.id} />
 				<button type="submit" class="danger" data-testid="market-days-delete"
-					>{t('marketDays.delete')}</button
+					><Icon name="trash" size="sm" />{t('marketDays.delete')}</button
 				>
 			</form>
 			<button
 				type="button"
 				class="secondary"
 				data-testid="market-days-edit-trigger"
-				onclick={openEditDialog}>{t('marketDays.edit')}</button
+				onclick={openEditDialog}><Icon name="edit" size="sm" />{t('marketDays.edit')}</button
 			>
 			<form
 				method="POST"
@@ -156,11 +211,11 @@
 				<input type="hidden" name="returnTo" value={returnTo} />
 				{#if data.marketDay.closedAt}
 					<button type="submit" class="secondary" data-testid="market-days-reopen"
-						>{t('marketDays.reopen')}</button
+						><Icon name="rotate" size="sm" />{t('marketDays.reopen')}</button
 					>
 				{:else}
 					<button type="submit" class="primary" data-testid="market-days-close"
-						>{t('marketDays.close')}</button
+						><Icon name="check" size="sm" />{t('marketDays.close')}</button
 					>
 				{/if}
 			</form>
@@ -170,7 +225,7 @@
 	<section class="panel" aria-labelledby="sales-title" data-testid="market-day-sales">
 		<div class="panel-head">
 			<div>
-				<h2 id="sales-title">{t('marketDays.salesTitle')}</h2>
+				<h2 id="sales-title"><Icon name="euro" />{t('marketDays.salesTitle')}</h2>
 				<p>{t('marketDays.salesSub')}</p>
 			</div>
 		</div>
@@ -178,9 +233,11 @@
 			<div class="sale-list">
 				{#each data.soldItems as item (item.id)}
 					<a class="sale-row" href={`/items/${item.id}`} data-testid="market-day-sale-item">
-						<div>
+						<div class="sale-row-main">
 							<strong>{item.title}</strong>
-							<span>{categoryLabel(item.category)}</span>
+							<span class="sale-row-meta"
+								><Icon name="tag" size="sm" tone="muted" />{categoryLabel(item.category)}</span
+							>
 						</div>
 						<strong>{formatPrice(item.saleProceedsCents ?? 0)} €</strong>
 					</a>
@@ -194,7 +251,7 @@
 	<section class="panel" aria-labelledby="expenses-title" data-testid="market-day-expenses">
 		<div class="panel-head">
 			<div>
-				<h2 id="expenses-title">{t('expenses.title')}</h2>
+				<h2 id="expenses-title"><Icon name="wallet" />{t('expenses.title')}</h2>
 				<p>{t('marketDays.expensesSub')}</p>
 			</div>
 			<button
@@ -202,7 +259,9 @@
 				class="secondary"
 				data-testid="expenses-toggle"
 				onclick={() => (expenseFormOpen = !expenseFormOpen)}
-				>{expenseFormOpen ? t('marketDays.cancel') : t('expenses.toggle')}</button
+				><Icon name={expenseFormOpen ? 'x' : 'plus'} size="sm" />{expenseFormOpen
+					? t('marketDays.cancel')
+					: t('expenses.toggle')}</button
 			>
 		</div>
 		{#if expenseFormOpen}
@@ -241,7 +300,9 @@
 					<input name="expenseDate" type="date" data-testid="expenses-date-input" />
 				</label>
 				<div class="actions form-actions">
-					<button type="submit" data-testid="expenses-create-submit">{t('expenses.create')}</button>
+					<button type="submit" data-testid="expenses-create-submit"
+						><Icon name="plus" size="sm" />{t('expenses.create')}</button
+					>
 				</div>
 			</form>
 		{/if}
@@ -251,8 +312,9 @@
 					<article class="expense-row" data-testid="expense-item">
 						<div>
 							<strong>{expense.label}</strong>
-							<span
-								>{expenseCategoryLabel(expense.category)} · {displayDate(expense.expenseDate)}</span
+							<span class="expense-row-meta"
+								><Icon name="tag" size="sm" tone="muted" />{expenseCategoryLabel(expense.category)} ·
+								{displayDate(expense.expenseDate)}</span
 							>
 						</div>
 						<strong class="negative">-{formatPrice(expense.amountCents)} €</strong>
@@ -261,13 +323,14 @@
 								type="button"
 								class="secondary"
 								data-testid="expenses-edit-trigger"
-								onclick={() => openExpenseDialog(expense)}>{t('expenses.edit')}</button
+								onclick={() => openExpenseDialog(expense)}
+								><Icon name="edit" size="sm" />{t('expenses.edit')}</button
 							>
 							<form method="POST" action="?/deleteExpense">
 								<input type="hidden" name="expenseId" value={expense.id} />
 								<input type="hidden" name="returnTo" value={returnTo} />
 								<button type="submit" class="danger" data-testid="expenses-delete"
-									>{t('expenses.delete')}</button
+									><Icon name="trash" size="sm" />{t('expenses.delete')}</button
 								>
 							</form>
 						</div>
@@ -387,18 +450,16 @@
 	</section>
 </main>
 
-<dialog
+<DialogShell
 	class="edit-dialog"
-	bind:this={editDialog}
-	aria-label={t('marketDays.edit')}
-	data-testid="market-days-edit-dialog"
+	bind:this={editShell}
+	ariaLabel={t('marketDays.edit')}
+	closeLabel={t('marketDays.cancel')}
+	testId="market-days-edit-dialog"
 >
-	<div class="dialog-head">
+	{#snippet header()}
 		<h2>{t('marketDays.editTitle')}</h2>
-		<button type="button" class="secondary" onclick={closeEditDialog}
-			>{t('marketDays.cancel')}</button
-		>
-	</div>
+	{/snippet}
 	<form method="POST" action="?/updateMarketDay" class="form-grid">
 		<input type="hidden" name="marketDayId" value={data.marketDay.id} />
 		<input type="hidden" name="returnTo" value={returnTo} />
@@ -436,28 +497,90 @@
 				value={data.marketDay.location}
 			/></label
 		>
+		<div class="wide position-field">
+			<span class="position-label">{t('marketDays.positionTitle')}</span>
+			{#if standPosition}
+				<iframe
+					class="position-preview"
+					title={t('marketDays.positionPreview')}
+					src={openStreetMapEmbedUrl(standPosition)}
+					loading="lazy"
+					data-testid="market-day-position-preview"
+				></iframe>
+			{:else}
+				<p class="position-empty" data-testid="market-day-position-empty">
+					{t('marketDays.positionEmpty')}
+				</p>
+			{/if}
+			<div class="position-actions">
+				<button
+					type="button"
+					class="secondary"
+					data-testid="market-day-use-position"
+					onclick={useCurrentPosition}
+					><Icon name="map-pin" size="sm" />{t('marketDays.useCurrentPosition')}</button
+				>
+				{#if positionHint}
+					<span class="position-hint" data-testid="market-day-position-hint">{positionHint}</span>
+				{/if}
+			</div>
+			<details class="position-manual" data-testid="market-day-position-manual">
+				<summary>{t('marketDays.positionManual')}</summary>
+				<div class="position-coordinates">
+					<label
+						><span>{t('marketDays.latitude')}</span><input
+							name="latitude"
+							inputmode="decimal"
+							bind:value={positionLatitude}
+							data-testid="market-day-latitude"
+						/></label
+					>
+					<label
+						><span>{t('marketDays.longitude')}</span><input
+							name="longitude"
+							inputmode="decimal"
+							bind:value={positionLongitude}
+							data-testid="market-day-longitude"
+						/></label
+					>
+				</div>
+			</details>
+		</div>
+		<div class="wide flag-checkboxes">
+			<label class="checkbox">
+				<input
+					name="locationReleased"
+					type="checkbox"
+					value="1"
+					bind:checked={locationReleased}
+					data-testid="market-day-location-released"
+				/>
+				<span>{t('marketDays.releaseLocation')}</span>
+			</label>
+		</div>
+		<p class="wide position-hint">{t('marketDays.releaseLocationHint')}</p>
 		<label class="wide"
 			><span>{t('marketDays.notes')}</span><input
 				name="notes"
 				value={data.marketDay.notes}
 			/></label
 		>
-		<div class="actions form-actions"><button type="submit">{t('marketDays.save')}</button></div>
+		<div class="actions form-actions">
+			<button type="submit"><Icon name="check" size="sm" />{t('marketDays.save')}</button>
+		</div>
 	</form>
-</dialog>
+</DialogShell>
 
-<dialog
+<DialogShell
 	class="edit-dialog"
-	bind:this={expenseDialog}
-	aria-label={t('expenses.edit')}
-	data-testid="expenses-edit-dialog"
+	bind:this={expenseShell}
+	ariaLabel={t('expenses.edit')}
+	closeLabel={t('marketDays.cancel')}
+	testId="expenses-edit-dialog"
 >
-	<div class="dialog-head">
+	{#snippet header()}
 		<h2>{t('expenses.edit')}</h2>
-		<button type="button" class="secondary" onclick={closeExpenseDialog}
-			>{t('marketDays.cancel')}</button
-		>
-	</div>
+	{/snippet}
 	<form method="POST" action="?/updateExpense" class="form-grid">
 		<input type="hidden" name="expenseId" value={editExpenseId} />
 		<input type="hidden" name="marketDayId" value={data.marketDay.id} />
@@ -495,10 +618,12 @@
 			/></label
 		>
 		<div class="actions form-actions">
-			<button type="submit" data-testid="expenses-save">{t('expenses.save')}</button>
+			<button type="submit" data-testid="expenses-save"
+				><Icon name="check" size="sm" />{t('expenses.save')}</button
+			>
 		</div>
 	</form>
-</dialog>
+</DialogShell>
 
 <style>
 	.market-day-detail-page {
@@ -560,13 +685,22 @@
 		color: var(--color-text-muted);
 		font-size: 0.8rem;
 	}
+	.headline-meta {
+		align-items: center;
+		display: inline-flex;
+		gap: 0.3rem;
+		justify-content: flex-end;
+	}
 	.pill {
+		align-items: center;
 		background: var(--color-ok-soft);
 		border: 1px solid var(--color-ok-border);
 		border-radius: 999px;
 		color: var(--color-ok);
+		display: inline-flex;
 		font-size: 0.68rem;
 		font-weight: 800;
+		gap: 0.25rem;
 		padding: 2px 10px;
 	}
 	.closed-pill {
@@ -590,11 +724,14 @@
 		display: contents;
 	}
 	button {
+		align-items: center;
 		border-radius: var(--radius-control);
 		cursor: pointer;
+		display: inline-flex;
 		font: inherit;
 		font-size: 0.84rem;
 		font-weight: 700;
+		gap: 0.3rem;
 		padding: 0.55rem 0.85rem;
 	}
 	.primary,
@@ -615,9 +752,30 @@
 		border: 1px solid var(--color-danger);
 		color: var(--color-danger);
 	}
+	.secondary-link {
+		align-items: center;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-control);
+		color: var(--color-accent);
+		cursor: pointer;
+		display: inline-flex;
+		font-size: 0.82rem;
+		font-weight: 700;
+		gap: 0.35rem;
+		padding: 0.5rem 0.85rem;
+		text-decoration: none;
+	}
+	.secondary-link:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: 2px;
+	}
 	.panel-head h2 {
+		align-items: center;
 		color: var(--color-accent-strong);
+		display: flex;
 		font-size: 1.1rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 	.panel-head p {
@@ -655,6 +813,12 @@
 		display: block;
 		font-size: 0.78rem;
 		margin-top: 0.15rem;
+	}
+	.sale-row-meta,
+	.expense-row-meta {
+		align-items: center;
+		display: inline-flex !important;
+		gap: 0.3rem;
 	}
 	.sale-row > strong {
 		color: var(--color-accent-strong);
@@ -707,29 +871,134 @@
 		margin: 1rem 0 0;
 		padding: 0.8rem;
 	}
-	.edit-dialog {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-card);
-		box-shadow: var(--shadow-card);
-		color: var(--color-text);
-		max-width: min(38rem, 92vw);
-		padding: 1.25rem;
-		width: 38rem;
+	.position-field {
+		display: grid;
+		gap: 0.5rem;
 	}
-	.dialog-head {
+
+	.position-label {
+		color: var(--color-text-muted);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.position-preview {
+		border: 1px solid var(--color-border);
+		border-radius: var(--r);
+		height: 180px;
+		width: 100%;
+	}
+
+	.position-empty {
+		align-items: center;
+		background: var(--color-surface-strong);
+		border: 1px dashed var(--color-border);
+		border-radius: var(--r);
+		color: var(--color-text-faint);
+		display: flex;
+		font-size: 0.82rem;
+		justify-content: center;
+		margin: 0;
+		min-height: 72px;
+		padding: 0 0.8rem;
+		text-align: center;
+	}
+
+	.position-actions {
 		align-items: center;
 		display: flex;
-		justify-content: space-between;
+		gap: 0.6rem;
 	}
-	.dialog-head h2 {
+
+	.position-hint {
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+	}
+
+	.position-manual {
+		color: var(--color-text-muted);
+		font-size: 0.78rem;
+	}
+
+	.position-manual summary {
+		cursor: pointer;
+	}
+
+	.position-coordinates {
+		display: grid;
+		gap: 0.6rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		margin-top: 0.5rem;
+	}
+
+	/* Follows the project's checkbox convention: no native control, explicit theme tokens. The
+	   wrapper class keeps the rules ahead of the generic `.form-grid label` styling. */
+	.flag-checkboxes {
+		display: flex;
+		gap: 1rem;
+	}
+
+	.flag-checkboxes label.checkbox {
+		align-items: center;
+		display: flex;
+		flex-direction: row;
+		gap: 0.45rem;
+	}
+
+	.flag-checkboxes label.checkbox span {
+		color: var(--color-text);
+		font-size: 0.9rem;
+		font-weight: 600;
+		letter-spacing: 0;
+		text-transform: none;
+	}
+
+	.flag-checkboxes label.checkbox input[type='checkbox'] {
+		appearance: none;
+		background-color: var(--color-surface-strong);
+		background-image: none;
+		background-position: center;
+		background-repeat: no-repeat;
+		background-size: 0.8rem;
+		border: 1px solid var(--color-border);
+		border-radius: 0.3rem;
+		box-shadow: none;
+		cursor: pointer;
+		height: 1.05rem;
+		margin: 0;
+		padding: 0;
+		width: 1.05rem;
+	}
+
+	.flag-checkboxes label.checkbox input[type='checkbox']:checked {
+		background-color: var(--color-accent);
+		background-image: var(--checkbox-checkmark);
+		border-color: var(--color-accent);
+	}
+
+	.flag-checkboxes label.checkbox input[type='checkbox']:focus-visible {
+		border-color: var(--color-ice);
+		box-shadow: 0 0 0 4px var(--focus-ring);
+		outline: none;
+	}
+
+	:global(.edit-dialog) {
+		max-width: min(38rem, 92vw);
+		width: 38rem;
+	}
+	:global(.edit-dialog .dialog-head h2) {
+		align-items: center;
 		color: var(--color-accent-strong);
+		display: flex;
 		font-size: 1.05rem;
+		gap: 0.4rem;
 		margin: 0;
 	}
 	.form-grid {
 		display: grid;
-		gap: 0.8rem;
+		gap: var(--gap-dialog-block);
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		margin-top: 1rem;
 	}
@@ -758,6 +1027,15 @@
 		padding: 0.6rem 0.75rem;
 		width: 100%;
 	}
+	.form-grid select {
+		appearance: none;
+		background-image: var(--select-arrow);
+		background-position: right var(--select-arrow-inset) center;
+		background-repeat: no-repeat;
+		background-size: var(--select-arrow-size);
+		padding-right: var(--select-control-end-padding);
+	}
+
 	.form-grid input:focus,
 	.form-grid select:focus {
 		border-color: var(--color-ice);

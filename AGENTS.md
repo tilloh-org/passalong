@@ -16,8 +16,9 @@ When instructions conflict, this order wins:
 
 1. **AFFiNE "Hermes Gehirn"** — architecture, data model, security and
    release decisions (private knowledge base, read-only for agents).
-2. **This repository's docs** — `docs/DESIGN.md` (UI rules), `docs/release-process.md`,
-   `CONTRIBUTING.md`, `SECURITY.md`.
+2. **This repository's docs** — `docs/roadmap.md` (the working plan to v1.0.0),
+   `docs/DESIGN.md` (UI rules), `docs/release-process.md`, `CONTRIBUTING.md`,
+   `SECURITY.md`.
 3. **Hermes skills** — project skills (`sveltekit-app-development`,
    `passalong-ui-patterns`, `test-code-conventions`, `ui-screenshot-pr-hygiene`).
 4. **Memory / session history** — context only, never proof of current state.
@@ -25,6 +26,20 @@ When instructions conflict, this order wins:
 `docs/DESIGN.md` wins over the Marktbude reference UI. Historical plans under
 `.hermes/plans/` are **not normative** — they record decisions at a point in
 time; current rules in the docs above win.
+
+## Plan and work items
+
+`docs/roadmap.md` is the plan of record for implementation work here: phases,
+exit gates and the verified status, derived from the private AFFiNE plan. A
+phase ends only when its exit gates are proven in this repository — a test, an
+E2E spec or a documented check; a gate without a proof stays open even when the
+code exists. Keep the status lines dated.
+
+A slice that changes behaviour is described in an F-document under
+`docs/requirements/` before it is implemented (template: `F-000-template.md`),
+using the next free number. That document is the contract for the slice and is
+frozen once its PR is merged, carrying the `Implemented: PR #<nr>` line. Work on
+one slice at a time.
 
 ## Non-negotiable rules
 
@@ -82,13 +97,31 @@ checked in Assume.
 
 - Every visible UI change gets a committed screenshot under
   `docs/feature-development/<branch-slug>/`.
-- Regenerate screenshots whenever the UI changes; the PR description must
-  point at the **latest** screenshots for the **current** commit.
-- Use **commit-pinned raw GitHub URLs**
-  (`https://github.com/tilloh-org/passalong/raw/<sha>/<path>`) so images stay
-  stable after squashes and merges. Remove stale image links.
+- **The branch carries only current screenshots.** The moment a later change
+  makes an existing screenshot stale, regenerate or delete it in that same
+  commit. Never leave a superseded image behind — an outdated screenshot is a
+  wrong claim about the UI.
+- **Screenshots go in the PR description, embedded as images** with
+  commit-pinned raw GitHub URLs
+  (`![alt](https://github.com/tilloh-org/passalong/raw/<sha>/<path>)`) so they
+  stay stable after squashes and merges. Do **not** post screenshots as PR
+  comments — the description is the single source of visual evidence.
+- Regenerate screenshots whenever the UI changes; the description must show
+  the **latest** screenshots for the **current** commit, and stale image
+  references must be replaced, not appended to.
 - Primary/confirm actions sit at the bottom right of their container
   (see `docs/DESIGN.md`).
+
+## Deliberate deviations
+
+Decisions that deliberately deviate from the process, one line each with the
+reason. The tide bootstrap leaves these items alone.
+
+- **Docs, commits and PR text in English.** tide's language rule (D-044) wants
+  `README.md`, everything under `docs/` and `AGENTS.md` in German and already
+  names an open-source project as the case for a project-level exception.
+  Everything in this repository stays English; the only German content is the
+  visitor-facing UI copy that the i18n layer serves (`src/lib/i18n/`).
 
 ## When stuck or unsure
 

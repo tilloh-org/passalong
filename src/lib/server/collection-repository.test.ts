@@ -215,54 +215,6 @@ describe('collection repository', () => {
 		expect(memberIsPrivileged).toBe(false);
 	});
 
-	it('creates a multi-account bootstrap manifest once with exactly one instance administrator', () => {
-		// arrange
-		const databasePath = createDatabasePath();
-		const repository = createCollectionRepository({ databasePath });
-		const accounts = [
-			{
-				tenantName: 'Avery household',
-				username: 'avery',
-				displayName: 'Avery',
-				password: 'not-a-real-password-avery',
-				passwordHash: 'scrypt$avery$hash',
-				instanceAdmin: true
-			},
-			{
-				tenantName: 'Blake household',
-				username: 'blake',
-				displayName: 'Blake',
-				password: 'not-a-real-password-blake',
-				passwordHash: 'scrypt$blake$hash',
-				instanceAdmin: false
-			}
-		];
-
-		// act
-		repository.provisionBootstrapAccounts(accounts);
-
-		// assume
-		expect(repository.getBootstrapAccount('avery')).toEqual({
-			username: 'avery',
-			displayName: 'Avery',
-			passwordHash: 'scrypt$avery$hash',
-			tenantName: 'Avery household',
-			instanceAdmin: true
-		});
-
-		const database = new Database(databasePath, { readonly: true });
-		expect(database.prepare('SELECT COUNT(*) AS count FROM tenants').get()).toEqual({ count: 2 });
-		expect(database.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({ count: 2 });
-		expect(database.prepare('SELECT COUNT(*) AS count FROM instance_roles').get()).toEqual({
-			count: 1
-		});
-		expect(database.prepare('SELECT username FROM users ORDER BY username').all()).toEqual([
-			{ username: 'avery' },
-			{ username: 'blake' }
-		]);
-		database.close();
-	});
-
 	it('lets an authenticated admin create a collection and persist an item', () => {
 		// arrange
 		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
@@ -749,10 +701,11 @@ describe('collection repository', () => {
 			captureConstraintError(() =>
 				database
 					.prepare(
-						'INSERT INTO collections (id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?)'
+						'INSERT INTO collections (id, public_id, tenant_id, owner_id, name, created_at) VALUES (?, ?, ?, ?, ?, ?)'
 					)
 					.run(
 						'collection-b',
+						'public-collection-b',
 						'tenant-b',
 						alpha.userId,
 						'Mixed collection',
@@ -1044,7 +997,10 @@ describe('collection repository', () => {
 			{ version: '2026082601_tenant_schema_foundation' },
 			{ version: '2026083101_item_scoped_image_keys' },
 			{ version: '2026090901_market_days' },
-			{ version: '2026091001_expenses' }
+			{ version: '2026091001_expenses' },
+			{ version: '2026091701_collection_public_id' },
+			{ version: '2026101801_collection_publication_status' },
+			{ version: '2026101901_market_day_location' }
 		]);
 		expect(
 			migratedDatabase
@@ -1094,7 +1050,10 @@ describe('collection repository', () => {
 			{ version: '2026082601_tenant_schema_foundation' },
 			{ version: '2026083101_item_scoped_image_keys' },
 			{ version: '2026090901_market_days' },
-			{ version: '2026091001_expenses' }
+			{ version: '2026091001_expenses' },
+			{ version: '2026091701_collection_public_id' },
+			{ version: '2026101801_collection_publication_status' },
+			{ version: '2026101901_market_day_location' }
 		]);
 		expect(reopenedDatabase.prepare('SELECT COUNT(*) AS count FROM users').get()).toEqual({
 			count: 2
@@ -1716,6 +1675,7 @@ describe('collection repository', () => {
 			{ category: 'books', soldItemCount: 1, totalProceedsCents: 250 }
 		]);
 		expect(allTime.proceedsByMarketDay).toEqual([
+			{ marketDayName: null, soldItemCount: 2, totalProceedsCents: 1650 },
 			{ marketDayName: 'May market', soldItemCount: 1, totalProceedsCents: 750 }
 		]);
 		expect(allTime.expensesByCategory).toEqual([
@@ -1729,7 +1689,10 @@ describe('collection repository', () => {
 		expect(mayOnly.soldItemCount).toBe(2);
 		expect(mayOnly.totalProceedsCents).toBe(1000);
 		expect(mayOnly.totalExpensesCents).toBe(700);
-		expect(mayOnly.proceedsByMarketDay).toHaveLength(1);
+		expect(mayOnly.proceedsByMarketDay).toEqual([
+			{ marketDayName: 'May market', soldItemCount: 1, totalProceedsCents: 750 },
+			{ marketDayName: null, soldItemCount: 1, totalProceedsCents: 250 }
+		]);
 		expect(juneOnly).toMatchObject({
 			soldItemCount: 1,
 			totalProceedsCents: 1400,
@@ -2407,7 +2370,7 @@ describe('collection repository', () => {
 				{ category: 'decor', soldItemCount: 2, totalProceedsCents: 2100 },
 				{ category: 'books', soldItemCount: 1, totalProceedsCents: 250 }
 			],
-			proceedsByMarketDay: [],
+			proceedsByMarketDay: [{ marketDayName: null, soldItemCount: 3, totalProceedsCents: 2350 }],
 			expensesByCategory: []
 		});
 		expect(foreignStatistics).toMatchObject({
@@ -2446,6 +2409,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const availableItem = repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -2497,13 +2461,13 @@ describe('collection repository', () => {
 		const unknownCollectionId = '00000000-0000-0000-0000-000000000000';
 
 		// act
-		const publicView = repository.getPublicStandView(standCollection.id);
+		const publicView = repository.getPublicStandView(standCollection.publicId);
 		const unknownStandView = repository.getPublicStandView(unknownCollectionId);
 
 		// assume
 		expect(publicView?.items).toHaveLength(2);
 		expect(publicView).toEqual({
-			collectionId: standCollection.id,
+			collectionId: standCollection.publicId,
 			collectionName: 'Flohmarkt',
 			ownerAvatarStorageKey: null,
 			intro: '',
@@ -2546,6 +2510,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const visibleItem = repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -2597,9 +2562,9 @@ describe('collection repository', () => {
 		const unknownId = '00000000-0000-0000-0000-000000000000';
 
 		// act
-		const publicItem = repository.getPublicStandItem(standCollection.id, visibleItem.id);
-		const publicReserved = repository.getPublicStandItem(standCollection.id, reservedItem.id);
-		const soldResult = repository.getPublicStandItem(standCollection.id, soldItem.id);
+		const publicItem = repository.getPublicStandItem(standCollection.publicId, visibleItem.id);
+		const publicReserved = repository.getPublicStandItem(standCollection.publicId, reservedItem.id);
+		const soldResult = repository.getPublicStandItem(standCollection.publicId, soldItem.id);
 		const unknownItem = repository.getPublicStandItem(unknownId, visibleItem.id);
 
 		// assume
@@ -2633,6 +2598,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const item = repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -2660,8 +2626,8 @@ describe('collection repository', () => {
 		const unknownKey = 'unknown-hash.png';
 
 		// act
-		const publicView = repository.getPublicStandView(standCollection.id);
-		const publicItem = repository.getPublicStandItem(standCollection.id, item.id);
+		const publicView = repository.getPublicStandView(standCollection.publicId);
+		const publicItem = repository.getPublicStandItem(standCollection.publicId, item.id);
 		const publicImage = repository.findPublicItemImage('hash-second.webp');
 		const unknownImage = repository.findPublicItemImage(unknownKey);
 
@@ -2687,7 +2653,7 @@ describe('collection repository', () => {
 			{ channel: 'flea-market', soldAt: '2026-08-31T10:30:00.000Z', proceedsCents: 750 },
 			owner
 		);
-		const publicViewAfterSale = repository.getPublicStandView(standCollection.id);
+		const publicViewAfterSale = repository.getPublicStandView(standCollection.publicId);
 
 		// assume
 		expect(publicViewAfterSale?.items).toHaveLength(0);
@@ -2704,12 +2670,13 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const unknownKey = 'unknown-avatar.png';
 
 		// act
-		const publicViewBefore = repository.getPublicStandView(standCollection.id);
+		const publicViewBefore = repository.getPublicStandView(standCollection.publicId);
 		repository.setProfileAvatar(owner, 'avatar-hash.png');
-		const publicViewAfter = repository.getPublicStandView(standCollection.id);
+		const publicViewAfter = repository.getPublicStandView(standCollection.publicId);
 		const avatarVisible = repository.findPublicOwnerAvatar('avatar-hash.png');
 
 		// assume
@@ -2728,6 +2695,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
 		const titleMatch = repository.createItem(
 			{
 				collectionId: standCollection.id,
@@ -2792,35 +2760,35 @@ describe('collection repository', () => {
 		);
 
 		// act
-		const titleResults = repository.searchPublicStandItems(standCollection.id, {
+		const titleResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			query: 'Keramikvase'
 		});
-		const descriptionResults = repository.searchPublicStandItems(standCollection.id, {
+		const descriptionResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			query: 'Deko'
 		});
-		const internalNoteResults = repository.searchPublicStandItems(standCollection.id, {
+		const internalNoteResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			query: 'GeheimwortXYZ'
 		});
-		const openResults = repository.searchPublicStandItems(standCollection.id, {
+		const openResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			status: 'open'
 		});
-		const reservedResults = repository.searchPublicStandItems(standCollection.id, {
+		const reservedResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			status: 'reserved'
 		});
-		const soldStatusResults = repository.searchPublicStandItems(standCollection.id, {
+		const soldStatusResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			status: 'sold'
 		});
-		const categoryResults = repository.searchPublicStandItems(standCollection.id, {
+		const categoryResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			category: 'books'
 		});
-		const conditionResults = repository.searchPublicStandItems(standCollection.id, {
+		const conditionResults = repository.searchPublicStandItems(standCollection.publicId, {
 			...emptyItemFilters,
 			condition: 'fair'
 		});
@@ -3071,6 +3039,7 @@ describe('collection repository', () => {
 			passwordHash: 'scrypt$test-salt$test-key'
 		});
 		const collection = repository.createCollection({ name: 'Avery collection' }, avery);
+		repository.setCollectionPublication(collection.id, true, avery);
 		const openItem = repository.createItem(
 			{
 				collectionId: collection.id,
@@ -3111,8 +3080,1086 @@ describe('collection repository', () => {
 		const unknownRoute = repository.getPublicStandItemRoute('missing-item');
 
 		// assume
-		expect(openRoute).toEqual({ collectionId: collection.id, itemId: openItem.id });
+		expect(openRoute).toEqual({ collectionId: collection.publicId, itemId: openItem.id });
 		expect(soldRoute).toBeNull();
 		expect(unknownRoute).toBeNull();
+	});
+
+	it('hides an unpublished collection and everything on it from every public surface', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const avery = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Avery collection' }, avery);
+		const item = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Secret lamp',
+				priceCents: 900,
+				category: 'home',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			avery
+		);
+
+		// assume - a fresh collection starts unpublished and is reachable nowhere
+		expect(collection.isPublished).toBe(false);
+		expect(repository.getPublicStandView(collection.publicId)).toBeNull();
+		expect(repository.getPublicStandItem(collection.publicId, item.id)).toBeNull();
+		expect(repository.getPublicStandItemRoute(item.id)).toBeNull();
+		expect(
+			repository.searchPublicStandItems(collection.publicId, {
+				...emptyItemFilters,
+				query: 'Secret'
+			})
+		).toEqual([]);
+
+		// act - publishing opens every surface
+		const published = repository.setCollectionPublication(collection.id, true, avery);
+
+		// assume
+		expect(published?.isPublished).toBe(true);
+		expect(repository.getPublicStandView(collection.publicId)?.collectionName).toBe(
+			'Avery collection'
+		);
+		expect(repository.getPublicStandItem(collection.publicId, item.id)?.title).toBe('Secret lamp');
+		expect(repository.getPublicStandItemRoute(item.id)).toEqual({
+			collectionId: collection.publicId,
+			itemId: item.id
+		});
+
+		// act - taking the page offline closes every surface again, item images included
+		const unpublished = repository.setCollectionPublication(collection.id, false, avery);
+
+		// assume
+		expect(unpublished?.isPublished).toBe(false);
+		expect(repository.getPublicStandView(collection.publicId)).toBeNull();
+		expect(repository.getPublicStandItem(collection.publicId, item.id)).toBeNull();
+		expect(repository.getPublicStandItemRoute(item.id)).toBeNull();
+	});
+
+	it('keeps the publication status scoped to the owning user and tenant', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const avery = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const collection = repository.createCollection({ name: 'Avery collection' }, avery);
+
+		// act
+		const foreignAttempt = repository.setCollectionPublication(collection.id, true, {
+			userId: 'foreign-user',
+			tenantId: 'foreign-tenant'
+		});
+
+		// assume
+		expect(foreignAttempt).toBeNull();
+		expect(repository.getPublicStandView(collection.publicId)).toBeNull();
+	});
+
+	it('gives every collection a separate public identifier that never exposes the internal id', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const firstCollection = repository.createCollection({ name: 'First collection' }, owner);
+		const secondCollection = repository.createCollection({ name: 'Second collection' }, owner);
+
+		// act
+		const listed = repository.listCollectionsForOwner(owner);
+
+		// assume
+		const first = listed.find((collection) => collection.id === firstCollection.id);
+		const second = listed.find((collection) => collection.id === secondCollection.id);
+		expect(first?.publicId).toBeTruthy();
+		expect(second?.publicId).toBeTruthy();
+		// A distinct identifier per collection, never equal to the internal row id.
+		expect(first?.publicId).not.toBe(first?.id);
+		expect(second?.publicId).not.toBe(second?.id);
+		expect(first?.publicId).not.toBe(second?.publicId);
+	});
+
+	it('resolves a public stand view only through the public identifier, never the internal id', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
+		repository.createItem(
+			{
+				collectionId: standCollection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			owner
+		);
+		const publicId = repository.listCollectionsForOwner(owner)[0].publicId;
+
+		// act
+		const byPublicId = repository.getPublicStandView(publicId);
+		const byInternalId = repository.getPublicStandView(standCollection.id);
+
+		// assume
+		expect(byPublicId?.collectionName).toBe('Flohmarkt');
+		expect(byPublicId?.items).toHaveLength(1);
+		// The internal id is not a public handle: it must not resolve any public view.
+		expect(byInternalId).toBeNull();
+	});
+
+	it('resolves a public stand item only through the public identifier', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
+		const item = repository.createItem(
+			{
+				collectionId: standCollection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			owner
+		);
+		const publicId = repository.listCollectionsForOwner(owner)[0].publicId;
+
+		// act
+		const byPublicId = repository.getPublicStandItem(publicId, item.id);
+		const byInternalId = repository.getPublicStandItem(standCollection.id, item.id);
+
+		// assume
+		expect(byPublicId?.title).toBe('Vase');
+		expect(byInternalId).toBeNull();
+	});
+
+	it('returns the public identifier from the public item route and search, not the internal id', () => {
+		// arrange
+		const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+		const owner = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$test-salt$test-key'
+		});
+		const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+		repository.setCollectionPublication(standCollection.id, true, owner);
+		const item = repository.createItem(
+			{
+				collectionId: standCollection.id,
+				title: 'Vase',
+				priceCents: 800,
+				category: 'decor',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: false,
+				isFunctional: false
+			},
+			owner
+		);
+		const publicId = repository.listCollectionsForOwner(owner)[0].publicId;
+
+		// act
+		const route = repository.getPublicStandItemRoute(item.id);
+		const found = repository.searchPublicStandItems(publicId, {
+			...emptyItemFilters,
+			query: 'Vase'
+		});
+
+		// assume
+		expect(route).toEqual({ collectionId: publicId, itemId: item.id });
+		expect(found.map((entry) => entry.title)).toEqual(['Vase']);
+	});
+
+	it('keeps a stable public identifier when the schema migrates an existing database', () => {
+		// arrange
+		const databasePath = createDatabasePath();
+		createOriginalCoreCollectionDatabase(databasePath);
+
+		// act
+		const repository = createCollectionRepository({ databasePath });
+		const database = new Database(databasePath, { readonly: true });
+		const columns = (database.pragma('table_info(collections)') as { name: string }[]).map(
+			(column) => column.name
+		);
+		const row = database
+			.prepare('SELECT id, public_id FROM collections WHERE id = ?')
+			.get('legacy-collection') as { id: string; public_id: string | null } | undefined;
+		database.close();
+
+		// assume
+		expect(columns).toContain('public_id');
+		// The legacy row keeps its internal id and gains a generated public identifier.
+		expect(row?.id).toBe('legacy-collection');
+		expect(row?.public_id).toBeTruthy();
+		expect(row?.public_id).not.toBe('legacy-collection');
+		expect(repository.getPublicStandView('legacy-collection')).toBeNull();
+		expect(repository.getPublicStandView(row?.public_id ?? '')).not.toBeNull();
+	});
+});
+
+describe('instance account administration', () => {
+	/**
+	 * Create a repository with one instance administrator and one invited member account.
+	 *
+	 * @returns {object} Repository, administrator scope, member details and invitation secret.
+	 */
+	function createAdministeredRepository() {
+		const databasePath = createDatabasePath();
+		const repository = createCollectionRepository({ databasePath });
+		const administrator = repository.createInitialAdmin({
+			username: 'avery',
+			displayName: 'Avery',
+			passwordHash: 'scrypt$admin-salt$admin-key'
+		});
+		const invitation = repository.createAccountInvitation(
+			{ username: 'blake', displayName: 'Blake' },
+			'invitation-secret-hash',
+			'2026-12-31T00:00:00.000Z'
+		);
+		return { databasePath, repository, administrator, invitation };
+	}
+
+	it('creates an invited account without a password and with its own household', () => {
+		// arrange
+		const { databasePath, administrator, invitation } = createAdministeredRepository();
+		const database = new Database(databasePath, { readonly: true });
+		const row = database
+			.prepare(
+				'SELECT id, tenant_id, username, display_name, password_hash, password_reset_required FROM users WHERE username = ?'
+			)
+			.get('blake') as
+			| {
+					id: string;
+					tenant_id: string;
+					display_name: string;
+					password_hash: string | null;
+					password_reset_required: number;
+			  }
+			| undefined;
+		const inviteRole = database
+			.prepare('SELECT 1 FROM instance_roles WHERE user_id = ?')
+			.get(row?.id ?? '') as { 1: number } | undefined;
+		const invitationRow = database
+			.prepare('SELECT secret_hash, expires_at, consumed_at FROM password_resets WHERE user_id = ?')
+			.get(row?.id ?? '') as
+			{ secret_hash: string; expires_at: string; consumed_at: string | null } | undefined;
+		database.close();
+
+		// assume
+		expect(invitation).toMatchObject({ username: 'blake', displayName: 'Blake' });
+		expect(row?.display_name).toBe('Blake');
+		// The account starts without a password so the invitation code is the only way in.
+		expect(row?.password_hash).toBeNull();
+		expect(row?.password_reset_required).toBe(1);
+		// A new account is its own data boundary, never a member of the administrator's household.
+		expect(row?.tenant_id).toBe(invitation.tenantId);
+		expect(row?.tenant_id).not.toBe(administrator.tenantId);
+		expect(inviteRole).toBeUndefined();
+		expect(invitationRow).toEqual({
+			secret_hash: 'invitation-secret-hash',
+			expires_at: '2026-12-31T00:00:00.000Z',
+			consumed_at: null
+		});
+	});
+
+	it('refuses an invited account whose username is taken in any letter case', () => {
+		// arrange
+		const { repository } = createAdministeredRepository();
+
+		// act
+		let duplicateError: unknown;
+		try {
+			repository.createAccountInvitation(
+				{ username: 'AVERY', displayName: 'Other Avery' },
+				'other-secret-hash',
+				'2026-12-31T00:00:00.000Z'
+			);
+		} catch (error) {
+			duplicateError = error;
+		}
+
+		// assume
+		expect(duplicateError).toBeInstanceOf(Error);
+	});
+
+	it('lets the invited member consume the code and sign in', () => {
+		// arrange
+		const { repository, invitation } = createAdministeredRepository();
+
+		// act
+		const scope = repository.consumePasswordReset(
+			'blake',
+			'invitation-secret-hash',
+			'scrypt$member-salt$member-key'
+		);
+		const loginUser = repository.getUserForLogin('blake');
+
+		// assume
+		expect(scope).toEqual({ userId: invitation.userId, tenantId: invitation.tenantId });
+		expect(loginUser?.passwordHash).toBe('scrypt$member-salt$member-key');
+		expect(loginUser?.passwordResetRequired).toBeUndefined();
+		// Consuming an invitation must never grant instance administration.
+		expect(repository.isInstanceAdmin(scope!)).toBe(false);
+	});
+
+	it('lists accounts with creation time, last sign-in and administrator mark', () => {
+		// arrange
+		const { repository, administrator, invitation } = createAdministeredRepository();
+
+		// act
+		const beforeSignIn = repository.listAccounts();
+
+		// assume
+		expect(beforeSignIn.map((account) => account.username)).toEqual(['avery', 'blake']);
+		expect(beforeSignIn[0]).toMatchObject({
+			userId: administrator.userId,
+			displayName: 'Avery',
+			isInstanceAdmin: true,
+			lastSignedInAt: null
+		});
+		expect(beforeSignIn[0].createdAt).toEqual(expect.any(String));
+		expect(beforeSignIn[1]).toMatchObject({
+			username: 'blake',
+			isInstanceAdmin: false,
+			lastSignedInAt: null
+		});
+
+		// act
+		repository.createSessionForUser(
+			{ userId: invitation.userId, tenantId: invitation.tenantId },
+			'member-session-token-hash'
+		);
+		const afterSignIn = repository.listAccounts();
+
+		// assume
+		expect(afterSignIn[1].lastSignedInAt).toEqual(expect.any(String));
+		expect(afterSignIn[1].lastSignedInAt).not.toBeNull();
+	});
+
+	it('reports the newest sign-in when an account holds several sessions', () => {
+		// arrange
+		const { databasePath, repository, invitation } = createAdministeredRepository();
+		const scope = { userId: invitation.userId, tenantId: invitation.tenantId };
+		repository.createSessionForUser(scope, 'first-session-token-hash');
+		repository.createSessionForUser(scope, 'second-session-token-hash');
+		const database = new Database(databasePath, { readonly: true });
+		const insertedSessions = database
+			.prepare('SELECT COUNT(*) AS count FROM sessions WHERE user_id = ?')
+			.get(invitation.userId) as { count: number };
+		database.close();
+
+		// act
+		const accounts = repository.listAccounts();
+
+		// assume
+		expect(insertedSessions.count).toBe(2);
+		// Several sessions must not duplicate the account row.
+		expect(accounts).toHaveLength(2);
+		expect(accounts[1].lastSignedInAt).toEqual(expect.any(String));
+	});
+
+	it('deletes an account with its data through the administrator path', () => {
+		// arrange
+		const { databasePath, repository, invitation } = createAdministeredRepository();
+		const memberScope = { userId: invitation.userId, tenantId: invitation.tenantId };
+		const collection = repository.createCollection({ name: 'Blake stand' }, memberScope);
+		const item = repository.createItem(
+			{
+				collectionId: collection.id,
+				title: 'Blake lamp',
+				priceCents: 1500,
+				category: 'home',
+				condition: 'good',
+				internalNotes: '',
+				externalDescription: '',
+				isComplete: true,
+				isFunctional: true
+			},
+			memberScope
+		);
+		repository.addItemImage(item.id, 'member-item-image.jpg', memberScope);
+
+		// act
+		const artifacts = repository.deleteAccountByAdmin(invitation.userId);
+
+		// assume
+		expect(artifacts).toEqual({
+			avatarStorageKey: null,
+			itemImageStorageKeys: ['member-item-image.jpg']
+		});
+		const database = new Database(databasePath, { readonly: true });
+		const remainingUsers = database
+			.prepare('SELECT COUNT(*) AS count FROM users WHERE id = ?')
+			.get(invitation.userId) as { count: number };
+		const remainingItems = database
+			.prepare('SELECT COUNT(*) AS count FROM items WHERE owner_id = ?')
+			.get(invitation.userId) as { count: number };
+		const remainingCollections = database
+			.prepare('SELECT COUNT(*) AS count FROM collections WHERE owner_id = ?')
+			.get(invitation.userId) as { count: number };
+		const remainingHousehold = database
+			.prepare('SELECT COUNT(*) AS count FROM tenants WHERE id = ?')
+			.get(invitation.tenantId) as { count: number };
+		database.close();
+		expect(remainingUsers.count).toBe(0);
+		expect(remainingItems.count).toBe(0);
+		expect(remainingCollections.count).toBe(0);
+		// The emptied household must not linger.
+		expect(remainingHousehold.count).toBe(0);
+		// The freed username can be handed out again.
+		expect(() =>
+			repository.createAccountInvitation(
+				{ username: 'blake', displayName: 'Blake again' },
+				'reuse-secret-hash',
+				'2026-12-31T00:00:00.000Z'
+			)
+		).not.toThrow();
+	});
+
+	it('refuses to delete the instance administrator through the administrator path', () => {
+		// arrange
+		const { repository, administrator } = createAdministeredRepository();
+
+		// act
+		let refusal: unknown;
+		try {
+			repository.deleteAccountByAdmin(administrator.userId);
+		} catch (error) {
+			refusal = error;
+		}
+
+		// assume
+		expect(refusal).toBeInstanceOf(Error);
+		expect(repository.getProfile(administrator)).not.toBeNull();
+	});
+
+	it('refuses to delete an unknown account through the administrator path', () => {
+		// arrange
+		const { repository } = createAdministeredRepository();
+
+		// act
+		let refusal: unknown;
+		try {
+			repository.deleteAccountByAdmin('no-such-user');
+		} catch (error) {
+			refusal = error;
+		}
+
+		// assume
+		expect(refusal).toBeInstanceOf(Error);
+	});
+
+	describe('statistics consistency and corrected sales', () => {
+		/**
+		 * Create a repository with an owner, a collection and a market day.
+		 *
+		 * @returns The repository, the owner scope, the collection and the market day.
+		 */
+		function createMarketRepository() {
+			const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+			const collection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+			const marketDay = repository.createMarketDay(
+				{
+					name: 'Maifeiertag',
+					date: '2026-05-16',
+					startTime: null,
+					endTime: null,
+					location: '',
+					notes: ''
+				},
+				owner
+			);
+			return { repository, owner, collection, marketDay };
+		}
+
+		/**
+		 * Sum one statistics dimension into the totals it must add up to.
+		 *
+		 * @param buckets - Buckets carrying a sold count and a proceeds total.
+		 * @returns The summed count and proceeds of the dimension.
+		 */
+		function sumBuckets(buckets: { soldItemCount: number; totalProceedsCents: number }[]) {
+			return buckets.reduce(
+				(total, bucket) => ({
+					soldItemCount: total.soldItemCount + bucket.soldItemCount,
+					totalProceedsCents: total.totalProceedsCents + bucket.totalProceedsCents
+				}),
+				{ soldItemCount: 0, totalProceedsCents: 0 }
+			);
+		}
+
+		it('keeps every statistics dimension in step with the underlying sales and expenses', () => {
+			// arrange — three sales across two months, three channels and three categories
+			const { repository, owner, collection, marketDay } = createMarketRepository();
+			const vase = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Vase',
+					priceCents: 800,
+					category: 'decor',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			const book = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Buch',
+					priceCents: 300,
+					category: 'books',
+					condition: 'fair',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			const lamp = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Lampe',
+					priceCents: 1500,
+					category: 'home',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			repository.markItemSold(
+				vase.id,
+				{
+					channel: 'flea-market',
+					soldAt: '2026-05-16T09:00:00.000Z',
+					proceedsCents: 750,
+					marketDayId: marketDay.id
+				},
+				owner
+			);
+			repository.markItemSold(
+				book.id,
+				{ channel: 'private-sale', soldAt: '2026-05-20T09:00:00.000Z', proceedsCents: 250 },
+				owner
+			);
+			repository.markItemSold(
+				lamp.id,
+				{ channel: 'shop', soldAt: '2026-06-05T09:00:00.000Z', proceedsCents: 1400 },
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Standgebühr',
+					category: 'fee',
+					amountCents: 500,
+					expenseDate: '2026-05-16',
+					marketDayId: marketDay.id
+				},
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Kaffee',
+					category: 'supplies',
+					amountCents: 200,
+					expenseDate: '2026-05-20',
+					marketDayId: null
+				},
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Benzin',
+					category: 'transport',
+					amountCents: 300,
+					expenseDate: '2026-06-05',
+					marketDayId: null
+				},
+				owner
+			);
+
+			// act
+			const statistics = repository.getSaleStatistics(owner);
+
+			// assume — the totals equal the rows behind them
+			expect(statistics.soldItemCount).toBe(3);
+			expect(statistics.totalProceedsCents).toBe(2400);
+			expect(statistics.totalExpensesCents).toBe(1000);
+			expect(statistics.netResultCents).toBe(1400);
+
+			// assume — every dimension adds up to those same totals
+			const totals = { soldItemCount: 3, totalProceedsCents: 2400 };
+			expect(sumBuckets(statistics.proceedsByChannel)).toEqual(totals);
+			expect(sumBuckets(statistics.proceedsByMonth)).toEqual(totals);
+			expect(sumBuckets(statistics.proceedsByCategory)).toEqual(totals);
+			expect(sumBuckets(statistics.proceedsByMarketDay)).toEqual(totals);
+			expect(
+				statistics.expensesByCategory.reduce(
+					(total, bucket) => total + bucket.totalExpensesCents,
+					0
+				)
+			).toBe(statistics.totalExpensesCents);
+
+			// assume — the month buckets carry the two May sales and the June sale
+			expect(statistics.proceedsByMonth).toEqual([
+				{ month: '2026-05', soldItemCount: 2, totalProceedsCents: 1000 },
+				{ month: '2026-06', soldItemCount: 1, totalProceedsCents: 1400 }
+			]);
+
+			// assume — the day buckets name the market day and keep the sales without one apart
+			expect(statistics.proceedsByMarketDay).toEqual([
+				{ marketDayName: null, soldItemCount: 2, totalProceedsCents: 1650 },
+				{ marketDayName: 'Maifeiertag', soldItemCount: 1, totalProceedsCents: 750 }
+			]);
+		});
+
+		it('counts both period bounds for sales and for expenses', () => {
+			// arrange — one row on each bound of May and one just outside it
+			const { repository, owner, collection } = createMarketRepository();
+			const firstItem = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Erster',
+					priceCents: 500,
+					category: 'home',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			const lastItem = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Letzter',
+					priceCents: 200,
+					category: 'home',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			const juneItem = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Juni',
+					priceCents: 300,
+					category: 'home',
+					condition: 'good',
+					internalNotes: '',
+					externalDescription: '',
+					isComplete: false,
+					isFunctional: false
+				},
+				owner
+			);
+			repository.markItemSold(
+				firstItem.id,
+				{ channel: 'shop', soldAt: '2026-05-01T09:00:00.000Z', proceedsCents: 500 },
+				owner
+			);
+			repository.markItemSold(
+				lastItem.id,
+				{ channel: 'shop', soldAt: '2026-05-31T09:00:00.000Z', proceedsCents: 200 },
+				owner
+			);
+			repository.markItemSold(
+				juneItem.id,
+				{ channel: 'shop', soldAt: '2026-06-01T09:00:00.000Z', proceedsCents: 300 },
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Erste',
+					category: 'fee',
+					amountCents: 100,
+					expenseDate: '2026-05-01',
+					marketDayId: null
+				},
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Letzte',
+					category: 'fee',
+					amountCents: 50,
+					expenseDate: '2026-05-31',
+					marketDayId: null
+				},
+				owner
+			);
+			repository.createExpense(
+				{
+					label: 'Juni',
+					category: 'fee',
+					amountCents: 25,
+					expenseDate: '2026-06-01',
+					marketDayId: null
+				},
+				owner
+			);
+
+			// act
+			const may = repository.getSaleStatistics(owner, {
+				fromInclusive: '2026-05-01',
+				toInclusive: '2026-05-31'
+			});
+
+			// assume — both bounds count, the June row stays out
+			expect(may.soldItemCount).toBe(2);
+			expect(may.totalProceedsCents).toBe(700);
+			expect(may.totalExpensesCents).toBe(150);
+			expect(may.netResultCents).toBe(550);
+		});
+
+		it('restores the complete item state when a sale is corrected', () => {
+			// arrange — a reserved item that carries every field, sold at a market day
+			const { repository, owner, collection, marketDay } = createMarketRepository();
+			const item = repository.createItem(
+				{
+					collectionId: collection.id,
+					title: 'Nähmaschine',
+					priceCents: 4500,
+					category: 'decor',
+					condition: 'good',
+					internalNotes: 'Kratzer an der Unterseite',
+					externalDescription: 'Läuft ruhig, Zubehör dabei.',
+					isComplete: true,
+					isFunctional: true
+				},
+				owner
+			);
+			repository.setItemReservation(item.id, true, owner);
+			const itemBeforeSale = repository.listItemsForOwner(collection.id, owner)[0];
+			repository.markItemSold(
+				item.id,
+				{
+					channel: 'flea-market',
+					soldAt: '2026-05-16T09:00:00.000Z',
+					proceedsCents: 4200,
+					marketDayId: marketDay.id
+				},
+				owner
+			);
+			const statisticsWhileSold = repository.getSaleStatistics(owner);
+
+			// act
+			const correctedItem = repository.unmarkItemSold(item.id, owner);
+
+			// assume — every field is back to what it was before the sale
+			expect(correctedItem).toEqual(itemBeforeSale);
+			expect(correctedItem.reservedAt).not.toBeNull();
+			expect(correctedItem.marketDayId).toBeNull();
+
+			// assume — the correction takes the sale out of history, statistics and the day
+			expect(
+				repository.getSaleHistory(owner, {
+					channel: null,
+					category: null,
+					proceedsMinCents: null,
+					proceedsMaxCents: null
+				})
+			).toEqual([]);
+			expect(statisticsWhileSold.soldItemCount).toBe(1);
+			expect(statisticsWhileSold.totalProceedsCents).toBe(4200);
+			const statisticsAfterCorrection = repository.getSaleStatistics(owner);
+			expect(statisticsAfterCorrection.soldItemCount).toBe(0);
+			expect(statisticsAfterCorrection.totalProceedsCents).toBe(0);
+			expect(statisticsAfterCorrection.proceedsByMarketDay).toEqual([]);
+			expect(repository.getProceedsByDay(owner, null)).toEqual([]);
+			expect(repository.getMarketDaySettlement(marketDay.id, owner)?.soldItemCount).toBe(0);
+
+			// assume — the item is sellable again and back on the label sheet
+			expect(repository.listItemsForPriceLabels(owner).map((labelItem) => labelItem.id)).toEqual([
+				item.id
+			]);
+		});
+	});
+
+	describe('public stand location', () => {
+		it('returns the position of the next released market day of the stand owner', () => {
+			// arrange
+			const databasePath = createDatabasePath();
+			const repository = createCollectionRepository({ databasePath });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+			const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+			repository.setCollectionPublication(standCollection.id, true, owner);
+			repository.createMarketDay(
+				{
+					name: 'Letzter Samstag',
+					date: '2026-10-03',
+					startTime: '10:00',
+					endTime: '16:00',
+					location: 'Alter Platz',
+					latitude: 52.51,
+					longitude: 13.35,
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+			repository.createMarketDay(
+				{
+					name: 'Nächster Samstag',
+					date: '2026-11-07',
+					startTime: '09:00',
+					endTime: '15:00',
+					location: 'Moorweg 7',
+					latitude: '52,514500',
+					longitude: '13,350100',
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+			repository.createMarketDay(
+				{
+					name: 'Nicht freigegeben',
+					date: '2026-10-25',
+					startTime: null,
+					endTime: null,
+					location: 'Geheimplatz',
+					latitude: 52.6,
+					longitude: 13.4,
+					locationReleased: false,
+					notes: ''
+				},
+				owner
+			);
+			const dayWithoutPosition = repository.createMarketDay(
+				{
+					name: 'Ohne Position',
+					date: '2026-10-20',
+					startTime: null,
+					endTime: null,
+					location: 'Marktplatz',
+					latitude: 52.5,
+					longitude: 13.3,
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+			repository.createMarketDay(
+				{
+					name: 'Ohne Datum',
+					date: null,
+					startTime: null,
+					endTime: null,
+					location: 'Irgendwo',
+					latitude: 52.7,
+					longitude: 13.5,
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+
+			// act — a released day whose coordinates went missing is skipped defensively
+			const rawDatabase = new Database(databasePath);
+			rawDatabase
+				.prepare('UPDATE market_days SET latitude = NULL, longitude = NULL WHERE id = ?')
+				.run(dayWithoutPosition.id);
+			rawDatabase.close();
+			const location = repository.getPublicStandLocation(standCollection.publicId, '2026-10-18');
+
+			// assume
+			expect(location).toEqual({
+				marketDayName: 'Nächster Samstag',
+				date: '2026-11-07',
+				startTime: '09:00',
+				endTime: '15:00',
+				location: 'Moorweg 7',
+				latitude: 52.5145,
+				longitude: 13.3501
+			});
+		});
+
+		it('hides the location of an unpublished collection, of another owner and of past days', () => {
+			// arrange
+			const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+			const standCollection = repository.createCollection({ name: 'Flohmarkt' }, owner);
+			// Market days belong to the owner, not to one collection: a second stand page of the
+			// same owner therefore shows the same position.
+			const secondCollection = repository.createCollection({ name: 'Zweiter Stand' }, owner);
+			const releasedDay = {
+				name: 'Nächster Samstag',
+				date: '2026-11-07',
+				startTime: null,
+				endTime: null,
+				location: 'Moorweg 7',
+				latitude: 52.5145,
+				longitude: 13.3501,
+				locationReleased: true,
+				notes: ''
+			};
+			repository.createMarketDay(releasedDay, owner);
+
+			// act — the collection is not published yet
+			const unpublishedLocation = repository.getPublicStandLocation(
+				standCollection.publicId,
+				'2026-10-18'
+			);
+			repository.setCollectionPublication(standCollection.id, true, owner);
+			repository.setCollectionPublication(secondCollection.id, true, owner);
+			const publishedLocation = repository.getPublicStandLocation(
+				standCollection.publicId,
+				'2026-10-18'
+			);
+			const secondStandLocation = repository.getPublicStandLocation(
+				secondCollection.publicId,
+				'2026-10-18'
+			);
+			const outOfSeasonLocation = repository.getPublicStandLocation(
+				standCollection.publicId,
+				'2026-12-01'
+			);
+			const unknownLocation = repository.getPublicStandLocation('unbekannt', '2026-10-18');
+
+			// assume
+			expect(unpublishedLocation).toBeNull();
+			expect(publishedLocation?.marketDayName).toBe('Nächster Samstag');
+			expect(secondStandLocation).toEqual(publishedLocation);
+			expect(outOfSeasonLocation).toBeNull();
+			expect(unknownLocation).toBeNull();
+		});
+
+		it('keeps the stand position optional and stores it with the market day', () => {
+			// arrange
+			const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+
+			// act — a plain market day without a position
+			const plainDay = repository.createMarketDay(
+				{
+					name: 'Samstag',
+					date: '2026-11-07',
+					startTime: null,
+					endTime: null,
+					location: 'Moorweg 7',
+					notes: ''
+				},
+				owner
+			);
+			const updatedDay = repository.updateMarketDay(
+				plainDay.id,
+				{
+					name: 'Samstag',
+					date: '2026-11-07',
+					startTime: null,
+					endTime: null,
+					location: 'Moorweg 7',
+					latitude: '52,5145',
+					longitude: '13,3501',
+					locationReleased: true,
+					notes: ''
+				},
+				owner
+			);
+			const storedDay = repository.getMarketDay(plainDay.id, owner);
+
+			// assume
+			expect(plainDay.latitude).toBeNull();
+			expect(plainDay.longitude).toBeNull();
+			expect(plainDay.locationReleased).toBe(false);
+			expect(updatedDay.latitude).toBe(52.5145);
+			expect(updatedDay.longitude).toBe(13.3501);
+			expect(updatedDay.locationReleased).toBe(true);
+			expect(storedDay).toMatchObject({ latitude: 52.5145, longitude: 13.3501 });
+		});
+
+		it('refuses a released stand position without usable coordinates', () => {
+			// arrange
+			const repository = createCollectionRepository({ databasePath: createDatabasePath() });
+			const owner = repository.createInitialAdmin({
+				username: 'avery',
+				displayName: 'Avery',
+				passwordHash: 'scrypt$test-salt$test-key'
+			});
+			const marketDayInput = {
+				name: 'Samstag',
+				date: '2026-11-07',
+				startTime: null,
+				endTime: null,
+				location: 'Moorweg 7',
+				notes: ''
+			};
+
+			// act — release without coordinates, and coordinates outside the valid ranges
+			const releaseWithoutCoordinates = () =>
+				repository.createMarketDay({ ...marketDayInput, locationReleased: true }, owner);
+			const latitudeOutOfRange = () =>
+				repository.createMarketDay({ ...marketDayInput, latitude: 91, longitude: 13.35 }, owner);
+			const longitudeNotANumber = () =>
+				repository.createMarketDay(
+					{ ...marketDayInput, latitude: 52.51, longitude: 'östlich' },
+					owner
+				);
+
+			// assume
+			expect(releaseWithoutCoordinates).toThrow('a released location needs both coordinates');
+			expect(latitudeOutOfRange).toThrow('latitude is out of range');
+			expect(longitudeNotANumber).toThrow('longitude must be a number');
+		});
 	});
 });

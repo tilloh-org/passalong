@@ -134,6 +134,8 @@ jobs:
           push: false
           load: true
           tags: passalong:ci
+          build-args: |
+            COMMIT_HASH=${{ github.sha }}
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0

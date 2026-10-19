@@ -13,4 +13,12 @@ test.describe('Application shell', () => {
 		await expect(page).toHaveTitle('passalong');
 		await expect(page.getByText('passalong', { exact: true })).toBeVisible();
 	});
+
+	test('serves a page with a cache policy so no stale copy is reused', async ({ page }) => {
+		// act
+		const response = await page.goto('/');
+
+		// assume
+		expect(response?.headers()['cache-control']).toBe('private, no-store');
+	});
 });

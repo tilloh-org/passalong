@@ -37,3 +37,6 @@ vite.config.ts.timestamp-*
 /test-results/
 /e2e/.auth-owner.json
 e2e/.test-avatar.png
+
+# Agent scratch space (plans, local notes) - never part of the product
+.hermes/

@@ -317,6 +317,33 @@ export const actions: Actions = {
 		redirect(httpStatus.seeOther, '/profile');
 	},
 
+	setCollectionPublication: async ({ cookies, request, url }) => {
+		if (!hasSameOrigin(request, url)) {
+			return fail(httpStatus.forbidden, { csrfError });
+		}
+		const scope = getSessionScope(cookies.get(sessionCookieName));
+		if (!scope) {
+			return fail(httpStatus.unauthorized, {
+				standPublicationError: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.'
+			});
+		}
+
+		const formData = await request.formData();
+		const publishing = getFormText(formData, 'published') === 'true';
+		const updated = getCollectionRepository().setCollectionPublication(
+			getFormText(formData, 'collectionId'),
+			publishing,
+			scope
+		);
+		if (!updated) {
+			return fail(httpStatus.notFound, {
+				standPublicationError: 'Die Sammlung wurde nicht gefunden.'
+			});
+		}
+
+		redirect(httpStatus.seeOther, '/profile');
+	},
+
 	logout: ({ cookies, request, url }) => {
 		if (!hasSameOrigin(request, url)) {
 			return fail(httpStatus.forbidden, { csrfError });

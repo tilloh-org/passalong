@@ -13,6 +13,15 @@ import {
 
 const httpStatusNotFound = 404;
 
+/**
+ * Current calendar date as `YYYY-MM-DD` (UTC), the form market days are stored in.
+ *
+ * @returns {string} Today's date.
+ */
+function currentDate(): string {
+	return new Date().toISOString().slice(0, 10);
+}
+
 const itemStatusFilters: ItemStatusFilter[] = ['open', 'reserved'];
 
 /**
@@ -61,7 +70,7 @@ function hasActiveFilters(filters: ItemFilters): boolean {
  *
  * @param {Parameters<import('./$types').PageServerLoad>[0]['params']} params - Route parameters.
  * @param {URLSearchParams} searchParams - Buyer filters from the URL.
- * @returns {{ stand: PublicStandView; appliedFilters: ItemFilters; hasActiveFilters: boolean }} Public stand data.
+ * @returns {{ stand: PublicStandView; location: PublicStandLocation | null; appliedFilters: ItemFilters; hasActiveFilters: boolean }} Public stand data.
  * @throws {Error} 404 when the collection does not exist.
  */
 export const load: PageServerLoad = ({ params, url }) => {
@@ -76,6 +85,8 @@ export const load: PageServerLoad = ({ params, url }) => {
 		: standView.items;
 	return {
 		stand: { ...standView, items },
+		// The position of the next released market day; null keeps the page exactly as before.
+		location: repository.getPublicStandLocation(params.collectionId, currentDate()),
 		appliedFilters,
 		hasActiveFilters: hasActiveFilters(appliedFilters),
 		categoryOptions: itemCategories,

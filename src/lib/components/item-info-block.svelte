@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatPrice } from '$lib/utils/format';
 	import { t } from '$lib/i18n/index.svelte';
+	import Icon from '$lib/components/icon.svelte';
 
 	/**
 	 * Buyer-facing item information block, shared by the internal item
@@ -49,39 +50,50 @@
 	const isReserved = $derived(Boolean(item.reservedAt) && !item.soldAt);
 </script>
 
-<p class="eyebrow">{categoryLabel(item.category)} · {conditionLabel(item.condition)}</p>
+<p class="eyebrow">
+	<Icon name="tag" size="sm" tone="muted" />
+	{categoryLabel(item.category)} · {conditionLabel(item.condition)}
+</p>
 <h1 class="item-title">{item.title}</h1>
 <p class="price">{formatPrice(item.priceCents)} €</p>
 <div class="flag-pills" data-testid="item-flag-pills">
-	<span class="flag-pill category">{categoryLabel(item.category)}</span>
+	<span class="flag-pill category"><Icon name="tag" size="sm" />{categoryLabel(item.category)}</span
+	>
 	{#if item.isComplete}
-		<span class="flag-pill complete">{t('item.complete')}</span>
+		<span class="flag-pill complete"><Icon name="check" size="sm" />{t('item.complete')}</span>
 	{/if}
 	{#if item.isFunctional}
-		<span class="flag-pill functional">{t('item.functional')}</span>
+		<span class="flag-pill functional"
+			><Icon name="settings" size="sm" />{t('item.functional')}</span
+		>
 	{/if}
 	{#if isReserved}
-		<span class="flag-pill reserved" data-testid="item-reserved-badge">{t('item.reserved')}</span>
+		<span class="flag-pill reserved" data-testid="item-reserved-badge"
+			><Icon name="bookmark" size="sm" />{t('item.reserved')}</span
+		>
 	{/if}
 </div>
 {#if item.externalDescription}
 	<div class="description external" data-testid="item-external-description">
-		<strong>{t('item.descriptionLabel')}</strong>
+		<strong><Icon name="note" size="sm" />{t('item.descriptionLabel')}</strong>
 		<p>{item.externalDescription}</p>
 	</div>
 {/if}
 {#if variant === 'internal' && item.internalNotes}
 	<div class="description internal" data-testid="item-internal-notes">
-		<strong>{t('item.internalNotesLabel')}</strong>
+		<strong><Icon name="note" size="sm" />{t('item.internalNotesLabel')}</strong>
 		<p>{item.internalNotes}</p>
 	</div>
 {/if}
 
 <style>
 	.eyebrow {
+		align-items: center;
 		color: var(--color-text-muted);
+		display: flex;
 		font-size: 0.85rem;
 		font-weight: 600;
+		gap: 0.3rem;
 		letter-spacing: 0.02em;
 		margin: 0;
 	}
@@ -109,11 +121,14 @@
 	}
 
 	.flag-pill {
+		align-items: center;
 		border: 1px solid var(--color-border);
 		border-radius: 999px;
 		color: var(--color-text-muted);
+		display: inline-flex;
 		font-size: 0.72rem;
 		font-weight: 700;
+		gap: 0.25rem;
 		padding: 3px 10px;
 	}
 
@@ -138,9 +153,11 @@
 	}
 
 	.description strong {
+		align-items: center;
 		color: var(--color-text-muted);
-		display: block;
+		display: inline-flex;
 		font-size: 0.78rem;
+		gap: 0.3rem;
 		margin-bottom: 2px;
 	}
 

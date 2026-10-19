@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import QRCode from 'qrcode';
 import { expect, test } from '@playwright/test';
 
 const coreCollectionFlowTimeoutMs = 60_000;
@@ -122,7 +123,117 @@ test.describe('Core collection', () => {
 		await page.getByRole('link', { name: 'Scannen' }).click();
 		await expect(page).toHaveURL(/\/scan/);
 		await expect(page.getByRole('heading', { name: 'Artikel scannen' })).toBeVisible();
-		await page.getByRole('link', { name: '+ Neu' }).click();
+		await expect(page.getByLabel('QR-Code-Foto auswählen')).toHaveAttribute('accept', 'image/*');
+		await expect(page.getByLabel('QR-Code-Foto auswählen')).toHaveAttribute(
+			'capture',
+			'environment'
+		);
+		await page.context().grantPermissions(['camera'], { origin: new URL(page.url()).origin });
+		await page.getByRole('button', { name: 'Kamera starten' }).click();
+		await expect(
+			page.getByText('Kamera aktiv — halte den QR-Code gut sichtbar ins Bild.')
+		).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Kamera stoppen' })).toBeEnabled();
+		await expect
+			.poll(() =>
+				page
+					.locator('video[aria-label="Kameravorschau zum Scannen von QR-Codes"]')
+					.evaluate((element) => {
+						const video = element as HTMLVideoElement;
+						if (!(video.srcObject instanceof MediaStream)) {
+							return false;
+						}
+						return (
+							!video.paused &&
+							video.srcObject.getTracks().every((track) => track.readyState === 'live')
+						);
+					})
+			)
+			.toBe(true);
+		await page
+			.locator('video[aria-label="Kameravorschau zum Scannen von QR-Codes"]')
+			.evaluate((element) => {
+				(window as typeof window & { normalCameraStream?: MediaStream }).normalCameraStream = (
+					element as HTMLVideoElement
+				).srcObject as MediaStream;
+			});
+		await page.getByRole('button', { name: 'Kamera stoppen' }).click();
+		await expect
+			.poll(() =>
+				page
+					.locator('video[aria-label="Kameravorschau zum Scannen von QR-Codes"]')
+					.evaluate((element) => (element as HTMLVideoElement).srcObject === null)
+			)
+			.toBe(true);
+		await expect
+			.poll(() =>
+				page.evaluate(() => {
+					const browserWindow = window as typeof window & { normalCameraStream?: MediaStream };
+					return browserWindow.normalCameraStream
+						?.getTracks()
+						.every((track) => track.readyState === 'ended');
+				})
+			)
+			.toBe(true);
+		await expect(
+			page.getByText('Starte die Kamera oder wähle ein Foto mit einem QR-Code aus.')
+		).toBeVisible();
+		await page.evaluate(() => {
+			type DelayedCameraState = {
+				originalGetUserMedia: typeof navigator.mediaDevices.getUserMedia;
+				resolve: ((stream: MediaStream) => void) | null;
+				stream: MediaStream | null;
+			};
+			const browserWindow = window as typeof window & { delayedCameraState?: DelayedCameraState };
+			browserWindow.delayedCameraState = {
+				originalGetUserMedia: navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices),
+				resolve: null,
+				stream: null
+			};
+			navigator.mediaDevices.getUserMedia = () =>
+				new Promise((resolve) => {
+					browserWindow.delayedCameraState!.resolve = resolve;
+				});
+		});
+		await page.getByRole('button', { name: 'Kamera starten' }).click();
+		await expect(page.getByText('Die Kamera wird gestartet…')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Kamera stoppen' })).toBeEnabled();
+		await page.getByRole('button', { name: 'Kamera stoppen' }).click();
+		await page.evaluate(async () => {
+			const browserWindow = window as typeof window & {
+				delayedCameraState: {
+					originalGetUserMedia: typeof navigator.mediaDevices.getUserMedia;
+					resolve: (stream: MediaStream) => void;
+					stream: MediaStream | null;
+				};
+			};
+			const delayedCameraState = browserWindow.delayedCameraState;
+			const stream = await delayedCameraState.originalGetUserMedia({ audio: false, video: true });
+			delayedCameraState.stream = stream;
+			delayedCameraState.resolve(stream);
+			navigator.mediaDevices.getUserMedia = delayedCameraState.originalGetUserMedia;
+		});
+		await expect
+			.poll(() =>
+				page.evaluate(() => {
+					const browserWindow = window as typeof window & {
+						delayedCameraState?: { stream: MediaStream | null };
+					};
+					return browserWindow.delayedCameraState?.stream
+						?.getTracks()
+						.every((track) => track.readyState === 'ended');
+				})
+			)
+			.toBe(true);
+		const scanUploadPayload = await QRCode.toBuffer('/q/scan-upload-test');
+		await page.getByLabel('QR-Code-Foto auswählen').setInputFiles({
+			name: 'scan-upload.png',
+			mimeType: 'image/png',
+			buffer: scanUploadPayload
+		});
+		await expect(page).toHaveURL(/\/q\/scan-upload-test/);
+		await page.goto('/');
+		await page.getByRole('link', { name: 'Neu' }).click();
 		await expect(
 			page
 				.getByRole('heading', { name: 'Deine Sammlungen' })
@@ -228,8 +339,9 @@ test.describe('Core collection', () => {
 				.first()
 		).toBeVisible();
 		await expect(page.getByTestId('item-flag-pills')).toContainText('Haushalt');
-		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Vollständig');
-		await expect(page.getByTestId('item-flag-pills')).toContainText('✓ Funktionsfähig');
+		// The leading check is a decorative sprite icon, so only the text is asserted.
+		await expect(page.getByTestId('item-flag-pills')).toContainText('Vollständig');
+		await expect(page.getByTestId('item-flag-pills')).toContainText('Funktionsfähig');
 		await expect(page.getByTestId('item-external-description')).toContainText('Warme Leselampe');
 		await expect(page.getByTestId('item-internal-notes')).toContainText('Glühbirne');
 		await expect(page.getByTestId('item-qr-panel')).toBeVisible();
@@ -261,11 +373,11 @@ test.describe('Core collection', () => {
 		await expect(priceLabel).toContainText('12,00 €');
 		await expect(priceLabel.getByRole('img')).toHaveAttribute('src', /^data:image\/png;base64,/);
 		await expect(page.getByTestId('price-labels-print')).toBeVisible();
-		await page.getByRole('link', { name: '+ Neu' }).click();
+		await page.getByRole('link', { name: 'Neu' }).click();
 		await itemCard.click();
 
 		// act — upload two photos once; retries reuse the leftover images (the dialog
-		// trigger label carries the stored image count, e.g. "🖼 Bilder (2)")
+		// trigger label carries the stored image count, e.g. "Bilder (2)")
 		const storedImageCount = await page.getByTestId('images-dialog-trigger').evaluate((el) => {
 			const match = /\((\d+)\)/.exec(el.textContent ?? '');
 			return match ? Number(match[1]) : 0;
@@ -346,6 +458,57 @@ test.describe('Core collection', () => {
 		await expect(page).toHaveURL(/category=home/);
 		await expect(page.getByTestId('sale-history-item')).toHaveCount(1);
 
+		// act — undo the sale and race two identical sale requests for the same item; a
+		// double tap on the scanner or a retried request must not produce a second sale
+		await page.goto(protectedUrl);
+		await page.getByTestId('unmark-item-sold').click();
+		await expect(page.getByTestId('item-sale-section')).toBeVisible();
+		await page.getByTestId('item-proceeds').fill('9,50');
+		await page.getByTestId('item-market-day').selectOption({ label: marketDayName });
+		const saleRequest = await page.evaluate(() => {
+			const saleForm = document.querySelector<HTMLFormElement>('form[action="?/markItemSold"]');
+			if (!saleForm) {
+				throw new Error('sale form not found');
+			}
+			const parameters = new URLSearchParams();
+			new FormData(saleForm).forEach((value, key) => parameters.append(key, String(value)));
+			return { url: `${window.location.pathname}?/markItemSold`, body: parameters.toString() };
+		});
+		const saleRequestHeaders = {
+			Origin: 'http://localhost:4173',
+			'Content-Type': 'application/x-www-form-urlencoded'
+		};
+		const [firstSaleResponse, secondSaleResponse] = await Promise.all([
+			page.request.post(saleRequest.url, { data: saleRequest.body, headers: saleRequestHeaders }),
+			page.request.post(saleRequest.url, { data: saleRequest.body, headers: saleRequestHeaders })
+		]);
+
+		// assume — one request sells the item, the other is rejected with the guard message.
+		// The action endpoint answers this fetch-style POST with JSON wrapping the real
+		// outcome: a 303 redirect for the sale, a 400 failure carrying the guard message.
+		const saleOutcomes: { type: string; status: number; location?: string; data?: unknown }[] = [];
+		for (const response of [firstSaleResponse, secondSaleResponse]) {
+			saleOutcomes.push(JSON.parse(await response.text()));
+		}
+		const acceptedOutcomes = saleOutcomes.filter((outcome) => outcome.type === 'redirect');
+		const rejectedOutcomes = saleOutcomes.filter((outcome) => outcome.type === 'failure');
+		expect(acceptedOutcomes).toHaveLength(1);
+		expect(acceptedOutcomes[0].status).toBe(303);
+		expect(acceptedOutcomes[0].location).toMatch(/\/items\//);
+		expect(rejectedOutcomes).toHaveLength(1);
+		expect(rejectedOutcomes[0].status).toBe(400);
+		expect(JSON.stringify(rejectedOutcomes[0].data)).toContain(
+			'Der Artikel wurde bereits als verkauft erfasst.'
+		);
+
+		// assume — the item carries exactly one sale, not two
+		await page.reload();
+		await expect(page.getByTestId('item-sold-badge')).toBeVisible();
+		await page.goto('/sales');
+		await expect(
+			page.getByTestId('sale-history-item').filter({ hasText: 'Leselampe' })
+		).toHaveCount(1);
+
 		// act — filter by an proceeds range that excludes the sale
 		await page.getByTestId('sale-history-filters').getByLabel('Erlös von (€)').fill('20');
 		await page.getByTestId('sale-history-filters').getByRole('button', { name: 'Filtern' }).click();
@@ -416,7 +579,7 @@ test.describe('Core collection', () => {
 
 		// act — go back to the portfolio via the header and check the sale statistics
 		// (the item is still sold from the history flow, so no quick-sell happens here)
-		await page.getByRole('link', { name: '+ Neu' }).click();
+		await page.getByRole('link', { name: 'Neu' }).click();
 		await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 
 		// assume
@@ -492,6 +655,15 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('save-stand-intro')).toBeEnabled();
 		await page.getByTestId('save-stand-intro').click();
 		await expect(page).toHaveURL(/\/profile/);
+
+		// act — the stand page opens for buyers only after the owner published it; a retry
+		// against the reused database finds it already published.
+		const publicationStatus = page.getByTestId('stand-publication-status');
+		await expect(publicationStatus).toBeVisible();
+		if (!(await publicationStatus.textContent())?.includes('ist veröffentlicht')) {
+			await page.getByTestId('toggle-stand-publication').click();
+			await expect(publicationStatus).toContainText('ist veröffentlicht');
+		}
 		const standHref = await page.getByTestId('open-stand-link').getAttribute('href');
 		const standPage = await page.context().newPage();
 		await standPage.goto(`http://localhost:4173${standHref}`);
@@ -591,6 +763,13 @@ test.describe('Core collection', () => {
 		await expect(page.getByTestId('delete-account-dialog')).toBeHidden();
 		await page.getByTestId('delete-account-trigger').click();
 		await expect(page.getByTestId('delete-account-dialog')).toBeVisible();
+		// The warning step offers the export and never submits on its own.
+		await expect(page.getByTestId('export-account-archive')).toBeVisible();
+		await expect(page.getByTestId('delete-account-final-dialog')).toBeHidden();
+		await page.getByTestId('delete-account-continue').click();
+
+		// act — the final dialog is the only place that can delete, and only with the typed username
+		await expect(page.getByTestId('delete-account-final-dialog')).toBeVisible();
 		await expect(page.getByTestId('delete-account-submit')).toBeDisabled();
 		await page.getByTestId('delete-account-input').fill(winningAccount.username);
 		await expect(page.getByTestId('delete-account-submit')).toBeEnabled();

@@ -1,4 +1,4 @@
-import { randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { maximumPasswordLength, minimumPasswordLength } from '$lib/password-policy';
 
 const keyLength = 64;
@@ -59,7 +59,15 @@ export async function hashPassword(password: string): Promise<string> {
  * @param {string} storedHash - The stored scrypt value.
  * @returns {Promise<boolean>} Whether the password is valid.
  */
-export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+export async function verifyPassword(
+	password: string,
+	storedHash: string | null
+): Promise<boolean> {
+	// An invited account carries no password until its code is consumed, and an
+	// account without a stored hash must simply never authenticate.
+	if (typeof storedHash !== 'string') {
+		return false;
+	}
 	const parsedHash = parsePasswordHash(storedHash);
 	if (!parsedHash || !isSafePasswordInput(password)) {
 		return false;
@@ -84,29 +92,28 @@ export function needsPasswordRehash(storedHash: string): boolean {
 }
 
 /**
- * Verify a bootstrap password synchronously before an account-provisioning transaction begins.
+ * Classify a password hash that arrives from an imported archive.
  *
- * @param {string} password - Plaintext password from the bootstrap manifest.
- * @param {string} storedHash - Existing supported scrypt storage value.
- * @returns {boolean} Whether the password matches the existing storage value.
+ * Only a native, strictly parseable hash may be carried over. Anything else (a foreign scheme such
+ * as a source application's own digest, a malformed value, or a missing hash) is refused so it is
+ * never stored, and the account is expected to receive a password reset instead.
+ *
+ * @param {string | null | undefined} storedHash - Untrusted hash read from the archive.
+ * @returns {{ usable: true; value: string } | { usable: false; reason: string }} Classification result.
  */
-export function verifyPasswordSync(password: string, storedHash: string): boolean {
-	const parsedHash = parsePasswordHash(storedHash);
-	if (!parsedHash || !isSafePasswordInput(password)) {
-		return false;
+export function classifyImportedPasswordHash(
+	storedHash: string | null | undefined
+): { usable: true; value: string } | { usable: false; reason: string } {
+	if (typeof storedHash !== 'string' || storedHash.length === 0) {
+		return { usable: false, reason: 'The archive does not contain a usable password hash.' };
 	}
-
-	try {
-		const actualKey = scryptSync(
-			password,
-			parsedHash.salt,
-			keyLength,
-			scryptOptions(parsedHash.parameters)
-		);
-		return timingSafeEqual(parsedHash.expectedKey, actualKey);
-	} catch {
-		return false;
+	if (!parsePasswordHash(storedHash)) {
+		return {
+			usable: false,
+			reason: 'The stored hash is not a native password hash and cannot be carried over.'
+		};
 	}
+	return { usable: true, value: storedHash };
 }
 
 /**

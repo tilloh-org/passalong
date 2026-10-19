@@ -1,4 +1,14 @@
 allowBuilds:
   better-sqlite3: true
+  # libvips-backed image processing; its install script fetches the platform binary.
+  sharp: true
 overrides:
   cookie: 0.7.2
+  # DoS via malformed input. Transitive through SvelteKit and Svelte, both of which allow ^5.8.1,
+  # so the patched release is inside their declared range.
+  devalue: ^5.9.3
+  # DoS via malformed input (CVE-2026-102276, CVE-2026-102278). Transitive through minimatch,
+  # which allows ^5.0.8.
+  brace-expansion: ^5.0.10
+  # DoS via malformed input (CVE-2026-93749). Transitive through postcss, which allows ^1.2.1.
+  source-map-js: ^1.2.2
