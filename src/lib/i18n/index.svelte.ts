@@ -87,6 +87,11 @@ const de: Record<string, string> = {
 	'portfolio.setupTitle': 'Ersten Zugang erstellen',
 	'portfolio.setupIntro': 'Erstelle das Admin-Konto für deine persönliche passalong-Instanz.',
 	'import.title': 'Bestand übernehmen',
+	'restore.initialTitle': 'Backup einspielen',
+	'restore.initialIntro':
+		'Spiele ein vollständiges passalong-Backup in diese leere Instanz zurück. Danach meldest du dich mit den Zugangsdaten aus dem Backup an.',
+	'restore.chooseBackup': 'Backup auswählen',
+	'restore.submit': 'Backup einspielen',
 	'import.intro':
 		'Lade ein Archiv im passalong-Austauschformat, um alle Nutzer und Daten in diese leere Instanz zu übernehmen. Danach kannst du dich als ausgewählter Instanz-Admin anmelden.',
 	'import.chooseArchive': 'Archiv auswählen',
@@ -582,6 +587,11 @@ const en: Record<string, string> = {
 	'portfolio.setupTitle': 'Create the first account',
 	'portfolio.setupIntro': 'Create the admin account for your personal passalong instance.',
 	'import.title': 'Take over existing data',
+	'restore.initialTitle': 'Restore a backup',
+	'restore.initialIntro':
+		'Restore a complete passalong backup into this empty instance. Afterwards you sign in with the credentials from the backup.',
+	'restore.chooseBackup': 'Choose backup',
+	'restore.submit': 'Restore backup',
 	'import.intro':
 		'Load an archive in the passalong exchange format to bring every user and record into this empty instance. Afterwards you can sign in as the selected instance administrator.',
 	'import.chooseArchive': 'Choose archive',

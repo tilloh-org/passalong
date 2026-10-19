@@ -152,6 +152,16 @@ Before switching a public hostname over, verify the imported data (portfolio,
 images, stand pages, sales, expenses, statistics, scans) and produce a backup
 from the new instance.
 
+### Restore a backup on a fresh instance
+
+A new deployment without an account restores a complete backup right on the first
+page: pick the file under "Backup einspielen" and sign in with the credentials from
+the backup afterwards. The restore runs the same checks as the restore in the
+instance administration — archive format, checksums, media and a smoke test — and
+leaves the instance untouched when the file is not a valid backup. Once the
+instance has an account, restoring belongs to the instance administration
+(`/admin`).
+
 ## Development
 
 ```bash

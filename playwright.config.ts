@@ -30,7 +30,7 @@ export default defineConfig({
 		{
 			name: 'chromium',
 			testIgnore:
-				/instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts|price-labels\.spec\.ts|reconciliation-csv\.spec\.ts|statistics-correction\.spec\.ts|restore-proof\.spec\.ts|stand-location\.spec\.ts|mobile-flea-market\.spec\.ts/,
+				/instance-import\.spec\.ts|privacy-two-tenant\.spec\.ts|admin-accounts\.spec\.ts|price-labels\.spec\.ts|reconciliation-csv\.spec\.ts|statistics-correction\.spec\.ts|restore-proof\.spec\.ts|restore-fresh\.spec\.ts|stand-location\.spec\.ts|mobile-flea-market\.spec\.ts/,
 			use: {
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4173',
@@ -100,6 +100,16 @@ export default defineConfig({
 				...devices['Desktop Chrome'],
 				baseURL: 'http://localhost:4175'
 			}
+		},
+		{
+			// The fresh-restore proof needs an instance that produces the backup and one that starts
+			// empty and takes it over, so it runs against two servers of its own.
+			name: 'restore-fresh',
+			testMatch: /restore-fresh\.spec\.ts/,
+			use: {
+				...devices['Desktop Chrome'],
+				baseURL: 'http://localhost:4186'
+			}
 		}
 	],
 	webServer: [
@@ -163,6 +173,22 @@ export default defineConfig({
 			// keeps its own database and media folder (see `e2e/restore-instance.ts`).
 			command: `rm -rf ${restoreInstancePaths.database}* ${restoreInstancePaths.mediaRoot} && ORIGIN=http://localhost:4179 PASSALONG_DATABASE_PATH=${restoreInstancePaths.database} PASSALONG_MEDIA_ROOT=${restoreInstancePaths.mediaRoot} BODY_SIZE_LIMIT=256M PORT=4179 node build/index.js`,
 			url: 'http://localhost:4179',
+			reuseExistingServer: !process.env.CI,
+			timeout: 120_000
+		},
+		{
+			// Source instance of the fresh-restore proof: it owns the account and the backup.
+			command:
+				'rm -rf /tmp/passalong-e2e-restore-source.sqlite* /tmp/passalong-e2e-restore-source-media && ORIGIN=http://localhost:4185 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-restore-source.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-restore-source-media BODY_SIZE_LIMIT=256M PORT=4185 node build/index.js',
+			url: 'http://localhost:4185',
+			reuseExistingServer: !process.env.CI,
+			timeout: 120_000
+		},
+		{
+			// Target instance of the fresh-restore proof: it starts empty and takes the backup over.
+			command:
+				'rm -rf /tmp/passalong-e2e-restore-fresh.sqlite* /tmp/passalong-e2e-restore-fresh-media && ORIGIN=http://localhost:4186 PASSALONG_DATABASE_PATH=/tmp/passalong-e2e-restore-fresh.sqlite PASSALONG_MEDIA_ROOT=/tmp/passalong-e2e-restore-fresh-media BODY_SIZE_LIMIT=256M PORT=4186 node build/index.js',
+			url: 'http://localhost:4186',
 			reuseExistingServer: !process.env.CI,
 			timeout: 120_000
 		}
